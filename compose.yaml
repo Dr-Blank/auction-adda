@@ -1,0 +1,26 @@
+services:
+  auction-adda:
+    image: ghcr.io/dr-blank/auction-adda:latest
+    # `docker compose up -d --build` builds from this checkout instead of pulling.
+    build: .
+    restart: unless-stopped
+    ports:
+      # Loopback only: the tunnel (cloudflared on the host, or on a shared Docker network) is the
+      # sole way in. Publishing on all interfaces would let anyone forge CLIENT_IP_HEADER.
+      - "127.0.0.1:8787:8787"
+    environment:
+      # Set to the public address once the tunnel exists, e.g. https://adda.example.com
+      # Leave empty to accept WebSocket connections from any origin.
+      ALLOWED_ORIGINS: ""
+      # Cloudflare puts the visitor's address here; used for the room creation limit.
+      CLIENT_IP_HEADER: cf-connecting-ip
+    volumes:
+      - auction-adda-data:/data
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  auction-adda-data:

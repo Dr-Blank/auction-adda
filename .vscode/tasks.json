@@ -1,0 +1,309 @@
+{
+  // Run from the Command Palette: "Tasks: Run Task". Room tasks wait for a server, so start
+  // one of the "Dev" tasks first (or in parallel). "last" as a room code means the room most
+  // recently created or joined by a room task.
+  "version": "2.0.0",
+  "tasks": [
+    // ---------- servers ----------
+    {
+      "label": "Dev: server + client",
+      "detail": "Game server on :8787 (restarts on change) and Vite on :5173",
+      "dependsOn": ["Dev: server", "Dev: client"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: server + client (in-memory rooms, 5 s reconnect timeout)",
+      "detail": "Fresh state every start; Skip / Free seat / Become admin unlock after 5 s instead of 30 s",
+      "dependsOn": ["Dev: server (in-memory, 5 s timeout)", "Dev: client"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: server",
+      "detail": "node --watch on :8787, rooms saved in data/",
+      "type": "shell",
+      "command": "node --watch src/server/index.ts",
+      "options": { "env": { "CREATE_LIMIT": "1000" } },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-server",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+      },
+      "presentation": { "group": "dev", "panel": "dedicated" }
+    },
+    {
+      "label": "Dev: server (in-memory, 5 s timeout)",
+      "type": "shell",
+      "command": "node --watch src/server/index.ts",
+      "options": { "env": { "CREATE_LIMIT": "1000", "DATA_DIR": "", "SKIP_AFTER_MS": "5000" } },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-server",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+      },
+      "presentation": { "group": "dev", "panel": "dedicated" }
+    },
+    {
+      "label": "Dev: client",
+      "detail": "Vite on :5173 with hot reload, proxies /ws to :8787",
+      "type": "npm",
+      "script": "dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-vite",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "VITE v", "endsPattern": "ready in|Local:" }
+      },
+      "presentation": { "group": "dev", "panel": "dedicated" }
+    },
+    {
+      "label": "Prod: build and start",
+      "detail": "Production build served by the game server on :8787",
+      "type": "npm",
+      "script": "start",
+      "dependsOn": ["Build"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-server",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+      },
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "Docker: compose up",
+      "detail": "Builds the image and runs it on :8787 (terminate the task to stop it)",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-server",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+      },
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "Server: health",
+      "detail": "GET /healthz on :8787",
+      "type": "shell",
+      "command": "curl -sS http://localhost:8787/healthz; echo",
+      "problemMatcher": []
+    },
+
+    // ---------- rooms and bots ----------
+    {
+      "label": "Room: new room with bots, I join as admin",
+      "detail": "Bots create a room and open it; you take the next seat, get admin and press Start",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "--create", "${input:botsBesideYou}", "--delay", "${input:delay}", "--admin", "human", "--open"],
+      "problemMatcher": [],
+      "presentation": { "panel": "new" },
+      "runOptions": { "instanceLimit": 10 }
+    },
+    {
+      "label": "Room: new room with bots, a bot is admin",
+      "detail": "Bot 1 keeps admin; you see the table as an ordinary player",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "--create", "${input:botsBesideYou}", "--delay", "${input:delay}", "--start-at", "${input:startAt}", "--open"],
+      "problemMatcher": [],
+      "presentation": { "panel": "new" },
+      "runOptions": { "instanceLimit": 10 }
+    },
+    {
+      "label": "Room: bots play whole games, I watch",
+      "detail": "Room of bots only, starts by itself and rematches; you watch as a spectator",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "--create", "${input:players}", "--start-at", "${input:players}", "--rematch", "--delay", "${input:delay}", "--open"],
+      "problemMatcher": [],
+      "presentation": { "panel": "new" },
+      "runOptions": { "instanceLimit": 10 }
+    },
+    {
+      "label": "Room: add bots to a room",
+      "detail": "Bots join a lobby, or take freed seats in a running game",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "${input:room}", "${input:botCount}", "--delay", "${input:delay}", "--start-at", "${input:startAt}"],
+      "problemMatcher": [],
+      "presentation": { "panel": "new" },
+      "runOptions": { "instanceLimit": 10 }
+    },
+    {
+      "label": "Room: add a flaky bot",
+      "detail": "One bot that drops its connection mid-game, for Skip / Free seat / reconnect / admin takeover",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "${input:room}", "1", "--delay", "${input:delay}", "--drop-after", "${input:dropAfter}", "--rejoin-after", "${input:rejoinAfter}"],
+      "problemMatcher": [],
+      "presentation": { "panel": "new" },
+      "runOptions": { "instanceLimit": 10 }
+    },
+    {
+      "label": "Room: open in browser",
+      "detail": "Opens a room on the dev client (:5173)",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/bots.ts", "${input:room}", "0", "--open"],
+      "problemMatcher": []
+    },
+
+    // ---------- checks ----------
+    {
+      "label": "Test",
+      "detail": "Rules tests, random full games, real-socket game",
+      "type": "npm",
+      "script": "test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: watch",
+      "type": "shell",
+      "command": "npx vitest",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated" }
+    },
+    {
+      "label": "Test: one file",
+      "type": "shell",
+      "command": "npx vitest run ${input:testFile}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Typecheck",
+      "type": "npm",
+      "script": "typecheck",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "Build",
+      "detail": "vite build into dist/",
+      "type": "npm",
+      "script": "build",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Screenshots",
+      "detail": "Builds, starts an in-memory server on :8799 and saves table screenshots to shots/ (needs chromium)",
+      "type": "shell",
+      "command": "node scripts/screenshots.mjs ./shots ${input:seconds}",
+      "options": { "env": { "PORT": "8799" } },
+      "dependsOn": ["Build", "Screenshots: server on 8799"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Screenshots: server on 8799",
+      "type": "shell",
+      "command": "node src/server/index.ts",
+      "options": { "env": { "PORT": "8799", "DATA_DIR": "", "CREATE_LIMIT": "1000" } },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "auction-adda-server",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+      },
+      "presentation": { "panel": "dedicated" }
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "room",
+      "type": "promptString",
+      "description": "Room code from the link after # (\"last\" = newest room, from the browser or a room task)",
+      "default": "last"
+    },
+    {
+      "id": "botCount",
+      "type": "pickString",
+      "description": "How many bots?",
+      "options": ["1", "2", "3", "4", "5"],
+      "default": "2"
+    },
+    {
+      "id": "botsBesideYou",
+      "type": "pickString",
+      "description": "How many bots beside you? (a game takes 3–5 players)",
+      "options": [
+        { "label": "2 bots (3-player game)", "value": "2" },
+        { "label": "3 bots (4-player game)", "value": "3" },
+        { "label": "4 bots (5-player game)", "value": "4" },
+        { "label": "1 bot (add more or open more browser profiles)", "value": "1" }
+      ],
+      "default": "2"
+    },
+    {
+      "id": "players",
+      "type": "pickString",
+      "description": "Players at the table",
+      "options": ["3", "4", "5"],
+      "default": "4"
+    },
+    {
+      "id": "delay",
+      "type": "pickString",
+      "description": "Bot thinking time per move",
+      "options": [
+        { "label": "Normal (1.2 s)", "value": "1200" },
+        { "label": "Fast (0.4 s)", "value": "400" },
+        { "label": "Very fast (0.1 s)", "value": "100" },
+        { "label": "Slow (3 s), time to read the table", "value": "3000" }
+      ],
+      "default": "1200"
+    },
+    {
+      "id": "startAt",
+      "type": "pickString",
+      "description": "When should the bots start the game?",
+      "options": [
+        { "label": "Never, someone presses Start", "value": "0" },
+        { "label": "When 3 players are seated", "value": "3" },
+        { "label": "When 4 players are seated", "value": "4" },
+        { "label": "When 5 players are seated", "value": "5" }
+      ],
+      "default": "0"
+    },
+    {
+      "id": "dropAfter",
+      "type": "pickString",
+      "description": "Seconds into the game before the bot drops",
+      "options": ["5", "10", "20", "45"],
+      "default": "10"
+    },
+    {
+      "id": "rejoinAfter",
+      "type": "pickString",
+      "description": "When does the bot come back? (Skip / Free seat unlock after 30 s, or 5 s on the in-memory dev server)",
+      "options": [
+        { "label": "Never", "value": "0" },
+        { "label": "After 3 s (before Skip unlocks)", "value": "3" },
+        { "label": "After 15 s", "value": "15" },
+        { "label": "After 45 s (after Skip unlocks)", "value": "45" }
+      ],
+      "default": "0"
+    },
+    {
+      "id": "testFile",
+      "type": "pickString",
+      "description": "Test file",
+      "options": ["test/engine.test.ts", "test/server.test.ts"]
+    },
+    {
+      "id": "seconds",
+      "type": "pickString",
+      "description": "How long to play for screenshots",
+      "options": ["60", "120", "300"],
+      "default": "120"
+    }
+  ]
+}

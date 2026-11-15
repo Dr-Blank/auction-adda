@@ -1,0 +1,36 @@
+{
+  "name": "auction-adda",
+  "private": true,
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "repository": "github:Dr-Blank/auction-adda",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node src/server/index.ts",
+    "build": "vite build",
+    "start": "NODE_ENV=production node src/server/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "bots": "node scripts/bots.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@fontsource/anton": "^5.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

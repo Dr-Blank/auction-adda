@@ -1,0 +1,89 @@
+.poster {
+  position: relative;
+  width: 7.4em;
+  height: 10.4em;
+  border-radius: 0.5em;
+  overflow: hidden;
+  flex: none;
+  box-shadow: 0 0.15em 0.5em rgb(0 0 0 / 45%), inset 0 0 0 1px rgb(255 255 255 / 14%);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.1;
+  user-select: none;
+}
+.poster-sm { font-size: 7px; }
+.poster-md { font-size: 13px; }
+.poster-lg { font-size: 19px; }
+
+.poster-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.poster-type {
+  position: absolute;
+  top: 0.4em;
+  left: 0.4em;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.18em 0.5em;
+  border-radius: 1em;
+  font-family: system-ui, sans-serif;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+.poster-type b { font-size: 1.25em; line-height: 1; }
+
+.poster-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2.2em 0.5em 0.45em;
+}
+.poster-title {
+  font-size: 1.02em;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+  text-wrap: balance;
+}
+.poster-tag {
+  margin-top: 0.25em;
+  font-size: 0.52em;
+  font-style: italic;
+  opacity: 0.85;
+}
+.poster-star {
+  margin-top: 0.4em;
+  font-family: system-ui, sans-serif;
+  font-size: 0.56em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.poster-star i { font-style: normal; opacity: 0.7; }
+
+/* Small posters: keep only what is readable — auction icon and star initials. */
+.poster-sm .poster-type { font-size: 1.5em; padding: 0.05em 0.3em; top: 0.25em; left: 0.25em; }
+.poster-sm .poster-type span,
+.poster-sm .poster-foot { display: none; }
+.poster-code { display: none; }
+.poster-sm .poster-code {
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.25em;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+  font-size: 2em;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+}
