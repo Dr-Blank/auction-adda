@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
@@ -16,7 +17,7 @@ use engine::{
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{debug, error, info, warn};
 
 use crate::protocol::{ClientMsg, ErrorCode, RoomInfo, SeatInfo, ServerMsg, ThemeId};
 
@@ -113,6 +114,9 @@ struct Room {
 
 impl Room {
     fn set_game(&mut self, game: GameState) {
+        if game.over && !self.game.as_ref().is_some_and(|g| g.over) {
+            info!(room = %self.code, "Game over");
+        }
         self.game = Some(game);
         self.version += 1;
     }
@@ -230,7 +234,7 @@ impl Rooms {
     /// Loads the saved rooms from `data_dir`, if set.
     ///
     /// # Errors
-    /// When the data directory cannot be created or read.
+    /// When the data directory cannot be created, read or written.
     pub fn new(opts: Options) -> io::Result<Self> {
         let mut rooms = Self {
             rooms: HashMap::new(),
@@ -246,9 +250,15 @@ impl Rooms {
             dropped: Vec::new(),
         };
         if let Some(dir) = opts.data_dir {
-            fs::create_dir_all(&dir)?;
-            rooms.load(&dir)?;
+            fs::create_dir_all(&dir).map_err(|e| io_context(&e, &format!("creating {}", dir.display())))?;
+            check_writable(&dir)?;
+            rooms
+                .load(&dir)
+                .map_err(|e| io_context(&e, &format!("reading {}", dir.display())))?;
+            info!("Loaded {} rooms from {}", rooms.rooms.len(), dir.display());
             rooms.store = Some(Store::start(dir)?);
+        } else {
+            info!("No data directory: rooms are kept in memory only");
         }
         rooms.sweep();
         Ok(rooms)
@@ -283,16 +293,24 @@ impl Rooms {
     /// Handles one message as received. Anything that is not a valid message, and every rule
     /// violation, goes back to the sender as an error.
     pub fn handle_text(&mut self, id: ClientId, text: &str) {
-        if let Ok(msg) = serde_json::from_str::<ClientMsg>(text) {
-            self.handle(id, msg);
-        } else {
-            self.reply_error(id, "Bad message");
-            self.drop_overflowed();
+        match serde_json::from_str::<ClientMsg>(text) {
+            Ok(msg) => self.handle(id, msg),
+            Err(e) => {
+                debug!(client = id, "Bad message ({e}), {} bytes", text.len());
+                self.reply_error(id, "Bad message");
+                self.drop_overflowed();
+            }
         }
     }
 
     pub fn handle(&mut self, id: ClientId, msg: ClientMsg) {
+        let kind = msg.kind();
         if let Err(e) = self.dispatch(id, msg) {
+            let (room, seat) = self
+                .clients
+                .get(&id)
+                .map_or((None, None), |c| (c.room.as_deref(), c.seat));
+            debug!(client = id, room, seat, "Refused {kind}: {}", e.message);
             self.send(
                 id,
                 &ServerMsg::Error {
@@ -332,11 +350,19 @@ impl Rooms {
             .filter(|r| r.updated_at < cutoff && r.clients.is_empty())
             .map(|r| r.code.clone())
             .collect();
-        for code in old {
-            self.rooms.remove(&code);
+        for code in &old {
+            self.rooms.remove(code);
             if let Some(store) = &self.store {
-                store.remove(&code);
+                store.remove(code);
             }
+        }
+        if !old.is_empty() {
+            info!(
+                "Expired {} idle rooms ({} left): {}",
+                old.len(),
+                self.rooms.len(),
+                old.join(", ")
+            );
         }
     }
 
@@ -349,6 +375,9 @@ impl Rooms {
 
     fn drop_overflowed(&mut self) {
         while let Some(id) = self.dropped.pop() {
+            if self.clients.contains_key(&id) {
+                warn!(client = id, "Dropping a client that fell behind (send queue full)");
+            }
             self.detach(id);
             self.clients.remove(&id);
         }
@@ -405,6 +434,7 @@ impl Rooms {
                     return fail("You already have a seat");
                 }
                 let name = clean_name(&name)?;
+                info!(client = id, room = %code, seat, "{name} claimed a released seat");
                 let token = new_token();
                 if let Some(s) = room.seats.get_mut(usize::from(seat)) {
                     s.name = name;
@@ -427,6 +457,7 @@ impl Rooms {
                 if self.room_mut(&code)?.game.is_some() {
                     return fail("The game has started; you cannot leave your seat");
                 }
+                info!(client = id, room = %code, seat, "Left the lobby");
                 self.remove_lobby_seat(&code, seat);
                 self.changed(&code);
                 return Ok(());
@@ -461,14 +492,17 @@ impl Rooms {
                 if !cfg.players.contains_key(&n) {
                     return fail(format!("Needs {}–{} players", cfg.min_players(), cfg.max_players()));
                 }
-                room.set_game(new_game(n, new_seed())?);
+                let seed = new_seed();
+                room.set_game(new_game(n, seed)?);
+                info!(room = %code, seat = me, "Game started with {n} players (seed {seed})");
             }
             ClientMsg::Rematch => {
                 let Some(game) = room.game.as_ref().filter(|g| g.over) else {
                     return fail("The game is not over yet");
                 };
-                let game = new_game(game.n, new_seed())?;
-                room.set_game(game);
+                let (n, seed) = (game.n, new_seed());
+                room.set_game(new_game(n, seed)?);
+                info!(room = %code, seat = me, "Rematch with {n} players (seed {seed})");
             }
             ClientMsg::Action { action } => {
                 let before = room.game()?;
@@ -476,12 +510,14 @@ impl Rooms {
                     return fail("Unknown move");
                 }
                 let game = apply_action(before, me, &action)?;
+                debug!(room = %code, seat = me, "Move {action:?}");
                 room.set_game(game);
             }
             ClientMsg::Skip { seat } => {
                 let before = room.game()?;
                 require_away(room, seat)?;
                 let game = apply_skip(before, seat)?;
+                info!(room = %code, seat = me, "Skipped away seat {seat}");
                 room.set_game(game);
             }
             ClientMsg::Rule { winner, price } => {
@@ -490,6 +526,11 @@ impl Rooms {
                     return fail("Only the room admin can call a result");
                 }
                 let game = apply_ruling(before, me, winner, price)?;
+                if let Some(w) = winner {
+                    info!(room = %code, seat = me, "Admin called a sale to seat {w} for {price}");
+                } else {
+                    info!(room = %code, seat = me, "Admin called no sale");
+                }
                 let before = before.clone();
                 room.set_game(game);
                 room.last_call = Some(LastCall {
@@ -510,6 +551,7 @@ impl Rooms {
                 let game = undo_ruling(&call.before, after, me)?;
                 room.set_game(game);
                 room.last_call = None;
+                info!(room = %code, seat = me, "Admin undid the last call");
             }
             ClientMsg::Admin { seat } => {
                 if !room.has_seat(seat) {
@@ -527,6 +569,7 @@ impl Rooms {
                 }
                 room.admin = seat;
                 room.last_call = None;
+                info!(room = %code, seat = me, "Seat {seat} is now admin");
             }
             ClientMsg::Release { seat } => {
                 if !room.has_seat(seat) {
@@ -540,10 +583,12 @@ impl Rooms {
                     if let Some(s) = room.seats.get_mut(usize::from(seat)) {
                         s.token = None;
                     }
+                    info!(room = %code, seat = me, "Released away seat {seat}");
                 } else {
                     if room.away.get(usize::from(seat)).copied().flatten().is_none() {
                         return fail("That player is connected");
                     }
+                    info!(room = %code, seat = me, "Removed away seat {seat} from the lobby");
                     self.remove_lobby_seat(&code, seat);
                 }
             }
@@ -573,16 +618,18 @@ impl Rooms {
             })
             .unwrap_or_default();
         if recent.len() >= usize::try_from(self.create_limit.count).unwrap_or(usize::MAX) {
+            warn!(client = id, ip, "Room creation limit reached for this address");
             return fail("Too many rooms created; try again later");
         }
         if self.rooms.len() >= self.max_rooms {
             self.sweep();
         }
         if self.rooms.len() >= self.max_rooms {
+            warn!(client = id, ip, "Server full: {} rooms", self.rooms.len());
             return fail("The server is full; try again later");
         }
         recent.push(now);
-        self.creates.insert(ip, recent);
+        self.creates.insert(ip.clone(), recent);
 
         let code = loop {
             let code = new_code();
@@ -590,6 +637,13 @@ impl Rooms {
                 break code;
             }
         };
+        info!(
+            client = id,
+            room = %code,
+            ip,
+            "{name} created a {theme} room ({} rooms open)",
+            self.rooms.len() + 1
+        );
         let token = new_token();
         self.rooms.insert(
             code.clone(),
@@ -640,6 +694,7 @@ impl Rooms {
         if let Some(known) = known {
             seat = u8::try_from(known).ok();
             seat_token = room.seats.get(known).and_then(|s| s.token.clone());
+            info!(client = id, room = %code, seat, "Rejoined");
         } else if room.game.is_none()
             && let Some(raw_name) = raw_name
         {
@@ -647,6 +702,7 @@ impl Rooms {
             if room.seats.len() >= usize::from(config().max_players()) {
                 return fail("The room is full");
             }
+            info!(client = id, room = %code, seat = room.seats.len(), "{name} joined the lobby");
             let token = new_token();
             room.seats.push(SeatData {
                 name,
@@ -655,6 +711,9 @@ impl Rooms {
             room.away.push(Some(now));
             seat = u8::try_from(room.seats.len() - 1).ok();
             seat_token = Some(token);
+        } else {
+            // Debug: the app joins as a viewer before it takes a seat.
+            debug!(client = id, room = %code, "Watching");
         }
         self.attach(id, &code, seat);
         self.send(
@@ -708,6 +767,7 @@ impl Rooms {
                 .any(|c| self.clients.get(c).is_some_and(|c| c.seat == Some(seat)));
             if !still_here && let Some(away) = room.away.get_mut(usize::from(seat)) {
                 *away = Some(now);
+                info!(client = id, room = %code, seat, "Seat disconnected");
             }
         }
         self.broadcast(&code);
@@ -825,8 +885,8 @@ impl Rooms {
                 Ok(Some(room)) => {
                     self.rooms.insert(code.to_owned(), room);
                 }
-                Ok(None) => {}
-                Err(e) => error!("Skipping unreadable room file {}: {e}", name.to_string_lossy()),
+                Ok(None) => warn!("Skipping {}: another file version or room", dir.join(&name).display()),
+                Err(e) => error!("Skipping unreadable room file {}: {e:#}", dir.join(&name).display()),
             }
         }
         Ok(())
@@ -864,6 +924,41 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
     }))
 }
 
+/// Prefixes an I/O error with what was being done; the plain error does not name the file.
+fn io_context(e: &io::Error, doing: &str) -> io::Error {
+    io::Error::new(e.kind(), format!("{doing}: {e}"))
+}
+
+/// The user this process runs as. Linux only, like the rest of the server: `/proc/self` belongs
+/// to it.
+fn process_uid() -> Option<u32> {
+    fs::metadata("/proc/self").ok().map(|m| m.uid())
+}
+
+/// Fails at startup when room files could not be saved, instead of failing on every save later.
+/// The usual cause is a Docker volume or bind mount owned by root while the image runs as uid 1000.
+fn check_writable(dir: &Path) -> io::Result<()> {
+    let probe = dir.join(".write-check");
+    let Err(e) = fs::write(&probe, b"").and_then(|()| fs::remove_file(&probe)) else {
+        return Ok(());
+    };
+    let owner = fs::metadata(dir).map_or_else(
+        |_| "unknown".to_owned(),
+        |m| format!("uid {} gid {} mode {:o}", m.uid(), m.gid(), m.mode() & 0o7777),
+    );
+    let me = process_uid().map_or_else(|| "unknown".to_owned(), |u| u.to_string());
+    Err(io::Error::new(
+        e.kind(),
+        format!(
+            "cannot write room files to {}: {e}. The directory is {owner}; this server runs as uid {me}. \
+             Give that user write access (e.g. `chown -R {me} {}`), or set DATA_DIR to a writable \
+             directory, or to empty to keep rooms in memory only",
+            dir.display(),
+            dir.display(),
+        ),
+    ))
+}
+
 enum Job {
     Write { code: String, bytes: Vec<u8> },
     Remove { code: String },
@@ -886,16 +981,27 @@ impl Store {
                     Job::Write { code, bytes } => {
                         let file = dir.join(format!("{code}.json"));
                         let tmp = dir.join(format!("{code}.json.tmp"));
-                        if let Err(e) = fs::write(&tmp, bytes).and_then(|()| fs::rename(&tmp, &file)) {
-                            error!("Could not save room {code}: {e}");
+                        let saved = fs::write(&tmp, &bytes)
+                            .map_err(|e| io_context(&e, &format!("writing {}", tmp.display())))
+                            .and_then(|()| {
+                                fs::rename(&tmp, &file).map_err(|e| {
+                                    io_context(&e, &format!("renaming {} to {}", tmp.display(), file.display()))
+                                })
+                            });
+                        match saved {
+                            Ok(()) => debug!(room = %code, "Saved {} bytes", bytes.len()),
+                            Err(e) => error!(room = %code, "Could not save room: {e}"),
                         }
                     }
-                    Job::Remove { code } => match fs::remove_file(dir.join(format!("{code}.json"))) {
-                        Err(e) if e.kind() != io::ErrorKind::NotFound => {
-                            error!("Could not delete room {code}: {e}");
+                    Job::Remove { code } => {
+                        let file = dir.join(format!("{code}.json"));
+                        match fs::remove_file(&file) {
+                            Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                                error!(room = %code, "Could not delete {}: {e}", file.display());
+                            }
+                            _ => debug!(room = %code, "Deleted {}", file.display()),
                         }
-                        _ => {}
-                    },
+                    }
                     Job::Flush(done) => {
                         let _ = done.send(());
                     }

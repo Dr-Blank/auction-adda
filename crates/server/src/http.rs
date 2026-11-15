@@ -26,7 +26,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::{SetResponseHeader, SetResponseHeaderLayer};
-use tracing::error;
+use tracing::{debug, error, warn};
 
 use crate::rooms::{ClientId, Rooms};
 
@@ -101,6 +101,10 @@ async fn upgrade(
     if !app.allowed_origins.is_empty() {
         let origin = headers.get(ORIGIN).and_then(|v| v.to_str().ok());
         if !origin.is_some_and(|o| app.allowed_origins.iter().any(|a| a == o)) {
+            warn!(
+                origin = origin.unwrap_or("(none)"),
+                "Refused a WebSocket from an origin not in ALLOWED_ORIGINS"
+            );
             return StatusCode::FORBIDDEN.into_response();
         }
     }
@@ -126,7 +130,7 @@ impl Drop for Leave {
     fn drop(&mut self) {
         let mut rooms = lock(&self.rooms);
         if catch_unwind(AssertUnwindSafe(|| rooms.disconnect(self.id))).is_err() {
-            error!("Unexpected error disconnecting a client");
+            error!(client = self.id, "Unexpected error disconnecting a client");
         }
     }
 }
@@ -134,7 +138,8 @@ impl Drop for Leave {
 fn handle(rooms: &Mutex<Rooms>, id: ClientId, text: &str) {
     let mut rooms = lock(rooms);
     if catch_unwind(AssertUnwindSafe(|| rooms.handle_text(id, text))).is_err() {
-        error!("Unexpected error handling message");
+        // The panic message and location are already on stderr, from the default panic hook.
+        error!(client = id, "Unexpected error handling message ({} bytes)", text.len());
         rooms.reply_error(id, "Something went wrong on the server");
     }
 }
@@ -150,7 +155,8 @@ async fn close(socket: &mut WebSocket, code: u16, reason: &'static str) {
 async fn connection(mut socket: WebSocket, ip: String, app: App) {
     let (tx, mut outbox) = mpsc::channel::<String>(QUEUE);
     let sink = Box::new(move |msg: &_| serde_json::to_string(msg).is_ok_and(|text| tx.try_send(text).is_ok()));
-    let id = lock(&app.rooms).connect(ip, sink);
+    let id = lock(&app.rooms).connect(ip.clone(), sink);
+    debug!(client = id, ip, "Connected");
     let _leave = Leave {
         rooms: Arc::clone(&app.rooms),
         id,
@@ -163,30 +169,39 @@ async fn connection(mut socket: WebSocket, ip: String, app: App) {
     let mut window_start = Instant::now();
     let mut count = 0;
 
-    loop {
+    let reason = loop {
         tokio::select! {
             () = app.shutdown.cancelled() => {
                 close(&mut socket, GOING_AWAY, "Server restarting").await;
-                break;
+                break "server stopping";
             }
             out = outbox.recv() => {
                 // None: the rooms dropped this client because it fell behind.
-                let Some(text) = out else { break };
-                if socket.send(Message::Text(text.into())).await.is_err() {
-                    break;
+                let Some(text) = out else { break "fell behind" };
+                if let Err(e) = socket.send(Message::Text(text.into())).await {
+                    debug!(client = id, "Send failed: {e}");
+                    break "send failed";
                 }
             }
             _ = ping.tick() => {
                 if !heard {
-                    break;
+                    break "no answer to ping";
                 }
                 heard = false;
-                if socket.send(Message::Ping(Bytes::new())).await.is_err() {
-                    break;
+                if let Err(e) = socket.send(Message::Ping(Bytes::new())).await {
+                    debug!(client = id, "Ping failed: {e}");
+                    break "send failed";
                 }
             }
             frame = socket.recv() => {
-                let Some(Ok(frame)) = frame else { break };
+                let frame = match frame {
+                    Some(Ok(frame)) => frame,
+                    Some(Err(e)) => {
+                        debug!(client = id, "Receive failed: {e}");
+                        break "receive failed";
+                    }
+                    None => break "connection ended",
+                };
                 heard = true;
                 match frame {
                     Message::Text(text) => {
@@ -196,19 +211,22 @@ async fn connection(mut socket: WebSocket, ip: String, app: App) {
                         }
                         count += 1;
                         if count > MAX_MESSAGES {
+                            warn!(client = id, ip, "Closing: over {MAX_MESSAGES} messages in {MESSAGE_WINDOW:?}");
                             close(&mut socket, POLICY, "Too many messages").await;
-                            break;
+                            break "too many messages";
                         }
                         handle(&app.rooms, id, text.as_str());
                     }
                     Message::Binary(_) => {
+                        warn!(client = id, ip, "Closing: sent a binary frame");
                         close(&mut socket, POLICY, "Too many messages").await;
-                        break;
+                        break "binary frame";
                     }
-                    Message::Close(_) => break,
+                    Message::Close(_) => break "closed by the browser",
                     Message::Ping(_) | Message::Pong(_) => {}
                 }
             }
         }
-    }
+    };
+    debug!(client = id, ip, "Disconnected: {reason}");
 }

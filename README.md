@@ -67,6 +67,14 @@ docker compose up -d --build                  # or build from this checkout
 
 Serves on `127.0.0.1:8787`; room files live in the `auction-adda-data` volume. The compose file binds to loopback only and trusts Cloudflare's `cf-connecting-ip` header, so put a tunnel (or another reverse proxy) in front for public access. To pin a release, replace `latest` with a `sha-…` or version tag.
 
+The server runs as uid 1000 and will not start if it cannot write to `/data`. A volume Docker made fresh from the image already belongs to uid 1000; an older volume or a bind mount may belong to root. Fix it once:
+
+```sh
+docker run --rm -v auction-adda-data:/data alpine chown -R 1000:1000 /data
+```
+
+Logs go to stderr (`docker compose logs -f`). `RUST_LOG=debug` adds every connection, refused message and save.
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -78,6 +86,8 @@ Serves on `127.0.0.1:8787`; room files live in the `auction-adda-data` volume. T
 | `CREATE_LIMIT` | `10` | Rooms one address may create per 10 minutes |
 | `STATIC_DIR` | `./dist` | Built frontend |
 | `ALLOWED_ORIGINS` | empty (any) | Comma-separated origins allowed to open the WebSocket, e.g. `https://adda.example.com` |
+| `TZ` | `/etc/localtime`, else UTC | Time zone of log timestamps, e.g. `Asia/Kolkata` |
+| `RUST_LOG` | `info` | Log detail: `debug` adds every connection, refused message and save |
 | `CLIENT_IP_HEADER` | empty (socket address) | Header holding the visitor's address behind a proxy, e.g. `cf-connecting-ip`. Set it only when the port is reachable through that proxy alone; otherwise anyone can forge it and get around `CREATE_LIMIT` |
 
 Each one is also a command-line option; `auction-adda --help` lists them. Relative paths are relative to the working directory; the image sets `DATA_DIR=/data` and `STATIC_DIR=/app/dist`.

@@ -1,3 +1,4 @@
+use std::io::IsTerminal as _;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -8,12 +9,18 @@ use anyhow::Context as _;
 use axum::http::HeaderName;
 use axum::serve::ListenerExt as _;
 use clap::Parser;
+use jiff::Timestamp;
+use jiff::tz::TimeZone;
 use server::http::{App, lock, router};
 use server::rooms::{CreateLimit, Options, Rooms};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::level_filters::LevelFilter;
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
 
 const PORT: u16 = 8787;
 const CREATE_LIMIT: u32 = 10;
@@ -65,6 +72,17 @@ where
     raw.trim().parse().map_err(|e| format!("{e}"))
 }
 
+/// Log timestamps in local time with the UTC offset, e.g. `2026-11-15T22:46:56.754+05:30`. The
+/// zone comes from `TZ` (e.g. `Asia/Kolkata`) or `/etc/localtime`, else UTC.
+struct LocalTime(TimeZone);
+
+impl FormatTime for LocalTime {
+    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
+        let now = Timestamp::now().to_zoned(self.0.clone());
+        write!(w, "{}", now.strftime("%Y-%m-%dT%H:%M:%S%.3f%:z"))
+    }
+}
+
 /// Resolves on SIGINT or SIGTERM. Needed in the container, where the server is PID 1 and gets no
 /// default signal handling.
 async fn stop_signal() -> anyhow::Result<()> {
@@ -79,8 +97,30 @@ async fn stop_signal() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+    // RUST_LOG picks the detail, e.g. `debug` for every connection and refused message; default info.
+    let zone = TimeZone::system();
+    let zone_name = zone.iana_name().unwrap_or("fixed offset").to_owned();
+    tracing_subscriber::fmt()
+        .with_timer(LocalTime(zone))
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .with_ansi(std::io::stderr().is_terminal())
+        .with_writer(std::io::stderr)
+        .init();
     let s = Settings::parse();
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        time_zone = zone_name,
+        static_dir = %s.static_dir.display(),
+        allowed_origins = %if s.allowed_origins.is_empty() { "any".to_owned() } else { s.allowed_origins.join(",") },
+        client_ip_header = if s.client_ip_header.is_empty() { "(socket address)" } else { s.client_ip_header.as_str() },
+        create_limit = s.create_limit,
+        skip_after_ms = s.skip_after_ms,
+        "Starting"
+    );
 
     let rooms = Rooms::new(Options {
         data_dir: (!s.data_dir.is_empty()).then(|| s.data_dir.into()),
@@ -129,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
             warn!("Cannot listen for stop signals: {e}");
             return;
         }
+        info!("Stopping: closing connections");
         stop.cancel();
     });
 
@@ -163,5 +204,6 @@ async fn main() -> anyhow::Result<()> {
         } => warn!("Stopped waiting for open connections"),
     }
     lock(&rooms).flush();
+    info!("Stopped");
     Ok(())
 }

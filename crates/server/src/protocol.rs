@@ -69,6 +69,28 @@ pub enum ClientMsg {
     Unknown,
 }
 
+impl ClientMsg {
+    /// The `type` tag, for logs. The message itself may hold a seat token, so it is never logged.
+    #[must_use]
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Create { .. } => "create",
+            Self::Join { .. } => "join",
+            Self::Claim { .. } => "claim",
+            Self::Start => "start",
+            Self::Action { .. } => "action",
+            Self::Skip { .. } => "skip",
+            Self::Release { .. } => "release",
+            Self::Leave => "leave",
+            Self::Rematch => "rematch",
+            Self::Rule { .. } => "rule",
+            Self::Undo => "undo",
+            Self::Admin { .. } => "admin",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SeatInfo {

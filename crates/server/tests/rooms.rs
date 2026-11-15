@@ -516,6 +516,31 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
     assert_eq!(dir.files(), Vec::<String>::new());
 }
 
+/// A data directory the server cannot write to (a Docker volume owned by root, say) stops it at
+/// startup with the reason, instead of failing every save while games go on.
+#[test]
+fn refuses_to_start_on_a_data_directory_it_cannot_write() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = TmpDir::new("read-only");
+    fs::set_permissions(&dir.0, fs::Permissions::from_mode(0o555)).unwrap();
+    // Root writes anyway; nothing to check then.
+    if fs::write(dir.0.join("probe"), "").is_ok() {
+        return;
+    }
+    let err = Rooms::new(Options {
+        data_dir: Some(dir.0.clone()),
+        ..Options::default()
+    })
+    .err()
+    .expect("a read-only data directory is refused")
+    .to_string();
+    fs::set_permissions(&dir.0, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(err.contains(&dir.0.display().to_string()), "{err}");
+    assert!(err.contains("mode 555"), "{err}");
+    assert!(err.contains("runs as uid"), "{err}");
+}
+
 /// A file written by the Node server mid-game loads, keeps its seats and plays on.
 #[test]
 fn loads_a_room_saved_by_the_node_server() {
