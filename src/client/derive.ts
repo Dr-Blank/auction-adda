@@ -1,7 +1,7 @@
 // Facts the table screen shows that are not stored directly in the view.
 
-import { ROUNDS, SUITS, TOKENS } from '../engine/config.ts';
-import type { Card, LogEntry, View } from '../engine/types.ts';
+import { ROUNDS, SUITS, TOKENS } from '../config.ts';
+import type { Card, LogEntry, View } from '../generated/index.ts';
 
 /** What one card of each suit would pay if the round ended right now. */
 export function provisionalValues(g: View): number[] {

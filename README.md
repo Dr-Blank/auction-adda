@@ -4,12 +4,12 @@ A browser auction card game for 3–5 friends on voice chat. One person creates 
 
 ## Run it
 
-Needs Node 24 or newer (the server runs its TypeScript sources directly).
+Needs Rust (the version in `rust-toolchain.toml`; rustup picks it up) for the server and Node 24 or newer for the frontend.
 
 ```sh
 npm install
 npm run build     # builds the frontend into dist/
-npm start         # http://localhost:8787
+npm start         # http://localhost:8787 (cargo run --release)
 ```
 
 Rooms are saved in `data/` and survive restarts.
@@ -17,11 +17,17 @@ Rooms are saved in `data/` and survive restarts.
 ### Development
 
 ```sh
-npm run server    # game server on :8787
+npm run server    # game server on :8787 (cargo run)
 npm run dev       # frontend on :5173 with hot reload, proxies /ws to the server
-npm test          # rules tests, random full games, real-socket game
+cargo test        # rules, the recorded games, rooms; also rewrites src/generated
+npm test          # builds the server, then plays real games against it over sockets
 npm run typecheck
+cargo clippy --all-targets && cargo fmt
 ```
+
+The TypeScript types of every message live in `src/generated/`, written by `cargo test` from the Rust types; commit them with the change that caused them (CI fails when they are stale). The game constants are in `crates/engine/config.json`, read by the engine and the client alike.
+
+The engine is checked against games recorded from the original TypeScript engine (`crates/engine/fixtures/`). After a deliberate rule change, rewrite them with `BLESS=1 cargo test -p engine --test fixtures` and review the diff.
 
 ### Try it alone
 
@@ -66,13 +72,15 @@ Serves on `127.0.0.1:8787`; room files live in the `auction-adda-data` volume. T
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PORT` | `8787` | HTTP and WebSocket port |
-| `HOST` | all interfaces | Address to listen on |
+| `HOST` | `0.0.0.0` | Address to listen on; `::` for IPv6 |
 | `DATA_DIR` | `./data` | Where room files are kept; empty keeps rooms in memory only |
 | `SKIP_AFTER_MS` | `30000` | How long a seat must be disconnected before others can skip it, free it or take admin |
 | `CREATE_LIMIT` | `10` | Rooms one address may create per 10 minutes |
 | `STATIC_DIR` | `./dist` | Built frontend |
 | `ALLOWED_ORIGINS` | empty (any) | Comma-separated origins allowed to open the WebSocket, e.g. `https://adda.example.com` |
 | `CLIENT_IP_HEADER` | empty (socket address) | Header holding the visitor's address behind a proxy, e.g. `cf-connecting-ip`. Set it only when the port is reachable through that proxy alone; otherwise anyone can forge it and get around `CREATE_LIMIT` |
+
+Each one is also a command-line option; `auction-adda --help` lists them. Relative paths are relative to the working directory; the image sets `DATA_DIR=/data` and `STATIC_DIR=/app/dist`.
 
 ## During a game
 
@@ -85,15 +93,16 @@ Serves on `127.0.0.1:8787`; room files live in the `auction-adda-data` volume. T
 ## Layout
 
 ```text
-src/engine/     rules: pure TypeScript, no UI or network
-src/server/     rooms, WebSocket protocol, persistence, static files
+crates/engine/  rules: pure Rust, no I/O, no clock; config.json holds the game constants
+crates/server/  rooms, WebSocket protocol, persistence, static files (the auction-adda binary)
+src/generated/  TypeScript types written from the Rust types by cargo test (do not edit)
 src/themes/     skins; box-office is the first
 src/client/     React UI
-scripts/bots.ts random-playing bots
-test/           rules, random full games, server
+scripts/        random-playing bots (bot.ts picks a move, bots.ts runs them), screenshots
+test/           the server as a black box over real sockets, theme checks
 ```
 
-A new theme is a folder in `src/themes/` plus one line in `ids.ts` and `index.ts`; the rules do not change. Theme names, titles and art must be invented: no real people, films, studios or logos.
+A new theme is a folder in `src/themes/`, an entry in `src/themes/index.ts` and a variant of `ThemeId` in `crates/server/src/protocol.rs`; the compiler refuses a theme that is missing on either side. The rules do not change. Theme names, titles and art must be invented: no real people, films, studios or logos.
 
 ## Licence
 

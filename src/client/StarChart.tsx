@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { SUIT_LIMIT, TOKENS } from '../engine/config.ts';
-import type { View } from '../engine/types.ts';
+import { SUIT_LIMIT, TOKENS } from '../config.ts';
+import type { View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { countBySuit, provisionalValues, rankSuits } from './derive.ts';
 import { COMPACT, useMedia } from './hooks.ts';

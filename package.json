@@ -7,20 +7,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node src/server/index.ts",
+    "server": "cargo run -p server",
     "build": "vite build",
-    "start": "NODE_ENV=production node src/server/index.ts",
-    "test": "vitest run",
+    "start": "cargo run --release -p server",
+    "test": "cargo build -q -p server && vitest run",
     "typecheck": "tsc --noEmit",
     "bots": "node scripts/bots.ts"
   },
   "engines": {
     "node": ">=24"
   },
-  "dependencies": {
-    "ws": "^8.23.0"
-  },
   "devDependencies": {
+    "ws": "^8.23.0",
     "@fontsource/anton": "^5.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

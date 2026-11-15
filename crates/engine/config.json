@@ -1,0 +1,18 @@
+{
+  "suits": 5,
+  "rounds": 4,
+  "suitLimit": 5,
+  "tokens": [30, 20, 10],
+  "players": {
+    "3": { "deal": [10, 6, 6, 0], "startMoney": 100 },
+    "4": { "deal": [9, 4, 4, 0], "startMoney": 100 },
+    "5": { "deal": [8, 3, 3, 0], "startMoney": 100 }
+  },
+  "cardTable": [
+    { "open": 3, "once": 3, "sealed": 2, "fixed": 2, "double": 2 },
+    { "open": 3, "once": 2, "sealed": 3, "fixed": 3, "double": 2 },
+    { "open": 3, "once": 3, "sealed": 3, "fixed": 3, "double": 2 },
+    { "open": 3, "once": 3, "sealed": 3, "fixed": 3, "double": 3 },
+    { "open": 4, "once": 3, "sealed": 3, "fixed": 3, "double": 3 }
+  ]
+}

@@ -7,7 +7,7 @@
     // ---------- servers ----------
     {
       "label": "Dev: server + client",
-      "detail": "Game server on :8787 (restarts on change) and Vite on :5173",
+      "detail": "Game server on :8787 (rerun the task after a Rust change) and Vite on :5173",
       "dependsOn": ["Dev: server", "Dev: client"],
       "dependsOrder": "parallel",
       "problemMatcher": []
@@ -21,28 +21,28 @@
     },
     {
       "label": "Dev: server",
-      "detail": "node --watch on :8787, rooms saved in data/",
+      "detail": "cargo run on :8787, rooms saved in data/",
       "type": "shell",
-      "command": "node --watch src/server/index.ts",
+      "command": "cargo run -p server",
       "options": { "env": { "CREATE_LIMIT": "1000" } },
       "isBackground": true,
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
       },
       "presentation": { "group": "dev", "panel": "dedicated" }
     },
     {
       "label": "Dev: server (in-memory, 5 s timeout)",
       "type": "shell",
-      "command": "node --watch src/server/index.ts",
+      "command": "cargo run -p server",
       "options": { "env": { "CREATE_LIMIT": "1000", "DATA_DIR": "", "SKIP_AFTER_MS": "5000" } },
       "isBackground": true,
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
       },
       "presentation": { "group": "dev", "panel": "dedicated" }
     },
@@ -69,7 +69,7 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
       },
       "presentation": { "panel": "dedicated" }
     },
@@ -82,7 +82,7 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
       },
       "presentation": { "panel": "dedicated" }
     },
@@ -157,9 +157,9 @@
     // ---------- checks ----------
     {
       "label": "Test",
-      "detail": "Rules tests, random full games, real-socket game",
-      "type": "npm",
-      "script": "test",
+      "detail": "Rust tests (rules, recorded games, rooms), then the real-socket tests",
+      "type": "shell",
+      "command": "cargo test && npm test",
       "group": { "kind": "test", "isDefault": true },
       "problemMatcher": []
     },
@@ -204,13 +204,13 @@
     {
       "label": "Screenshots: server on 8799",
       "type": "shell",
-      "command": "node src/server/index.ts",
+      "command": "cargo run -p server",
       "options": { "env": { "PORT": "8799", "DATA_DIR": "", "CREATE_LIMIT": "1000" } },
       "isBackground": true,
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "Restarting '|^> ", "endsPattern": "listening on port" }
+        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
       },
       "presentation": { "panel": "dedicated" }
     }
@@ -296,7 +296,7 @@
       "id": "testFile",
       "type": "pickString",
       "description": "Test file",
-      "options": ["test/engine.test.ts", "test/server.test.ts"]
+      "options": ["test/server.test.ts", "test/themes.test.ts"]
     },
     {
       "id": "seconds",

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ClientMsg } from '../protocol.ts';
+import type { ClientMsg } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { initials } from './derive.ts';
 import { saveName, savedName } from './net.ts';

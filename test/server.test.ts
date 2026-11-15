@@ -1,40 +1,43 @@
+// The server as a black box: started as a child process, spoken to over HTTP and WebSockets.
+// Rule and room logic is tested next to the code, in crates/*/tests.
+
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { chooseAction } from '../src/engine/bot.ts';
-import { rng } from '../src/engine/deck.ts';
-import type { ClientMsg, ServerMsg } from '../src/protocol.ts';
-import { Rooms } from '../src/server/rooms.ts';
-import type { Client } from '../src/server/rooms.ts';
-import { startServer } from '../src/server/server.ts';
+import { chooseAction } from '../scripts/bot.ts';
+import type { ClientMsg, ServerMsg } from '../src/generated/index.ts';
+import { rng } from '../src/rng.ts';
 
 type State = Extract<ServerMsg, { type: 'state' }>;
-type Joined = Extract<ServerMsg, { type: 'joined' }>;
 
-interface Fake extends Client {
-  got: ServerMsg[];
-}
+/** The server under test. `npm test` builds it first. */
+const SERVER_CMD = process.env.AA_SERVER_CMD ?? 'target/debug/auction-adda';
 
-function fake(ip = '10.0.0.1'): Fake {
-  const got: ServerMsg[] = [];
-  return { ip, got, send: (m) => got.push(structuredClone(m)) };
-}
-const state = (c: Fake) => c.got.filter((m): m is State => m.type === 'state').at(-1)!;
-const joined = (c: Fake) => c.got.filter((m): m is Joined => m.type === 'joined').at(-1)!;
-const lastError = (c: Fake) => {
-  const m = c.got.at(-1)!;
-  return m.type === 'error' ? m.message : null;
-};
-
-/** A room with `n` seated players; returns the clients in seat order. */
-function seated(rooms: Rooms, n: number) {
-  const clients = Array.from({ length: n }, (_, i) => fake(`10.0.0.${i + 1}`));
-  rooms.handle(clients[0], { type: 'create', theme: 'box-office', name: 'P0' } satisfies ClientMsg);
-  const code = joined(clients[0]).room;
-  for (let i = 1; i < n; i++) rooms.handle(clients[i], { type: 'join', room: code, name: `P${i}` });
-  return { clients, code };
+/** Starts the server with the given environment on a free port; resolves once it is listening. */
+function startServer(env: Record<string, string>): Promise<{ port: number; close: () => Promise<void> }> {
+  const [cmd, ...args] = SERVER_CMD.split(' ');
+  const child = spawn(cmd, args, {
+    env: { ...process.env, PORT: '0', HOST: '127.0.0.1', DATA_DIR: '', ...env },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  const close = async () => {
+    child.kill('SIGTERM');
+    await exited;
+  };
+  return new Promise((resolve, reject) => {
+    let out = '';
+    child.once('error', reject);
+    child.once('exit', (code) => reject(new Error(`server exited with ${code} before listening:\n${out}`)));
+    child.stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString();
+      const port = /listening on port (\d+)/.exec(out)?.[1];
+      if (port) resolve({ port: Number(port), close });
+    });
+  });
 }
 
 const tmpDirs: string[] = [];
@@ -47,232 +50,45 @@ afterEach(() => {
   for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-describe('rooms', () => {
-  it('lobby: join, leave, start needs 3–5 players', () => {
-    const rooms = new Rooms();
-    const { clients, code } = seated(rooms, 2);
-    expect(code).toMatch(/^[A-Z0-9]{6}$/);
-    expect(state(clients[1]).room.seats.map((s) => s.name)).toEqual(['P0', 'P1']);
-    rooms.handle(clients[0], { type: 'start' });
-    expect(lastError(clients[0])).toMatch(/3–5/);
+describe('server over real sockets', () => {
+  it('serves the app, its assets and the health check', async () => {
+    const staticDir = tmpDir();
+    fs.writeFileSync(path.join(staticDir, 'index.html'), '<!doctype html><title>app</title>');
+    fs.mkdirSync(path.join(staticDir, 'assets'));
+    fs.writeFileSync(path.join(staticDir, 'assets', 'app-1234.js'), 'export {};');
+    const server = await startServer({ STATIC_DIR: staticDir });
+    const base = `http://127.0.0.1:${server.port}`;
+    try {
+      expect(await (await fetch(`${base}/healthz`)).json()).toEqual({ ok: true, rooms: 0 });
 
-    const c = fake();
-    rooms.handle(c, { type: 'join', room: code.toLowerCase(), name: '  Third\u0007 player with a very long name  ' });
-    expect(state(c).room.seats[2].name).toBe('Third player with a');
-    expect(state(c).you).toBe(2);
+      const page = await fetch(`${base}/some/room`);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain('<title>app</title>');
+      expect(page.headers.get('content-type')).toContain('text/html');
+      expect(page.headers.get('cache-control')).toBe('no-cache');
+      expect(page.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(page.headers.get('referrer-policy')).toBe('no-referrer');
 
-    // seat 1 leaves: seat 2 moves down to seat 1 and keeps working
-    rooms.handle(clients[1], { type: 'leave' });
-    expect(state(c).you).toBe(1);
-    expect(state(clients[1]).you).toBeNull();
-    rooms.handle(clients[1], { type: 'join', room: code, name: 'Back' });
-    rooms.handle(c, { type: 'start' });
-    expect(state(c).game!.n).toBe(3);
-    expect(state(c).game!.hand).toHaveLength(10);
-  });
+      const asset = await fetch(`${base}/assets/app-1234.js`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get('content-type')).toContain('javascript');
+      expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
 
-  it('unknown room, bad theme, full room, spectators', () => {
-    const rooms = new Rooms();
-    const a = fake();
-    rooms.handle(a, { type: 'join', room: 'NOPE00', name: 'x' });
-    expect(a.got.at(-1)).toMatchObject({ type: 'error', code: 'no-room' });
-    rooms.handle(a, { type: 'create', theme: 'nope', name: 'x' });
-    expect(lastError(a)).toMatch(/theme/);
-    rooms.handle(a, { type: 'create', theme: 'box-office', name: '   ' });
-    expect(lastError(a)).toMatch(/name/);
-
-    const { clients, code } = seated(rooms, 5);
-    const sixth = fake();
-    rooms.handle(sixth, { type: 'join', room: code, name: 'Six' });
-    expect(lastError(sixth)).toMatch(/full/);
-
-    rooms.handle(clients[0], { type: 'start' });
-    const watcher = fake();
-    rooms.handle(watcher, { type: 'join', room: code, name: 'Late', token: 'wrong' });
-    expect(joined(watcher).seat).toBeNull();
-    const v = state(watcher).game!;
-    expect(v.hand).toEqual([]);
-    expect(v.players.every((p) => p.money === null)).toBe(true);
-    rooms.handle(watcher, { type: 'action', action: { type: 'pass' } });
-    expect(lastError(watcher)).toMatch(/watching/);
-  });
-
-  it('reconnect with the seat token restores the seat; tokens are never broadcast', () => {
-    const rooms = new Rooms();
-    const { clients, code } = seated(rooms, 3);
-    rooms.handle(clients[0], { type: 'start' });
-    const token = joined(clients[1]).token!;
-    const hand = state(clients[1]).game!.hand;
-
-    rooms.disconnect(clients[1]);
-    expect(state(clients[0]).room.seats[1].connected).toBe(false);
-    const again = fake();
-    rooms.handle(again, { type: 'join', room: code, token });
-    expect(joined(again).seat).toBe(1);
-    expect(state(again).game!.hand).toEqual(hand);
-    expect(state(clients[0]).room.seats[1].connected).toBe(true);
-
-    const secrets = clients.map((c) => joined(c).token!);
-    for (const c of [...clients, again]) {
-      for (const m of c.got) {
-        if (m.type === 'state') for (const secret of secrets) expect(JSON.stringify(m)).not.toContain(secret);
-      }
+      // A stale tab asking for an old asset must not get HTML as a script.
+      expect((await fetch(`${base}/assets/missing.js`)).status).toBe(404);
+      const outside = await fetch(`${base}/..%2f..%2fetc%2fpasswd`);
+      expect(outside.headers.get('content-type')).toContain('text/html');
+      expect(await outside.text()).toContain('<title>app</title>');
+      expect((await fetch(`${base}/`, { method: 'POST' })).status).toBe(405);
+    } finally {
+      await server.close();
     }
   });
 
-  it('skip and release need 30 s of disconnection; a released seat can be claimed', () => {
-    let now = 1_000_000;
-    const rooms = new Rooms({ now: () => now });
-    const { clients, code } = seated(rooms, 3);
-    rooms.handle(clients[0], { type: 'start' });
-    const turn = state(clients[0]).game!.turn;
-    const other = clients[(turn + 1) % 3];
-
-    rooms.handle(other, { type: 'skip', seat: turn });
-    expect(lastError(other)).toMatch(/connected/);
-    rooms.disconnect(clients[turn]);
-    now += 29_000;
-    rooms.handle(other, { type: 'skip', seat: turn });
-    expect(lastError(other)).toMatch(/longer/);
-    rooms.handle(other, { type: 'release', seat: turn });
-    expect(lastError(other)).toMatch(/longer/);
-    now += 2_000;
-    rooms.handle(other, { type: 'skip', seat: turn });
-    expect(state(other).room.seats[turn].awayMs).toBe(31_000);
-    expect(state(other).game!.turn).toBe((turn + 1) % 3);
-    expect(state(other).game!.players[turn].handCount).toBe(10);
-
-    rooms.handle(other, { type: 'release', seat: turn });
-    expect(state(other).room.seats[turn].open).toBe(true);
-    const sub = fake();
-    rooms.handle(sub, { type: 'join', room: code });
-    expect(joined(sub).seat).toBeNull();
-    rooms.handle(sub, { type: 'claim', seat: (turn + 1) % 3, name: 'Sub' });
-    expect(lastError(sub)).toMatch(/taken/);
-    rooms.handle(sub, { type: 'claim', seat: turn, name: 'Sub' });
-    expect(joined(sub).seat).toBe(turn);
-    expect(state(sub).game!.hand).toHaveLength(10);
-    expect(state(other).room.seats[turn]).toMatchObject({ name: 'Sub', open: false, connected: true });
-  });
-
-  it('only whitelisted moves from the right seat are applied', () => {
-    const rooms = new Rooms();
-    const { clients } = seated(rooms, 3);
-    rooms.handle(clients[0], { type: 'start' });
-    const turn = state(clients[0]).game!.turn;
-    const wrong = clients[(turn + 1) % 3];
-    rooms.handle(wrong, { type: 'action', action: { type: 'play', card: state(wrong).game!.hand[0].id } });
-    expect(lastError(wrong)).toMatch(/not your turn/);
-    rooms.handle(wrong, { type: 'action', action: { type: 'skipTurn' } as never });
-    expect(lastError(wrong)).toMatch(/Unknown move/);
-    rooms.handle(wrong, { type: 'rematch' });
-    expect(lastError(wrong)).toMatch(/not over/);
-    rooms.handle(wrong, 'garbage' as never);
-    expect(lastError(wrong)).toMatch(/Bad message/);
-  });
-
-  it('admin: creator calls results; role moves by hand-over or after 30 s away', () => {
-    let now = 1_000_000;
-    const rooms = new Rooms({ now: () => now });
-    const { clients } = seated(rooms, 3);
-    expect(state(clients[1]).room.admin).toBe(0);
-    rooms.handle(clients[0], { type: 'start' });
-    const g = state(clients[0]).game!;
-    const turn = g.turn;
-    const card = state(clients[turn]).game!.hand.find((x) => x.type !== 'double')!;
-    rooms.handle(clients[turn], { type: 'action', action: { type: 'play', card: card.id } });
-    expect(state(clients[0]).game!.auction).not.toBeNull();
-
-    rooms.handle(clients[1], { type: 'rule', winner: 1, price: 5 });
-    expect(lastError(clients[1])).toMatch(/admin/);
-    rooms.handle(clients[0], { type: 'rule', winner: 2, price: 5 });
-    const after = state(clients[1]).game!;
-    expect(after.auction).toBeNull();
-    expect(after.players[2].bought.map((x) => x.id)).toEqual([card.id]);
-    expect(after.log.at(-1)).toMatchObject({ by: 0 });
-    expect(state(clients[1]).room.canUndo).toBe(true);
-
-    // Undo puts the auction back; only the admin may, and only once.
-    rooms.handle(clients[1], { type: 'undo' });
-    expect(lastError(clients[1])).toMatch(/admin/);
-    rooms.handle(clients[0], { type: 'undo' });
-    const undone = state(clients[1]).game!;
-    expect(undone.auction?.cards.map((x) => x.id)).toEqual([card.id]);
-    expect(undone.players[2].bought).toEqual([]);
-    expect(undone.log.at(-1)).toMatchObject({ t: 'undo', by: 0 });
-    expect(state(clients[1]).room.canUndo).toBe(false);
-    rooms.handle(clients[0], { type: 'undo' });
-    expect(lastError(clients[0])).toMatch(/Nothing to undo/);
-
-    // A move after the call closes the undo.
-    rooms.handle(clients[0], { type: 'rule', winner: 2, price: 5 });
-    const next = state(clients[0]).game!;
-    const mover = clients[next.turn];
-    rooms.handle(mover, { type: 'action', action: { type: 'play', card: state(mover).game!.hand[0].id } });
-    expect(state(clients[0]).room.canUndo).toBe(false);
-    rooms.handle(clients[0], { type: 'undo' });
-    expect(lastError(clients[0])).toMatch(/Nothing to undo/);
-
-    rooms.handle(clients[1], { type: 'admin', seat: 1 });
-    expect(lastError(clients[1])).toMatch(/connected/);
-    rooms.handle(clients[0], { type: 'admin', seat: 2 });
-    expect(state(clients[1]).room.admin).toBe(2);
-    rooms.disconnect(clients[2]);
-    now += 31_000;
-    rooms.handle(clients[0], { type: 'admin', seat: 1 });
-    expect(lastError(clients[0])).toMatch(/hand the role/);
-    rooms.handle(clients[1], { type: 'admin', seat: 1 });
-    expect(state(clients[0]).room.admin).toBe(1);
-  });
-
-  it('limits room creation per address', () => {
-    const rooms = new Rooms({ createLimit: { count: 2, windowMs: 1000 } });
-    const a = fake('9.9.9.9');
-    rooms.handle(a, { type: 'create', theme: 'box-office', name: 'a' });
-    rooms.handle(a, { type: 'create', theme: 'box-office', name: 'a' });
-    rooms.handle(a, { type: 'create', theme: 'box-office', name: 'a' });
-    expect(lastError(a)).toMatch(/Too many/);
-    const b = fake('8.8.8.8');
-    rooms.handle(b, { type: 'create', theme: 'box-office', name: 'b' });
-    expect(lastError(b)).toBeNull();
-  });
-
-  it('rooms survive a restart and expire after the TTL', () => {
-    const dataDir = tmpDir();
-    let now = 5_000_000;
-    let rooms = new Rooms({ dataDir, now: () => now });
-    const { clients, code } = seated(rooms, 3);
-    rooms.handle(clients[0], { type: 'start' });
-    const token = joined(clients[2]).token!;
-    const before = state(clients[2]).game!;
-    expect(fs.readdirSync(dataDir)).toEqual([`${code}.json`]);
-
-    rooms = new Rooms({ dataDir, now: () => now });
-    const back = fake();
-    rooms.handle(back, { type: 'join', room: code, token });
-    expect(joined(back).seat).toBe(2);
-    expect(state(back).game).toEqual(before);
-    rooms.disconnect(back);
-
-    now += 8 * 24 * 3600 * 1000;
-    rooms = new Rooms({ dataDir, now: () => now });
-    expect(rooms.size).toBe(0);
-    expect(fs.readdirSync(dataDir)).toEqual([]);
-  });
-});
-
-describe('server over real sockets', () => {
   it('plays a full 4-player game and a rematch without leaking hidden information', { timeout: 60_000 }, async () => {
-    const staticDir = tmpDir();
-    fs.writeFileSync(path.join(staticDir, 'index.html'), '<!doctype html><title>app</title>');
-    const server = await startServer({ port: 0, host: '127.0.0.1', staticDir, dataDir: tmpDir() });
+    const server = await startServer({ DATA_DIR: tmpDir() });
     const base = `127.0.0.1:${server.port}`;
     try {
-      expect(await (await fetch(`http://${base}/healthz`)).json()).toMatchObject({ ok: true });
-      expect(await (await fetch(`http://${base}/some/room`)).text()).toContain('<title>app</title>');
-      expect((await fetch(`http://${base}/assets/missing.js`)).status).toBe(404);
-      expect((await fetch(`http://${base}/..%2f..%2fetc%2fpasswd`)).headers.get('content-type')).toContain('text/html');
-
       const random = rng(42);
       const n = 4;
       const tokens: string[] = [];
@@ -354,6 +170,45 @@ describe('server over real sockets', () => {
     }
   });
 
+  it('answers malformed and oversized messages without dropping the room', async () => {
+    const server = await startServer({});
+    try {
+      const ws = new WebSocket(`ws://127.0.0.1:${server.port}/ws`);
+      const replies: ServerMsg[] = [];
+      const closed = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
+      await new Promise<void>((resolve, reject) => {
+        ws.on('error', reject);
+        ws.on('open', () => resolve());
+      });
+      ws.on('message', (data) => replies.push(JSON.parse(data.toString()) as ServerMsg));
+      const next = () =>
+        new Promise<ServerMsg>((resolve) => {
+          const at = replies.length;
+          const poll = setInterval(() => {
+            if (replies.length > at) {
+              clearInterval(poll);
+              resolve(replies[at]);
+            }
+          }, 5);
+        });
+      ws.send('not json');
+      expect(await next()).toEqual({ type: 'error', message: 'Bad message' });
+      ws.send(JSON.stringify({ type: 'start' }));
+      expect(await next()).toEqual({ type: 'error', message: 'Join a room first' });
+      ws.send(JSON.stringify({ type: 'join', room: 'NOPE00' }));
+      expect(await next()).toEqual({
+        type: 'error',
+        message: 'That room does not exist (it may have expired)',
+        code: 'no-room',
+      });
+      // More than 4096 bytes closes the socket.
+      ws.send('x'.repeat(5000));
+      expect(await closed).not.toBe(1000);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('trusts a client address header only when configured', async () => {
     /** Creates a room with the given forwarded address; resolves to the first reply type. */
     const create = (port: number, forwarded: string) =>
@@ -366,10 +221,10 @@ describe('server over real sockets', () => {
           ws.close();
         });
       });
-    const createLimit = { count: 1, windowMs: 60_000 };
+    const CREATE_LIMIT = '1';
 
     // Without the option the header is ignored, so a forged address does not get a fresh quota.
-    const plain = await startServer({ port: 0, host: '127.0.0.1', createLimit });
+    const plain = await startServer({ CREATE_LIMIT });
     try {
       expect(await create(plain.port, '1.1.1.1')).toBe('joined');
       expect(await create(plain.port, '2.2.2.2')).toBe('error');
@@ -377,13 +232,33 @@ describe('server over real sockets', () => {
       await plain.close();
     }
 
-    const proxied = await startServer({ port: 0, host: '127.0.0.1', createLimit, clientIpHeader: 'CF-Connecting-IP' });
+    const proxied = await startServer({ CREATE_LIMIT, CLIENT_IP_HEADER: 'CF-Connecting-IP' });
     try {
       expect(await create(proxied.port, '1.1.1.1')).toBe('joined');
       expect(await create(proxied.port, '2.2.2.2')).toBe('joined');
       expect(await create(proxied.port, '1.1.1.1')).toBe('error');
     } finally {
       await proxied.close();
+    }
+  });
+
+  it('refuses WebSockets from other origins when ALLOWED_ORIGINS is set', async () => {
+    const server = await startServer({ ALLOWED_ORIGINS: 'https://adda.example.com, https://other.example.com' });
+    const connect = (origin: string) =>
+      new Promise<string>((resolve) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${server.port}/ws`, { origin });
+        ws.on('open', () => {
+          resolve('open');
+          ws.close();
+        });
+        ws.on('unexpected-response', (_req, res) => resolve(String(res.statusCode)));
+        ws.on('error', () => resolve('error'));
+      });
+    try {
+      expect(await connect('https://other.example.com')).toBe('open');
+      expect(await connect('https://evil.example.com')).toBe('403');
+    } finally {
+      await server.close();
     }
   });
 });

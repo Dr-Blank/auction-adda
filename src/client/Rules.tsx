@@ -1,5 +1,5 @@
-import { ROUNDS, SUIT_LIMIT, TOKENS } from '../engine/config.ts';
-import type { AuctionType } from '../engine/types.ts';
+import { ROUNDS, SUIT_LIMIT, TOKENS } from '../config.ts';
+import type { AuctionType } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 
 const TYPES: AuctionType[] = ['open', 'once', 'sealed', 'fixed', 'double'];

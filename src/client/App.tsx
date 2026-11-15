@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_THEME } from '../themes/ids.ts';
-import { getTheme } from '../themes/index.ts';
+import { DEFAULT_THEME, getTheme } from '../themes/index.ts';
 import { Home } from './Home.tsx';
 import { Lobby } from './Lobby.tsx';
 import { useRoom } from './net.ts';

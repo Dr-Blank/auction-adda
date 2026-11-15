@@ -1,8 +1,9 @@
-import type { Action, View } from './types.ts';
+import type { Action, View } from '../src/generated/index.ts';
 
 /**
- * A player that makes random legal moves. Used by the simulated-game tests and by
- * scripts/bots.ts for solo testing; it is not meant to play well.
+ * A player that makes random legal moves. Used by the socket tests and by scripts/bots.ts for
+ * solo testing; it is not meant to play well. It plays through the wire protocol, so it is not
+ * part of the engine.
  */
 export function chooseAction(v: View, random: () => number): Action | null {
   const me = v.you;

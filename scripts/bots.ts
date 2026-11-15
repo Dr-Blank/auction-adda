@@ -24,9 +24,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import WebSocket from 'ws';
-import { chooseAction } from '../src/engine/bot.ts';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../src/engine/config.ts';
-import type { ClientMsg, SeatInfo, ServerMsg } from '../src/protocol.ts';
+import { MAX_PLAYERS, MIN_PLAYERS } from '../src/config.ts';
+import type { ClientMsg, SeatInfo, ServerMsg } from '../src/generated/index.ts';
+import { chooseAction } from './bot.ts';
 
 type StateMsg = Extract<ServerMsg, { type: 'state' }>;
 

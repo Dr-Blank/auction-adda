@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
 import type { ReactNode } from 'react';
-import type { View } from '../engine/types.ts';
-import type { ClientMsg, RoomInfo } from '../protocol.ts';
+import type { ClientMsg, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { PHONE, useMedia } from './hooks.ts';
 import { Sheet } from './Sheet.tsx';

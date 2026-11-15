@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { AuctionType, Card } from '../engine/types.ts';
+import type { AuctionType, Card } from '../generated/index.ts';
 
 export interface SuitSkin {
   name: string;

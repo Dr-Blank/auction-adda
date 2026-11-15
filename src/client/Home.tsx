@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import type { ClientMsg } from '../protocol.ts';
-import { THEME_IDS } from '../themes/ids.ts';
-import type { ThemeId } from '../themes/ids.ts';
-import { THEMES } from '../themes/index.ts';
+import type { ClientMsg, ThemeId } from '../generated/index.ts';
+import { THEME_IDS, THEMES } from '../themes/index.ts';
 import { saveName, savedName } from './net.ts';
 
 export function Home({ send, online }: { send: (m: ClientMsg) => void; online: boolean }) {

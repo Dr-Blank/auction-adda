@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { TOKENS } from '../engine/config.ts';
-import type { Card, RoundSummary, Sale, View } from '../engine/types.ts';
+import { TOKENS } from '../config.ts';
+import type { Card, RoundSummary, Sale, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { reducedMotion } from './derive.ts';
 import { TOUCH, useCountUp } from './hooks.ts';

@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import type { Card, View } from '../engine/types.ts';
-import type { ClientMsg, RoomInfo } from '../protocol.ts';
+import type { Card, ClientMsg, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { aroundTable, countBySuit, doing, hammerOrder, initials, lastWords, purchases } from './derive.ts';
 import { COMPACT, TOUCH } from './hooks.ts';

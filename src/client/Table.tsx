@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ROUNDS } from '../engine/config.ts';
-import type { Action, AuctionType, AuctionView, Card, LogEntry, View } from '../engine/types.ts';
-import type { ClientMsg, RoomInfo } from '../protocol.ts';
+import { ROUNDS } from '../config.ts';
+import type { Action, AuctionType, AuctionView, Card, ClientMsg, LogEntry, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { BidBox } from './BidBox.tsx';
 import { groupLog, hammerOrder, initials, rail, reducedMotion } from './derive.ts';

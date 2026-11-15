@@ -1,40 +1,60 @@
 # syntax=docker/dockerfile:1
 
-# The build stages run on the builder's own platform. What they produce (static files and the
-# runtime dependencies, which are pure JavaScript) is the same on every architecture, so the
-# final stage has no RUN step and an arm64 image builds without emulation.
-# If a runtime dependency with native code is ever added, drop --platform from the deps stage.
+# Every build stage runs on the builder's own platform: the frontend is the same on every
+# architecture, and the server is cross-compiled for the target with the xx helpers. The final
+# stage has no RUN step, so an arm64 image builds without emulation.
 #
-# Needs BuildKit (docker buildx), which sets BUILDPLATFORM. The classic builder does not:
-# pass it yourself, e.g. --build-arg BUILDPLATFORM=linux/amd64.
+# Needs BuildKit (docker buildx), which sets BUILDPLATFORM and TARGETPLATFORM. The classic
+# builder does not: pass them yourself, e.g. --build-arg BUILDPLATFORM=linux/amd64.
 ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM node:24-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY . .
+COPY index.html vite.config.ts tsconfig.json ./
+COPY crates/engine/config.json ./crates/engine/
+COPY src ./src
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:24-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && mkdir /data
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.10.0 AS xx
 
-# Runtime: the server runs its TypeScript sources directly (Node strips the types)
-FROM node:24-alpine
+FROM --platform=$BUILDPLATFORM lukemathwalker/cargo-chef:0.1.78-rust-alpine AS chef
+COPY --from=xx / /
+RUN apk add --no-cache clang lld
 WORKDIR /app
-ENV NODE_ENV=production PORT=8787 DATA_DIR=/data
-COPY package.json LICENSE ./
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY src/engine ./src/engine
-COPY src/server ./src/server
-COPY src/themes/ids.ts ./src/themes/ids.ts
-COPY src/protocol.ts ./src/protocol.ts
-COPY --from=deps --chown=node:node /data /data
-USER node
+# The toolchain version comes from this file, as in local builds and CI.
+COPY rust-toolchain.toml ./
+RUN rustup toolchain install
+
+FROM chef AS plan
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS rust
+ARG TARGETPLATFORM
+RUN xx-apk add --no-cache musl-dev gcc
+# Dependencies only: this layer stays cached until Cargo.lock changes.
+COPY --from=plan /app/recipe.json ./
+RUN xx-cargo chef cook --release --locked --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN xx-cargo build --release --locked -p server \
+ && cp "target/$(xx-cargo --print-target-triple)/release/auction-adda" /auction-adda \
+ && xx-verify --static /auction-adda \
+ && mkdir /data
+
+FROM alpine:3.24
+WORKDIR /app
+ENV PORT=8787 DATA_DIR=/data STATIC_DIR=/app/dist
+COPY LICENSE ./
+COPY --from=rust /auction-adda /usr/local/bin/auction-adda
+COPY --from=web /app/dist ./dist
+# Numeric, so no passwd entry is needed; 1000 is also the owner of volumes made by earlier images.
+COPY --from=rust --chown=1000:1000 /data /data
+USER 1000:1000
 VOLUME /data
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -qO- http://127.0.0.1:8787/healthz || exit 1
-CMD ["node", "--disable-warning=ExperimentalWarning", "src/server/index.ts"]
+CMD ["auction-adda"]

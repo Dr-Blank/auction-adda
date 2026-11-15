@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, ServerMsg } from '../protocol.ts';
+import type { ClientMsg, ServerMsg } from '../generated/index.ts';
 
 export type RoomState = Extract<ServerMsg, { type: 'state' }> & { receivedAt: number };
 export interface NetError {
