@@ -8,7 +8,7 @@
 # builder does not: pass them yourself, e.g. --build-arg BUILDPLATFORM=linux/amd64.
 ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
