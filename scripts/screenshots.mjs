@@ -207,7 +207,8 @@ const checkPhone = async (where) => {
     scrollTo(0, 0);
     const h = innerHeight, w = innerWidth;
     const strip = box('.chart-strip'), hand = box('.hand-panel'), bar = box('.table.acting .action-bar'), lot = box('.stage .lot-posters');
-    const cards = [...document.querySelectorAll('.hand-card')].map((c) => c.getBoundingClientRect());
+    // Cards still flying in from a deal are not in place yet.
+    const cards = [...document.querySelectorAll('.hand-card:not(.deal-in)')].map((c) => c.getBoundingClientRect());
     const floor = bar ? bar.top : h;
     const small = [...document.querySelectorAll('.table.acting .action-bar button')].filter((b) => b.getBoundingClientRect().height < 40).map((b) => b.textContent.trim());
     return {
@@ -345,6 +346,8 @@ while (Date.now() < end) {
       (await once('premiere-details')) || (await shot(`premiere-details-${tick}`));
     }
     await click('.premiere .btn.primary');
+    await sleep(350);
+    if (await evaluate(`!!document.querySelector('.hand-card.deal-in')`)) await once('dealt');
     continue;
   }
   if (st.moment) (await once('moment')) || (st.kind.includes('sealed') && (await once('moment-sealed')));
@@ -401,7 +404,7 @@ while (Date.now() < end) {
     continue;
   }
   if (st.bidbox) {
-    await once('bid-' + (st.kind.match(/stage-(\w+)/)?.[1] ?? 'x'));
+    if (!st.moment) await once('bid-' + (st.kind.match(/stage-(\w+)/)?.[1] ?? 'x'));
     if (!taken.has('mobile-bid')) {
       taken.add('mobile-bid');
       await size(390, 844, true);

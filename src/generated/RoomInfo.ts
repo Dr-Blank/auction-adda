@@ -13,4 +13,13 @@ canUndo: boolean, minPlayers: number, maxPlayers: number,
 /**
  * How long a seat must be disconnected before it can be skipped or released.
  */
-skipAfterMs: number, };
+skipAfterMs: number, 
+/**
+ * Open auctions: seconds from the lot going up or the last bid until everyone still in is
+ * done. 0 = off.
+ */
+bidTimerS: number, 
+/**
+ * Milliseconds left on the running open-auction clock; null when none runs.
+ */
+bidMsLeft: number | null, };

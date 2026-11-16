@@ -184,11 +184,21 @@ mod open_auction {
     }
 
     #[test]
-    fn a_new_bid_clears_done_flags() {
+    fn done_stays_done_when_others_raise() {
         let mut s = run(start(), &[(0, done(0)), (1, bid(5, 0))]);
-        assert_eq!(s.auction.as_ref().unwrap().done, [false, false, false]);
-        s = run(s, &[(0, done(5)), (2, done(5))]);
+        assert_eq!(s.auction.as_ref().unwrap().done, [true, false, false]);
+        assert_eq!(pending(&s), [2]);
+        s = run(s, &[(2, done(5))]);
         assert_eq!(money(&s), [105, 95, 100]);
+    }
+
+    #[test]
+    fn bidding_again_brings_a_done_player_back_in() {
+        let mut s = run(start(), &[(0, done(0)), (1, bid(5, 0)), (0, bid(6, 5))]);
+        assert_eq!(s.auction.as_ref().unwrap().done, [false, false, false]);
+        assert_eq!(pending(&s), [1, 2]);
+        s = run(s, &[(1, done(6)), (2, done(6))]);
+        assert_eq!(money(&s), [94, 100, 100]);
     }
 
     #[test]

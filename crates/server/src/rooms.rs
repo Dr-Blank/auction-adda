@@ -12,8 +12,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
 use engine::{
-    Action, GameState, RuleError, Seat, apply_action, apply_ruling, apply_skip, config, new_game, pending, undo_ruling,
-    view_for,
+    Action, AuctionKind, GameState, LogEntry, RuleError, Seat, apply_action, apply_ruling, apply_skip, config,
+    new_game, pending, undo_ruling, view_for,
 };
 use rand::RngExt;
 use rand::seq::IndexedRandom;
@@ -30,6 +30,13 @@ const FILE_VERSION: u64 = 1;
 /// While the admin can still undo a call, bots wait at least this long, so their move does not
 /// take the undo away at once.
 const BOT_WAIT_AFTER_CALL_MS: u64 = 8_000;
+/// Open auctions: seconds after the lot goes up or the last bid before everyone still in is done.
+const DEFAULT_BID_TIMER_S: u16 = 15;
+const MAX_BID_TIMER_S: u16 = 120;
+
+const fn default_bid_timer() -> u16 {
+    DEFAULT_BID_TIMER_S
+}
 
 pub type ClientId = u64;
 
@@ -121,9 +128,13 @@ struct Room {
     game: Option<GameState>,
     created_at: u64,
     updated_at: u64,
+    /// Open-auction clock in seconds; 0 = off (tables that bid by voice).
+    bid_timer_s: u16,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
+    /// Running open-auction clock: the log line that started it and when it runs out.
+    bid_clock: Option<(usize, u64)>,
     last_call: Option<LastCall>,
     clients: Vec<ClientId>,
     /// Per seat: when its last connection dropped (`None` while connected, and always for a bot).
@@ -139,6 +150,21 @@ impl Room {
         }
         self.game = Some(game);
         self.version += 1;
+    }
+
+    /// Restarts the open-auction clock when a lot goes up, someone bids or a call is undone; stops
+    /// it when no open auction runs or the timer is off.
+    fn sync_bid_clock(&mut self, now: u64) {
+        let start = self
+            .game
+            .as_ref()
+            .filter(|_| self.bid_timer_s > 0)
+            .and_then(bid_clock_start);
+        self.bid_clock = match (start, self.bid_clock) {
+            (None, _) => None,
+            (Some(start), Some((since, due))) if start == since => Some((since, due)),
+            (Some(start), _) => Some((start, now + u64::from(self.bid_timer_s) * 1000)),
+        };
     }
 
     fn game(&self) -> Result<&GameState, Fail> {
@@ -162,7 +188,25 @@ impl Room {
     }
 }
 
-/// The save file, version 1: `{ v, code, theme, seats, admin, game, createdAt, updatedAt }`.
+/// Index of the log line that last (re)started the clock of the running open auction: the lot
+/// going up, a bid, or an undone call. `None` when no open auction runs.
+fn bid_clock_start(g: &GameState) -> Option<usize> {
+    g.auction.as_ref().filter(|a| a.kind == AuctionKind::Open)?;
+    g.log
+        .iter()
+        .rposition(|e| matches!(e, LogEntry::Play { .. } | LogEntry::Bid { .. } | LogEntry::Undo { .. }))
+}
+
+/// The open-auction clock ran out: everyone still in is done, which closes the auction.
+fn time_up(game: &GameState) -> Result<GameState, RuleError> {
+    let high = game.auction.as_ref().map_or(0, |a| a.high);
+    pending(game).into_iter().try_fold(game.clone(), |g, seat| {
+        apply_action(&g, seat, &Action::Done { seen_high: high })
+    })
+}
+
+/// The save file, version 1: `{ v, code, theme, seats, admin, game, createdAt, updatedAt,
+/// bidTimerS }` (`bidTimerS` missing in older files: the default).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedRef<'a> {
@@ -174,6 +218,7 @@ struct SavedRef<'a> {
     game: &'a Option<GameState>,
     created_at: u64,
     updated_at: u64,
+    bid_timer_s: u16,
 }
 
 #[derive(Deserialize)]
@@ -186,6 +231,8 @@ struct Saved {
     game: Option<GameState>,
     created_at: u64,
     updated_at: u64,
+    #[serde(default = "default_bid_timer")]
+    bid_timer_s: u16,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -407,6 +454,25 @@ impl Rooms {
         let mut rng = rand::rng();
         let mut moved = Vec::new();
         for room in self.rooms.values_mut() {
+            room.sync_bid_clock(now);
+            if !room.clients.is_empty()
+                && room.bid_clock.is_some_and(|(_, due)| due <= now)
+                && let Some(game) = &room.game
+            {
+                match time_up(game) {
+                    Ok(game) => {
+                        info!(room = %room.code, "Open auction timed out");
+                        room.set_game(game);
+                        room.bot_due = None;
+                        moved.push(room.code.clone());
+                        continue;
+                    }
+                    Err(e) => {
+                        error!(room = %room.code, "Cannot close the timed-out auction: {}", e.0);
+                        room.bid_clock = None;
+                    }
+                }
+            }
             let bot = room.game.as_ref().filter(|_| !room.clients.is_empty()).and_then(|g| {
                 pending(g)
                     .into_iter()
@@ -736,6 +802,16 @@ impl Rooms {
                 room.last_call = None;
                 info!(room = %code, seat = me, "Seat {seat} is now admin");
             }
+            ClientMsg::Timer { seconds } => {
+                room.require_admin(me, "set the bid timer")?;
+                if seconds > MAX_BID_TIMER_S {
+                    return fail(format!("The bid timer is at most {MAX_BID_TIMER_S} seconds"));
+                }
+                room.bid_timer_s = seconds;
+                // A running clock starts again at the new length.
+                room.bid_clock = None;
+                info!(room = %code, seat = me, "Bid timer set to {seconds} s");
+            }
             ClientMsg::Release { seat } => {
                 if !room.has_seat(seat) {
                     return fail("No such seat");
@@ -830,7 +906,9 @@ impl Rooms {
                 game: None,
                 created_at: now,
                 updated_at: now,
+                bid_timer_s: DEFAULT_BID_TIMER_S,
                 version: 0,
+                bid_clock: None,
                 last_call: None,
                 clients: Vec::new(),
                 away: vec![Some(now)],
@@ -1037,6 +1115,8 @@ impl Rooms {
             min_players: cfg.min_players(),
             max_players: cfg.max_players(),
             skip_after_ms: self.skip_after_ms,
+            bid_timer_s: room.bid_timer_s,
+            bid_ms_left: room.bid_clock.map(|(_, due)| due.saturating_sub(now)),
         }
     }
 
@@ -1064,6 +1144,7 @@ impl Rooms {
         let now = (self.now)();
         if let Some(room) = self.rooms.get_mut(code) {
             room.updated_at = now;
+            room.sync_bid_clock(now);
             if let Some(store) = &self.store {
                 store.save(room);
             }
@@ -1118,7 +1199,9 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         game: saved.game,
         created_at: saved.created_at,
         updated_at: saved.updated_at,
+        bid_timer_s: saved.bid_timer_s.min(MAX_BID_TIMER_S),
         version: 0,
+        bid_clock: None,
         last_call: None,
         clients: Vec::new(),
         bot_due: None,
@@ -1231,6 +1314,7 @@ impl Store {
             game: &room.game,
             created_at: room.created_at,
             updated_at: room.updated_at,
+            bid_timer_s: room.bid_timer_s,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {

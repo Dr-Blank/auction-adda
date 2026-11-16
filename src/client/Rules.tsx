@@ -1,4 +1,4 @@
-import { ROUNDS, SUIT_LIMIT, TOKENS } from '../config.ts';
+import { CARD_TABLE, DEALS, ROUNDS, SUIT_LIMIT, TOKENS } from '../config.ts';
 import type { AuctionType } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 
@@ -33,9 +33,91 @@ export function AuctionTypes({ theme, current }: { theme: Theme; current?: Aucti
   );
 }
 
-export function Rules({ theme }: { theme: Theme }) {
+/**
+ * The whole deck and the deal schedule: fixed facts of the game, not what is left in the deck now.
+ * `n` = players in this game, marked in the deal table.
+ */
+export function Deck({ theme, n }: { theme: Theme; n?: number }) {
+  const { cards, suit, round } = theme.nouns;
+  const sizes = CARD_TABLE.map((row) => TYPES.reduce((sum, t) => sum + row[t], 0));
+  const total = sizes.reduce((x, y) => x + y, 0);
+  const counts = Object.keys(DEALS).map(Number);
+  return (
+    <div className="deck-info">
+      <p className="hint">
+        {total} {cards} in the game. Each {suit} has this many of each auction type:
+      </p>
+      <div className="scroll-x">
+        <table className="results deck-table">
+          <thead>
+            <tr>
+              <th className="left">{cap(suit)}</th>
+              {TYPES.map((t) => (
+                <th key={t} title={theme.auctionLabels[t]}>
+                  <span className="type-icon">{theme.auctionIcons[t]}</span>
+                </th>
+              ))}
+              <th>All</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CARD_TABLE.map((row, s) => (
+              <tr key={s}>
+                <th className="left">
+                  {theme.suits[s].glyph} {theme.suits[s].name}
+                </th>
+                {TYPES.map((t) => (
+                  <td key={t}>{row[t]}</td>
+                ))}
+                <td>
+                  <b>{sizes[s]}</b>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">
+        {cap(cards)} dealt to each player at the start of each {round}. Unplayed {cards} carry over; the rest are never dealt.
+      </p>
+      <div className="scroll-x">
+        <table className="results deck-table">
+          <thead>
+            <tr>
+              <th className="left">Players</th>
+              {theme.roundNames.map((name) => (
+                <th key={name}>{name}</th>
+              ))}
+              <th>Never dealt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {counts.map((k) => (
+              <tr key={k} className={k === n ? 'current' : ''}>
+                <th className="left">
+                  {k}
+                  {k === n && <em className="live">this game</em>}
+                </th>
+                {DEALS[k].map((d, r) => (
+                  <td key={r}>{d === 0 ? '—' : r === 0 ? d : `+${d}`}</td>
+                ))}
+                <td>{total - k * DEALS[k].reduce((x, y) => x + y, 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">Icons: {TYPES.map((t) => `${theme.auctionIcons[t]} ${theme.auctionLabels[t]}`).join(' · ')}.</p>
+    </div>
+  );
+}
+
+const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+export function Rules({ theme, n }: { theme: Theme; n?: number }) {
   const { card, cards, suit, round } = theme.nouns;
   return (
+    <>
     <details className="rules">
       <summary>How to play</summary>
       <ul>
@@ -55,7 +137,8 @@ export function Rules({ theme }: { theme: Theme }) {
           <b>plus that {suit}’s scores from earlier {round}s</b>. A {suit} outside the top three pays nothing, whatever it earned before.
         </li>
         <li>
-          {ROUNDS} {round}s. Unplayed {cards} stay in your hand. Most money at the end wins.
+          {ROUNDS} {round}s. Most {round}s start with new {cards} dealt to everyone (see “The deck and the deal”); unplayed{' '}
+          {cards} stay in your hand. Most money at the end wins.
         </li>
       </ul>
       <dl>
@@ -69,5 +152,10 @@ export function Rules({ theme }: { theme: Theme }) {
         ))}
       </dl>
     </details>
+    <details className="rules">
+      <summary>The deck and the deal</summary>
+      <Deck theme={theme} n={n} />
+    </details>
+    </>
   );
 }

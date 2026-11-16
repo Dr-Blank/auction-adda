@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { ROUNDS } from '../config.ts';
 import type { Action, AuctionType, AuctionView, Card, ClientMsg, LogEntry, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
-import { BidBox } from './BidBox.tsx';
-import { groupLog, hammerOrder, initials, rail, reducedMotion } from './derive.ts';
+import { BidBox, BidClock } from './BidBox.tsx';
+import { dealNote, groupLog, hammerOrder, initials, rail, reducedMotion } from './derive.ts';
 import { PHONE, useCountUp, useMedia } from './hooks.ts';
-import { ShareLink } from './Lobby.tsx';
+import { BidTimer, ShareLink } from './Lobby.tsx';
 import { saveName, savedName } from './net.ts';
 import type { RoomState } from './net.ts';
 import { Premiere } from './Premiere.tsx';
@@ -154,6 +154,32 @@ export function Table({ state, send, theme }: Props) {
   }, [g.summaries.length]);
   const summary = g.summaries.length > seenSummaries ? g.summaries[g.summaries.length - 1] : null;
 
+  // ---- cards dealt at a round start ----
+  // Marked "new" until you play one of your cards; they fly in once the results are closed.
+  const [fresh, setFresh] = useState<number[]>([]);
+  const [dealing, setDealing] = useState(false);
+  const lastHand = useRef({ round: g.round, ids: g.hand.map((c) => c.id) });
+  useEffect(() => {
+    const before = lastHand.current;
+    const ids = g.hand.map((c) => c.id);
+    lastHand.current = { round: g.round, ids };
+    if (g.round > before.round) {
+      const added = ids.filter((id) => !before.ids.includes(id));
+      setFresh(added);
+      setDealing(added.length > 0);
+    } else if (g.round < before.round || ids.length < before.ids.length) {
+      setFresh([]);
+      setDealing(false);
+    }
+  }, [g]);
+  const showDeal = dealing && !summary && !moment;
+  useEffect(() => {
+    if (!showDeal) return;
+    play('deal');
+    const timer = setTimeout(() => setDealing(false), 900 + fresh.length * 90);
+    return () => clearTimeout(timer);
+  }, [showDeal]);
+
   // ---- absent players ----
   const anyAway = room.seats.some((s) => !s.connected);
   const [, setTick] = useState(0);
@@ -166,6 +192,9 @@ export function Table({ state, send, theme }: Props) {
     const ms = room.seats[i].awayMs;
     return ms === null ? null : ms + (Date.now() - state.receivedAt);
   };
+  /** The open-auction clock: when everyone still in becomes done. */
+  const bidClock =
+    room.bidMsLeft !== null && room.bidTimerS > 0 ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidTimerS * 1000 } : null;
 
   // ---- chrome ----
   const [menu, setMenu] = useState(false);
@@ -382,29 +411,36 @@ export function Table({ state, send, theme }: Props) {
     if (me === null) {
       bar = null;
     } else if (a.kind === 'open') {
+      const clock = bidClock ? <BidClock {...bidClock} /> : null;
       if (a.highBidder === me) {
         bar = (
           <p className="status">
-            You lead with {theme.money(a.high)}. Waiting for {list(g.pending)}…
+            You lead with {theme.money(a.high)}. Waiting for {list(g.pending)}… {clock}
           </p>
         );
       } else {
         // A player who cannot outbid still says "done" themselves; the others must not see why.
         const done = a.done[me]
           ? undefined
-          : { label: a.highBidder === null ? 'No bid' : 'Done', onClick: () => act({ type: 'done', seenHigh: a.high }) };
+          : { label: a.highBidder === null ? 'No bid' : 'Done', onClick: () => act({ type: 'done', seenHigh: a.high }), clock };
         bar =
           myMoney > a.high ? (
             <BidBox key={a.high} min={a.high + 1} max={myMoney} label="Bid" theme={theme} onBid={(amount) => act({ type: 'bid', amount, seenHigh: a.high })} secondary={done}>
-              {a.done[me] && <p className="hint">You said done at this price; you can still bid. Waiting for {list(g.pending)}…</p>}
+              {a.done[me] && (
+                <p className="hint">
+                  You are done: raises do not bring you back. Bid to come back in. Waiting for {list(g.pending)}… {clock}
+                </p>
+              )}
             </BidBox>
           ) : (
             <div className="act-row">
               <p className="status">You cannot outbid {theme.money(a.high)}. Only you can see that.</p>
-              {done && (
-                <button className="btn big" onClick={done.onClick}>
-                  {done.label}
+              {done ? (
+                <button className="btn big timed" onClick={done.onClick}>
+                  {done.label} {clock}
                 </button>
+              ) : (
+                clock
               )}
             </div>
           );
@@ -589,6 +625,11 @@ export function Table({ state, send, theme }: Props) {
             <h2>
               Your hand <small>{g.hand.length}</small>
             </h2>
+            {fresh.length > 0 && (
+              <span className={`dealt-note ${showDeal ? 'dealing' : ''}`} title={`Dealt at the start of ${theme.roundNames[g.round]}`}>
+                +{fresh.length} new
+              </span>
+            )}
             {myPlay && !selCard && <span className="your-move">Pick one to auction</span>}
             {myOffer && <span className="your-move">Pick a matching {theme.nouns.card} to add</span>}
             <button className="info-btn tap-only" onClick={() => setTypes(true)} aria-label="What the auction icons mean">
@@ -610,8 +651,11 @@ export function Table({ state, send, theme }: Props) {
                   {cards.map((c) => {
                     const eligible = pairing ? canPair(pairing, c) : false;
                     const clickable = myPlay || (myOffer && eligible);
+                    const dealt = fresh.indexOf(c.id);
                     const cls = [
                       'hand-card',
+                      dealt >= 0 ? 'fresh' : '',
+                      dealt >= 0 && showDeal ? 'deal-in' : '',
                       c.id === sel || c.id === sel2 ? 'selected' : '',
                       eligible ? 'eligible' : '',
                       pairing && !eligible && c.id !== sel ? 'dim' : '',
@@ -622,8 +666,9 @@ export function Table({ state, send, theme }: Props) {
                       <button
                         key={c.id}
                         className={cls}
+                        style={dealt >= 0 ? { ['--i' as string]: dealt } : undefined}
                         onClick={() => (clickable ? clickCard(c) : setInspect(c))}
-                        aria-label={`${theme.cardTitle(c)}, ${theme.suits[c.suit].name}, ${theme.auctionLabels[c.type]}${clickable ? '' : ' (view)'}`}
+                        aria-label={`${dealt >= 0 ? 'New: ' : ''}${theme.cardTitle(c)}, ${theme.suits[c.suit].name}, ${theme.auctionLabels[c.type]}${clickable ? '' : ' (view)'}`}
                       >
                         {theme.renderCard(c, phone ? 'sm' : 'md')}
                       </button>
@@ -795,7 +840,8 @@ function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; t
           </div>
         )}
       </div>
-      <Rules theme={theme} />
+      <BidTimer room={room} me={me} send={send} />
+      <Rules theme={theme} n={names.length} />
     </div>
   );
 }
@@ -862,7 +908,11 @@ function LogLine({ e, names, me, theme, lot }: LineProps) {
   const called = (by?: number) => (by === undefined ? null : <em className="called"> (called by {name(by, true)})</em>);
   switch (e.t) {
     case 'round':
-      return <>{theme.roundNames[e.round]} begins. {n(e.first)} {v(e.first, 'goes', 'go')} first.</>;
+      return (
+        <>
+          {theme.roundNames[e.round]} begins. {dealNote(theme, names.length, e.round)} {n(e.first)} {v(e.first, 'goes', 'go')} first.
+        </>
+      );
     case 'play':
       return <>{n(e.p)} {v(e.p, 'auctions', 'auction')} {lot(e.cards)} · {theme.auctionLabels[e.kind]}</>;
     case 'offer':

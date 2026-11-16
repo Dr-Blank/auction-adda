@@ -214,7 +214,7 @@ export const boxOffice: Theme = {
     double: 'Double Feature',
   },
   auctionHints: {
-    open: 'Open bidding. Anyone can raise at any time; it sells when everyone else is done.',
+    open: 'Anyone can raise at any time. Done takes you out until you bid again. It sells when everyone else is done or the bid timer runs out.',
     once: 'One bid each, going round the table. The seller bids last.',
     sealed: 'Everyone bids in secret, once. Highest wins; a tie goes to the seller, then clockwise.',
     fixed: 'The seller names a price. First player round the table to accept buys it; if nobody does, the seller pays.',

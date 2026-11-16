@@ -344,7 +344,8 @@ fn act(s: &mut GameState, seat: Seat, action: &Action) -> Step {
             a.high_bidder = Some(seat);
             s.log.push(LogEntry::Bid { p: seat, amount });
             if a.kind == AuctionKind::Open {
-                a.done.fill(false);
+                // Done stays done when others raise; bidding again is how a player comes back in.
+                *at_mut(&mut a.done, seat)? = false;
                 return settle_open(s);
             }
             a.step += 1;

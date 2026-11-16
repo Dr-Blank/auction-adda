@@ -674,6 +674,49 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
 .hand-card.dim { opacity: 0.35; }
 .hand-card.inspectable { cursor: zoom-in; }
 .hand-card.inspectable:hover { transform: translateY(-6px); }
+/* Dealt at this round's start: a tag above the card until you play one; they fly in from the stage once. */
+.hand-card.fresh::before {
+  content: 'New';
+  position: absolute;
+  top: -13px;
+  left: 4px;
+  z-index: 2;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--gold);
+  color: #1d1730;
+  font: 700 0.6rem/1.2 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+.hand-card.deal-in { animation: deal-in 0.55s cubic-bezier(0.2, 0.8, 0.3, 1.1) backwards; animation-delay: calc(var(--i, 0) * 90ms); }
+@keyframes deal-in {
+  from { transform: translate(-40px, -160px) rotate(-18deg) scale(0.55); opacity: 0; }
+  60% { opacity: 1; }
+}
+/* Open-auction clock: seconds and a draining bar; inside a .timed button the bar runs along its bottom. */
+.bid-clock { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); vertical-align: middle; }
+.bid-clock.urgent { color: var(--danger); }
+.bid-clock .drain { display: inline-block; width: 48px; height: 4px; border-radius: 2px; background: rgb(255 255 255 / 12%); overflow: hidden; }
+.bid-clock .drain > span { display: block; height: 100%; background: currentColor; transform-origin: left; animation: drain linear forwards; }
+@keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.btn.timed { position: relative; overflow: hidden; }
+.btn.timed .bid-clock { margin-left: 4px; }
+.btn.timed .bid-clock .drain { position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 4px; border-radius: 0; }
+.bid-timer { display: grid; gap: 4px; font-size: 0.9rem; }
+.bid-timer select { margin-left: 6px; }
+.dealt-note {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--gold);
+  color: #1d1730;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.dealt-note.dealing { animation: pop-in 0.4s ease-out backwards; }
+@keyframes pop-in { from { transform: scale(1.6); opacity: 0; } }
 
 .inspect { cursor: zoom-out; }
 .inspect-card {
@@ -873,6 +916,13 @@ b.you { color: var(--gold); }
 .ledger-table td, .ledger-table th { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ledger-table .films { display: grid; gap: 2px; white-space: normal; min-width: 9em; }
 .film-name { display: inline-flex; gap: 6px; align-items: center; }
+.lot-type { font-size: 0.85rem; }
+.next-deal { display: block; font-size: 0.75rem; font-weight: 500; opacity: 0.85; text-transform: none; letter-spacing: 0; }
+.deck-info { display: grid; gap: 8px; }
+.deck-table { font-size: 0.82rem; }
+.deck-table th, .deck-table td { padding: 4px 6px; white-space: nowrap; }
+.deck-table tr.current { background: rgb(255 255 255 / 6%); color: var(--text); }
+.deck-table .live { font-size: 0.65rem; font-weight: 700; font-style: normal; text-transform: uppercase; color: var(--ok); margin-left: 6px; }
 .suit-dot {
   display: inline-grid;
   place-items: center;
@@ -1190,6 +1240,7 @@ b.you { color: var(--gold); }
   .group-label { display: none; }
   .fan .hand-card + .hand-card, .fan:hover .hand-card + .hand-card { margin-left: 0; }
   .hand-card.selected, .hand-card.selected:hover { transform: translateY(-4px); outline-width: 2px; }
+  .hand-card.fresh::before { top: -7px; left: 2px; padding: 0 4px; font-size: 0.55rem; }
   .hand .poster-sm .poster-type { font-size: 1.9em; }
 }
 /* Tall enough for chart + lot + hand + action bar: the hand stays pinned above the action bar. */

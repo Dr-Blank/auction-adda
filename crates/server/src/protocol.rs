@@ -76,6 +76,10 @@ pub enum ClientMsg {
     Admin {
         seat: Seat,
     },
+    /// Admin only, in the lobby or a game: the open-auction bid timer in seconds, 0 = off.
+    Timer {
+        seconds: u16,
+    },
     /// Any other `type`: answered with "Unknown message".
     #[serde(other)]
     #[ts(skip)]
@@ -101,6 +105,7 @@ impl ClientMsg {
             Self::Rule { .. } => "rule",
             Self::Undo => "undo",
             Self::Admin { .. } => "admin",
+            Self::Timer { .. } => "timer",
             Self::Unknown => "unknown",
         }
     }
@@ -135,6 +140,11 @@ pub struct RoomInfo {
     pub max_players: u8,
     /// How long a seat must be disconnected before it can be skipped or released.
     pub skip_after_ms: u64,
+    /// Open auctions: seconds from the lot going up or the last bid until everyone still in is
+    /// done. 0 = off.
+    pub bid_timer_s: u16,
+    /// Milliseconds left on the running open-auction clock; null when none runs.
+    pub bid_ms_left: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

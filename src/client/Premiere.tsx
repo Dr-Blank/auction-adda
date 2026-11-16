@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { TOKENS } from '../config.ts';
 import type { Card, RoundSummary, Sale, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
-import { reducedMotion } from './derive.ts';
+import { dealNote, reducedMotion } from './derive.ts';
 import { TOUCH, useCountUp } from './hooks.ts';
 import { play } from './sound.ts';
 
@@ -111,7 +111,14 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
         <div className="row">
           {/* Touch: no autofocus, which would scroll a tall results sheet past the reveal to this button. */}
           <button className="btn primary big grow" onClick={onClose} autoFocus={!matchMedia(TOUCH).matches}>
-            {g.over ? 'See final result' : `On to ${theme.roundNames[g.round]}`}
+            {g.over ? (
+              'See final result'
+            ) : (
+              <>
+                On to {theme.roundNames[g.round]}
+                <small className="next-deal">{dealNote(theme, g.n, g.round)}</small>
+              </>
+            )}
           </button>
           {!instant && (
             <button className="btn" onClick={() => setInstant(true)}>
@@ -158,6 +165,17 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
   const buyers = new Map<number, number>();
   for (const x of sold) buyers.set(x.to, (buyers.get(x.to) ?? 0) + x.price);
 
+  // A double sells with its second card's auction; a double alone was taken free.
+  const how = (lot: Sale) => {
+    const t = lot.cards[lot.cards.length - 1].type;
+    return (
+      <span className="lot-type" title={theme.auctionHints[t]}>
+        <span className="type-icon">{lot.cards.length > 1 ? `${theme.auctionIcons.double} ` : ''}{theme.auctionIcons[t]}</span>{' '}
+        {t === 'double' ? `${theme.auctionLabels.double}, nobody added` : theme.auctionLabels[t]}
+      </span>
+    );
+  };
+
   const film = (lot: Sale) => (
     <span className="films">
       {lot.cards.map((c) => (
@@ -199,6 +217,7 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
             <thead>
               <tr>
                 <th className="left">You bought</th>
+                <th className="left">Auction</th>
                 <th className="left">From</th>
                 <th>Paid</th>
                 <th>Earned</th>
@@ -209,6 +228,7 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
               {bought.map((lot, k) => (
                 <tr key={k}>
                   <td className="left">{film(lot)}</td>
+                  <td className="left">{how(lot)}</td>
                   <td className="left muted">{lot.price === 0 ? 'Free' : lot.from === me ? 'Bank' : names[lot.from]}</td>
                   <td>{theme.money(lot.price)}</td>
                   <td>{worth(lot) ? theme.money(worth(lot)) : <span className="muted">Flop</span>}</td>
@@ -226,6 +246,7 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
             <thead>
               <tr>
                 <th className="left">You sold</th>
+                <th className="left">Auction</th>
                 <th className="left">To</th>
                 <th>You got</th>
                 <th>It paid them</th>
@@ -235,6 +256,7 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
               {sold.map((lot, k) => (
                 <tr key={k}>
                   <td className="left">{film(lot)}</td>
+                  <td className="left">{how(lot)}</td>
                   <td className="left muted">{names[lot.to]}</td>
                   <td className="gain">{theme.money(lot.price)}</td>
                   <td className="muted">{worth(lot) ? theme.money(worth(lot)) : 'Flop'}</td>

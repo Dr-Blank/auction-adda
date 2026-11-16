@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use engine::{AuctionType, LogEntry, View};
+use engine::{AuctionKind, AuctionType, LogEntry, View};
 use serde_json::{Value, json};
 use server::protocol::{ErrorCode, RoomInfo, ServerMsg};
 use server::rooms::{ClientId, CreateLimit, Options, Rooms};
@@ -553,6 +553,66 @@ fn only_the_admin_adds_bots_starts_and_rematches_bots_play_their_seats() {
 }
 
 #[test]
+fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_bid_restarts_the_timer() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    let admin = &clients[0];
+    assert_eq!(state(admin).room.bid_timer_s, 15);
+    send(&mut rooms, &clients[1], json!({ "type": "timer", "seconds": 5 }));
+    assert_error(&clients[1], "Only the room admin can set the bid timer");
+    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 121 }));
+    assert_error(admin, "at most 120 seconds");
+    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 5 }));
+    assert_eq!(state(admin).room.bid_timer_s, 5);
+    send(&mut rooms, admin, json!({ "type": "start" }));
+
+    // Play at random until an open auction is up; the clock does not move meanwhile.
+    let is_open = |c: &Fake| game(c).auction.is_some_and(|a| a.kind == AuctionKind::Open);
+    let mut rng = rand::rng();
+    'play: for _ in 0..2_000 {
+        assert!(!game(admin).over, "no open auction came up");
+        for c in &clients {
+            if is_open(c) {
+                break 'play;
+            }
+            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+                send(&mut rooms, c, json!({ "type": "action", "action": action }));
+            }
+        }
+    }
+    assert!(is_open(admin));
+    assert_eq!(state(admin).room.bid_ms_left, Some(5_000));
+
+    advance(&now, 3_000);
+    rooms.tick();
+    assert!(is_open(admin));
+    let bidder = clients
+        .iter()
+        .find(|c| game(c).players[usize::from(game(c).you.unwrap())].money >= Some(1))
+        .unwrap();
+    let seat = game(bidder).you.unwrap();
+    let high = game(bidder).auction.unwrap().high;
+    send(
+        &mut rooms,
+        bidder,
+        json!({ "type": "action", "action": { "type": "bid", "amount": high + 1, "seenHigh": high } }),
+    );
+    assert_eq!(state(admin).room.bid_ms_left, Some(5_000), "a bid restarts the clock");
+
+    advance(&now, 4_000);
+    rooms.tick();
+    assert!(is_open(admin));
+    advance(&now, 1_500);
+    rooms.tick();
+    let v = game(admin);
+    assert!(v.auction.is_none_or(|a| a.kind != AuctionKind::Open), "time is up");
+    assert_eq!(state(admin).room.bid_ms_left, None);
+    let sold = v.log.iter().rev().find(|e| matches!(e, LogEntry::Sold { .. }));
+    assert!(matches!(sold, Some(LogEntry::Sold { to, price, .. }) if *to == seat && *price == high + 1));
+}
+
+#[test]
 fn bots_never_hold_admin_and_leave_with_the_last_player() {
     let mut rooms = Rooms::new(Options::default()).unwrap();
     let (clients, code) = seated(&mut rooms, 1);
@@ -696,16 +756,28 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
     rooms.flush();
     assert_eq!(dir.files(), [format!("{code}.json")]);
 
-    // What the Node server's loader checks, and the exact set of keys it wrote.
+    // What the Node server's loader checked, and the exact set of keys (the Node server wrote all
+    // but bidTimerS; a file without it loads with the default).
     let saved: Value = serde_json::from_slice(&fs::read(dir.0.join(format!("{code}.json"))).unwrap()).unwrap();
     assert_eq!(saved["v"], 1);
     assert_eq!(saved["code"], code.as_str());
     assert!(saved["seats"].is_array());
+    assert_eq!(saved["bidTimerS"], 15);
     let mut keys: Vec<&String> = saved.as_object().unwrap().keys().collect();
     keys.sort();
     assert_eq!(
         keys,
-        ["admin", "code", "createdAt", "game", "seats", "theme", "updatedAt", "v"]
+        [
+            "admin",
+            "bidTimerS",
+            "code",
+            "createdAt",
+            "game",
+            "seats",
+            "theme",
+            "updatedAt",
+            "v"
+        ]
     );
 
     let (_, opts) = clock(now.load(Ordering::SeqCst));

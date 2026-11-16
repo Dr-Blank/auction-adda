@@ -1,7 +1,19 @@
 // Facts the table screen shows that are not stored directly in the view.
 
-import { ROUNDS, SUITS, TOKENS } from '../config.ts';
+import { DEALS, ROUNDS, SUITS, TOKENS } from '../config.ts';
 import type { Card, LogEntry, View } from '../generated/index.ts';
+import type { Theme } from '../themes/types.ts';
+
+/** What the deal at the start of `round` gives every player (all get the same), and why nothing when nothing. */
+export function dealNote(theme: Theme, n: number, round: number): string {
+  const count = DEALS[n]?.[round] ?? 0;
+  const { cards } = theme.nouns;
+  if (round === 0) return `Everyone is dealt ${count} ${cards}.`;
+  if (count > 0) return `Everyone gets ${count} new ${cards}.`;
+  return round === ROUNDS - 1
+    ? `No new ${cards}: the last ${theme.nouns.round} is played with the ${cards} left in hand.`
+    : `No new ${cards} this ${theme.nouns.round} (see “The deck and the deal” in the rules).`;
+}
 
 /** What one card of each suit would pay if the round ended right now. */
 export function provisionalValues(g: View): number[] {

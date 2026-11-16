@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ClientMsg } from '../generated/index.ts';
+import type { ClientMsg, RoomInfo } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { initials } from './derive.ts';
 import { saveName, savedName } from './net.ts';
@@ -30,6 +30,37 @@ export function ShareLink({ code }: { code: string }) {
       >
         {copied ? 'Copied' : 'Copy link'}
       </button>
+    </div>
+  );
+}
+
+const TIMER_CHOICES = [0, 10, 15, 20, 30, 45, 60];
+
+/** The open-auction bid timer: the admin picks it, everyone else sees it. */
+export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void }) {
+  const s = room.bidTimerS;
+  const label = (n: number) => (n === 0 ? 'Off' : `${n} s`);
+  return (
+    <div className="bid-timer">
+      <label>
+        Open-auction timer{' '}
+        {room.admin === me ? (
+          <select value={s} onChange={(e) => send({ type: 'timer', seconds: Number(e.target.value) })}>
+            {[...new Set([...TIMER_CHOICES, s])].sort((x, y) => x - y).map((n) => (
+              <option key={n} value={n}>
+                {label(n)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <b>{label(s)}</b>
+        )}
+      </label>
+      <small className="muted">
+        {s === 0
+          ? 'Open auctions wait until every bidder says done. Good for tables that call results on voice.'
+          : `When a lot goes up, and again after every bid, players still in have ${s} s to bid; then they are done.`}
+      </small>
     </div>
   );
 }
@@ -111,6 +142,7 @@ export function Lobby({ state, send, join, theme }: Props) {
         and can fill empty seats with bots. Playing on voice? The admin can end an auction with the result the table agreed (and undo a
         wrong call). Hand the role over any time from the Room menu.
       </p>
+      <BidTimer room={room} me={you} send={send} />
 
       {you === null ? (
         count < room.maxPlayers ? (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Theme } from '../themes/types.ts';
 import { TOUCH } from './hooks.ts';
@@ -11,9 +11,31 @@ interface Props {
   label: string;
   theme: Theme;
   onBid: (n: number) => void;
-  /** Secondary action (pass, done) shown at the same height; Esc triggers it. */
-  secondary?: { label: string; onClick: () => void };
+  /** Secondary action (pass, done) shown at the same height; Esc triggers it. `clock` runs inside it. */
+  secondary?: { label: string; onClick: () => void; clock?: ReactNode };
   children?: ReactNode;
+}
+
+/**
+ * Time left on the open-auction clock: seconds, and a bar that drains to the end (the bar sits at
+ * the bottom of a `.timed` button). The server makes everyone still in done when it runs out.
+ */
+export function BidClock({ deadline, total }: { deadline: number; total: number }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((x) => x + 1), 250);
+    return () => clearInterval(timer);
+  }, []);
+  const left = Math.max(0, deadline - Date.now());
+  const secs = Math.ceil(left / 1000);
+  return (
+    <span className={`bid-clock ${secs <= 5 ? 'urgent' : ''}`} title="When this runs out, everyone still in is done">
+      <span className="secs">{secs}s</span>
+      <span className="drain" aria-hidden="true">
+        <span key={deadline} style={{ animationDuration: `${total}ms`, animationDelay: `${left - total}ms` }} />
+      </span>
+    </span>
+  );
 }
 
 /** Amount picker with steppers and quick raises. Enter submits, Esc passes, ↑/↓ step by 1. */
@@ -94,8 +116,9 @@ export function BidBox({ min, max, start, label, theme, onBid, secondary, childr
           {ok ? ` ${theme.money(n)}` : ''} <kbd>Enter</kbd>
         </button>
         {secondary && (
-          <button type="button" className="btn big" onClick={secondary.onClick}>
+          <button type="button" className={`btn big ${secondary.clock ? 'timed' : ''}`} onClick={secondary.onClick}>
             {secondary.label} <kbd>Esc</kbd>
+            {secondary.clock}
           </button>
         )}
       </div>
