@@ -195,6 +195,9 @@ fn lobby_join_leave_start_needs_3_to_5_players() {
         json!({ "type": "join", "room": code, "name": "Back" }),
     );
     send(&mut rooms, &c, json!({ "type": "start" }));
+    assert_error(&c, "Only the room admin can start");
+    assert!(state(&c).game.is_none());
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
     assert_eq!(game(&c).n, 3);
     assert_eq!(game(&c).hand.len(), 10);
 }
@@ -293,7 +296,15 @@ fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() 
     send(&mut rooms, &clients[0], json!({ "type": "start" }));
     let turn = game(&clients[0]).turn;
     let t = usize::from(turn);
-    let other = &clients[(t + 1) % 3];
+    // Skipping and freeing are the admin's; make sure the admin is not the one who walks away.
+    let a = if t == 0 {
+        send(&mut rooms, &clients[0], json!({ "type": "admin", "seat": 1 }));
+        1
+    } else {
+        0
+    };
+    let player = &clients[3 - t - a];
+    let other = &clients[a];
 
     send(&mut rooms, other, json!({ "type": "skip", "seat": turn }));
     assert_error(other, "connected");
@@ -304,6 +315,10 @@ fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() 
     send(&mut rooms, other, json!({ "type": "release", "seat": turn }));
     assert_error(other, "longer");
     advance(&now, 2_000);
+    send(&mut rooms, player, json!({ "type": "skip", "seat": turn }));
+    assert_error(player, "Only the room admin can skip");
+    send(&mut rooms, player, json!({ "type": "release", "seat": turn }));
+    assert_error(player, "Only the room admin can free");
     send(&mut rooms, other, json!({ "type": "skip", "seat": turn }));
     assert_eq!(state(other).room.seats[t].away_ms, Some(31_000));
     assert_eq!(game(other).turn, (turn + 1) % 3);
@@ -441,6 +456,204 @@ fn admin_creator_calls_results_role_moves_by_hand_over_or_after_30_s_away() {
     assert_error(&clients[0], "hand the role");
     send(&mut rooms, &clients[1], json!({ "type": "admin", "seat": 1 }));
     assert_eq!(state(&clients[0]).room.admin, 1);
+    // Not to someone who is away: the room would have no admin for 30 s.
+    send(&mut rooms, &clients[1], json!({ "type": "admin", "seat": 2 }));
+    assert_error(&clients[1], "not connected");
+    assert_eq!(state(&clients[0]).room.admin, 1);
+}
+
+#[test]
+fn only_the_admin_removes_players_from_the_lobby_an_away_admin_can_be_replaced_there() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    rooms.disconnect(clients[2].id);
+    send(&mut rooms, &clients[1], json!({ "type": "release", "seat": 2 }));
+    assert_error(&clients[1], "Only the room admin can remove a seat");
+    send(&mut rooms, &clients[0], json!({ "type": "release", "seat": 2 }));
+    assert_eq!(state(&clients[1]).room.seats.len(), 2);
+
+    // The admin drops in the lobby: after 30 s someone else takes the role and can start.
+    rooms.disconnect(clients[0].id);
+    send(&mut rooms, &clients[1], json!({ "type": "admin", "seat": 1 }));
+    assert_error(&clients[1], "longer");
+    advance(&now, 31_000);
+    send(&mut rooms, &clients[1], json!({ "type": "admin", "seat": 1 }));
+    assert_eq!(state(&clients[1]).room.admin, 1);
+    send(&mut rooms, &clients[1], json!({ "type": "bot" }));
+    send(&mut rooms, &clients[1], json!({ "type": "start" }));
+    assert_eq!(game(&clients[1]).n, 3);
+}
+
+#[test]
+fn only_the_admin_adds_bots_starts_and_rematches_bots_play_their_seats() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 2);
+    let (a, b) = (&clients[0], &clients[1]);
+
+    send(&mut rooms, b, json!({ "type": "bot" }));
+    assert_error(b, "Only the room admin can add a bot");
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    let seats = state(a).room.seats;
+    let names: Vec<&str> = seats.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["P0", "P1", "Bot 1", "Bot 2"]);
+    assert!(seats[2].bot && seats[2].connected && !seats[2].open);
+    assert!(!seats[0].bot);
+
+    // Removing a bot is the admin's call; its number is free again.
+    send(&mut rooms, b, json!({ "type": "release", "seat": 2 }));
+    assert_error(b, "Only the room admin can remove a seat");
+    send(&mut rooms, a, json!({ "type": "release", "seat": 2 }));
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    let names: Vec<String> = state(a).room.seats.iter().map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["P0", "P1", "Bot 2", "Bot 1"]);
+    send(&mut rooms, a, json!({ "type": "admin", "seat": 2 }));
+    assert_error(a, "A bot cannot be the admin");
+
+    send(&mut rooms, b, json!({ "type": "start" }));
+    assert_error(b, "Only the room admin can start");
+    send(&mut rooms, a, json!({ "type": "start" }));
+    assert_eq!(game(a).n, 4);
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    assert_error(a, "seats are locked");
+
+    // The players move at random; the server moves the bots once their thinking time is up.
+    let mut rng = rand::rng();
+    for _ in 0..5_000 {
+        let v = game(a);
+        if v.over {
+            break;
+        }
+        for c in [a, b] {
+            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+                send(&mut rooms, c, json!({ "type": "action", "action": action }));
+            }
+        }
+        rooms.tick();
+        advance(&now, 2_500);
+        rooms.tick();
+    }
+    let v = game(a);
+    assert!(v.over, "the game should finish");
+    let bot_moved = |seat: u8| {
+        v.log.iter().any(|e| {
+            matches!(e, LogEntry::Play { p, .. } | LogEntry::Bid { p, .. } | LogEntry::Pass { p }
+                | LogEntry::Price { p, .. } | LogEntry::Decline { p } if *p == seat)
+        })
+    };
+    assert!(bot_moved(2) && bot_moved(3), "both bots should have moved");
+    assert!(!v.log.iter().any(|e| matches!(e, LogEntry::Skip { .. })));
+
+    send(&mut rooms, b, json!({ "type": "rematch" }));
+    assert_error(b, "Only the room admin can start a rematch");
+    send(&mut rooms, a, json!({ "type": "rematch" }));
+    assert!(!game(a).over);
+}
+
+#[test]
+fn bots_never_hold_admin_and_leave_with_the_last_player() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, code) = seated(&mut rooms, 1);
+    let a = &clients[0];
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    let b = fake(&mut rooms, "10.0.0.2");
+    send(&mut rooms, &b, json!({ "type": "join", "room": code, "name": "B" }));
+    send(&mut rooms, a, json!({ "type": "leave" }));
+    // Seat 0 is now the bot; the role goes to the player behind it.
+    assert_eq!(state(&b).room.admin, 1);
+    send(&mut rooms, &b, json!({ "type": "leave" }));
+    assert!(state(a).room.seats.is_empty());
+}
+
+#[test]
+fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lose_the_seat() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let (a, b, c) = (&clients[0], &clients[1], &clients[2]);
+    send(&mut rooms, a, json!({ "type": "start" }));
+
+    send(&mut rooms, a, json!({ "type": "bot", "seat": 1 }));
+    assert_error(a, "connected");
+    let token = joined(b).2.unwrap();
+    rooms.disconnect(b.id);
+    send(&mut rooms, c, json!({ "type": "bot", "seat": 1 }));
+    assert_error(c, "Only the room admin can add a bot");
+    send(&mut rooms, a, json!({ "type": "bot", "seat": 1 }));
+    let seat = state(a).room.seats[1].clone();
+    assert!(seat.bot && !seat.connected && !seat.open);
+    advance(&now, 31_000);
+    send(&mut rooms, a, json!({ "type": "release", "seat": 1 }));
+    assert_error(a, "A bot is playing that seat");
+    send(&mut rooms, a, json!({ "type": "skip", "seat": 1 }));
+    assert_error(a, "A bot is playing that seat");
+
+    // The bot moves for seat 1 while the others play.
+    let moved_by = |v: &View, seat: u8, from: usize| {
+        v.log.iter().skip(from.saturating_sub(v.log_start as usize)).any(|e| {
+            matches!(e, LogEntry::Play { p, .. } | LogEntry::Bid { p, .. } | LogEntry::Pass { p }
+                | LogEntry::Price { p, .. } | LogEntry::Decline { p } if *p == seat)
+        })
+    };
+    let v = game(a);
+    let from = v.log_start as usize + v.log.len();
+    let mut rng = rand::rng();
+    for _ in 0..500 {
+        if moved_by(&game(a), 1, from) {
+            break;
+        }
+        for c in [a, c] {
+            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+                send(&mut rooms, c, json!({ "type": "action", "action": action }));
+            }
+        }
+        advance(&now, 2_500);
+        rooms.tick();
+        rooms.tick();
+    }
+    assert!(moved_by(&game(a), 1, from), "the bot should play seat 1");
+
+    // The player comes back and has the seat again.
+    let back = fake(&mut rooms, "10.0.0.2");
+    send(
+        &mut rooms,
+        &back,
+        json!({ "type": "join", "room": code, "token": token }),
+    );
+    assert_eq!(joined(&back).1, Some(1));
+    assert!(!state(a).room.seats[1].bot && state(a).room.seats[1].connected);
+
+    // Kicking: admin only, not yourself; the player becomes a watcher and a bot plays on.
+    send(&mut rooms, &back, json!({ "type": "kick", "seat": 2 }));
+    assert_error(&back, "Only the room admin can kick");
+    send(&mut rooms, a, json!({ "type": "kick", "seat": 0 }));
+    assert_error(a, "kick yourself");
+    let c_token = joined(c).2.unwrap();
+    send(&mut rooms, a, json!({ "type": "kick", "seat": 2 }));
+    assert_eq!(joined(c).1, None);
+    assert_eq!(state(c).you, None);
+    let seat = state(a).room.seats[2].clone();
+    assert!(seat.bot && seat.connected && !seat.open);
+    let again = fake(&mut rooms, "10.0.0.3");
+    send(
+        &mut rooms,
+        &again,
+        json!({ "type": "join", "room": code, "token": c_token }),
+    );
+    assert_eq!(joined(&again).1, None);
+}
+
+#[test]
+fn the_admin_kicks_from_the_lobby() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    send(&mut rooms, &clients[0], json!({ "type": "kick", "seat": 1 }));
+    assert_eq!(state(&clients[1]).you, None);
+    assert_eq!(state(&clients[2]).you, Some(1));
+    let names: Vec<String> = state(&clients[0]).room.seats.iter().map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["P0", "P2"]);
 }
 
 #[test]

@@ -27,6 +27,7 @@ const CREATE_LIMIT: u32 = 10;
 const SKIP_AFTER_MS: u64 = 30_000;
 const CREATE_WINDOW_MS: u64 = 10 * 60 * 1000;
 const SWEEP_EVERY: Duration = Duration::from_secs(3600);
+const BOT_TICK_EVERY: Duration = Duration::from_millis(200);
 /// How long shutdown waits for open requests before giving up on them.
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(5);
 
@@ -93,6 +94,20 @@ async fn stop_signal() -> anyhow::Result<()> {
         _ = int.recv() => {}
     }
     Ok(())
+}
+
+/// Deletes idle rooms now and then, and lets bot seats move, until `stop`.
+async fn timers(rooms: Arc<Mutex<Rooms>>, stop: CancellationToken) {
+    let mut sweep = tokio::time::interval_at(tokio::time::Instant::now() + SWEEP_EVERY, SWEEP_EVERY);
+    let mut bots = tokio::time::interval(BOT_TICK_EVERY);
+    bots.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => break,
+            _ = sweep.tick() => lock(&rooms).sweep(),
+            _ = bots.tick() => lock(&rooms).tick(),
+        }
+    }
 }
 
 #[tokio::main]
@@ -173,17 +188,7 @@ async fn main() -> anyhow::Result<()> {
         stop.cancel();
     });
 
-    let sweeper = Arc::clone(&rooms);
-    let stop = shutdown.clone();
-    tokio::spawn(async move {
-        let mut every = tokio::time::interval_at(tokio::time::Instant::now() + SWEEP_EVERY, SWEEP_EVERY);
-        loop {
-            tokio::select! {
-                () = stop.cancelled() => break,
-                _ = every.tick() => lock(&sweeper).sweep(),
-            }
-        }
-    });
+    tokio::spawn(timers(Arc::clone(&rooms), shutdown.clone()));
 
     // Without TCP_NODELAY small WebSocket messages wait for the previous one's ACK.
     let listener = listener.tap_io(|tcp| {

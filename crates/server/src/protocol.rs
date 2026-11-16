@@ -39,7 +39,19 @@ pub enum ClientMsg {
         seat: Seat,
         name: String,
     },
+    /// Admin only.
     Start,
+    /// Admin only. In the lobby: seat a bot the server plays (`seat` is ignored; `release` removes
+    /// it again). In a game: a bot plays the disconnected `seat` until its player comes back.
+    Bot {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        seat: Option<Seat>,
+    },
+    /// Admin only. In the lobby the seat goes; in a game the player loses it and a bot plays on.
+    Kick {
+        seat: Seat,
+    },
     Action {
         action: Action,
     },
@@ -50,6 +62,7 @@ pub enum ClientMsg {
         seat: Seat,
     },
     Leave,
+    /// Admin only.
     Rematch,
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
     Rule {
@@ -78,6 +91,8 @@ impl ClientMsg {
             Self::Join { .. } => "join",
             Self::Claim { .. } => "claim",
             Self::Start => "start",
+            Self::Bot { .. } => "bot",
+            Self::Kick { .. } => "kick",
             Self::Action { .. } => "action",
             Self::Skip { .. } => "skip",
             Self::Release { .. } => "release",
@@ -100,6 +115,9 @@ pub struct SeatInfo {
     pub away_ms: Option<u64>,
     /// Released mid-game: anyone opening the link may claim it.
     pub open: bool,
+    /// Played by the server; never open, never admin. A bot standing in for a player who may come
+    /// back shows as disconnected.
+    pub bot: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

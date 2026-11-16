@@ -50,7 +50,14 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
   const seat = room.seats[i];
   const p = g.players[i];
   const away = awayFor(i);
-  const canAct = me !== null && i !== me && away !== null && away >= room.skipAfterMs;
+  const isAdmin = me !== null && room.admin === me && i !== me;
+  // Skip and free seat: the admin's, once the player has been away long enough.
+  const canAct = isAdmin && !seat.bot && away !== null && away >= room.skipAfterMs;
+  // A bot standing in for a player shows as disconnected; one that took a kicked player's seat does not.
+  const standIn = seat.bot && !seat.connected;
+  const canBot = isAdmin && !g.over && !seat.connected && !seat.bot;
+  const canKick = isAdmin && !g.over && !(seat.bot && seat.connected);
+  const [kicking, setKicking] = useState(false);
   const owing = g.pending.includes(i);
   const now = doing(g, i);
   // The hammer: who sells now (or is choosing what to sell), and where it goes after this lot.
@@ -87,7 +94,14 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         ? `Your money: ${theme.money(p.money ?? 0)}. Only you can see it.`
         : `Money stays hidden until the game ends.`,
   );
-  facts.push(seat.connected ? 'Connected.' : seat.open ? 'Seat open: anyone with the room link can take it over.' : `Away for ${clock(away ?? 0)}.`);
+  facts.push(
+    standIn
+      ? `🤖 A bot plays this seat at random until ${name} comes back.`
+      : seat.bot
+        ? '🤖 A bot: the server plays this seat at random.'
+        : seat.connected ? 'Connected.' : seat.open           ? 'Seat open: anyone with the room link can take it over.'
+          : `Away for ${clock(away ?? 0)}.`,
+  );
 
   return (
     <div
@@ -130,6 +144,12 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
               ★
             </span>
           )}
+          {seat.bot && (
+            <span title="A bot plays this seat" aria-label="bot">
+              {' '}
+              🤖
+            </span>
+          )}
           {now ? (
             <span className="mark now">{now}</span>
           ) : (
@@ -155,7 +175,12 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         <Owned g={g} seat={i} name={name} names={names} theme={theme} />
         {!seat.connected && (
           <div className="away-row">
-            <span className="muted small">{seat.open ? 'Seat open' : `Away ${clock(away ?? 0)}`}</span>
+            <span className="muted small">{standIn ? 'Bot playing' : seat.open ? 'Seat open' : `Away ${clock(away ?? 0)}`}</span>
+            {canBot && (
+              <button className="btn small" onClick={() => send({ type: 'bot', seat: i })} title="A bot plays until they come back">
+                Bot plays
+              </button>
+            )}
             {canAct && owing && (
               <button className="btn small" onClick={() => send({ type: 'skip', seat: i })}>
                 Skip their move
@@ -206,6 +231,30 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
                   Become admin
                 </button>
               )}
+            </div>
+          )}
+          {(canBot || canKick) && (
+            <div className="row">
+              {canBot && (
+                <button className="btn" onClick={() => send({ type: 'bot', seat: i })}>
+                  Let a bot play until they come back
+                </button>
+              )}
+              {canKick &&
+                (kicking ? (
+                  <>
+                    <button className="btn primary" onClick={() => send({ type: 'kick', seat: i })}>
+                      Kick {seat.name}: a bot plays the seat for good
+                    </button>
+                    <button className="btn" onClick={() => setKicking(false)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn" onClick={() => setKicking(true)}>
+                    Kick
+                  </button>
+                ))}
             </div>
           )}
           <h3 className="details-head">

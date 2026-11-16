@@ -211,7 +211,16 @@ export function Table({ state, send, theme }: Props) {
       );
     if (g.over)
       return {
-        body: <GameOver g={g} names={names} theme={theme} canRematch={me !== null} onRematch={() => send({ type: 'rematch' })} />,
+        body: (
+          <GameOver
+            g={g}
+            names={names}
+            theme={theme}
+            canRematch={me !== null && room.admin === me}
+            admin={me !== null ? names[room.admin] : undefined}
+            onRematch={() => send({ type: 'rematch' })}
+          />
+        ),
         bar: null,
       };
 
@@ -750,7 +759,10 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
 
 function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; theme: Theme; send: (m: ClientMsg) => void; onClose: () => void }) {
   const { room, me, names, theme, send, onClose } = props;
-  const [to, setTo] = useState<number>(room.admin === 0 ? 1 : 0);
+  // Only a connected player can take the role.
+  const eligible = room.seats.flatMap((s, i) => (i !== me && !s.bot && s.connected ? [i] : []));
+  const [picked, setTo] = useState<number | null>(null);
+  const to = picked !== null && eligible.includes(picked) ? picked : eligible[0];
   return (
     <div className="menu" role="dialog" aria-label="Room">
       <div className="menu-head">
@@ -768,10 +780,14 @@ function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; t
           <br />
           <small className="muted">Can end an auction with a result agreed on voice (“Call it from voice” on the stage).</small>
         </p>
-        {room.admin === me && (
+        {room.admin === me && to !== undefined && (
           <div className="row">
             <select value={to} onChange={(e) => setTo(Number(e.target.value))} aria-label="New admin">
-              {names.map((n, i) => (i === me ? null : <option key={i} value={i}>{n}</option>))}
+              {eligible.map((i) => (
+                <option key={i} value={i}>
+                  {names[i]}
+                </option>
+              ))}
             </select>
             <button className="btn small" onClick={() => send({ type: 'admin', seat: to })}>
               Make admin
@@ -932,7 +948,15 @@ function Inspect({ card, theme, onClose }: { card: Card; theme: Theme; onClose: 
   );
 }
 
-function GameOver(props: { g: View; names: string[]; theme: Theme; canRematch: boolean; onRematch: () => void }) {
+function GameOver(props: {
+  g: View;
+  names: string[];
+  theme: Theme;
+  canRematch: boolean;
+  /** Name of the admin, shown to the other players while they wait for a rematch. */
+  admin?: string;
+  onRematch: () => void;
+}) {
   const { g, names, theme } = props;
   const order = g.players.map((p, i) => ({ i, money: p.money ?? 0 })).sort((x, y) => y.money - x.money);
   return (
@@ -951,10 +975,12 @@ function GameOver(props: { g: View; names: string[]; theme: Theme; canRematch: b
           </li>
         ))}
       </ol>
-      {props.canRematch && (
+      {props.canRematch ? (
         <button className="btn primary big" onClick={props.onRematch}>
           New game, same players
         </button>
+      ) : (
+        props.admin && <p className="muted">Waiting for {props.admin} (admin) to start a new game.</p>
       )}
     </div>
   );

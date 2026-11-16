@@ -8,4 +8,9 @@ awayMs: number | null,
 /**
  * Released mid-game: anyone opening the link may claim it.
  */
-open: boolean, };
+open: boolean, 
+/**
+ * Played by the server; never open, never admin. A bot standing in for a player who may come
+ * back shows as disconnected.
+ */
+bot: boolean, };

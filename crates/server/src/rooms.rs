@@ -12,19 +12,24 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
 use engine::{
-    Action, GameState, RuleError, Seat, apply_action, apply_ruling, apply_skip, config, new_game, undo_ruling, view_for,
+    Action, GameState, RuleError, Seat, apply_action, apply_ruling, apply_skip, config, new_game, pending, undo_ruling,
+    view_for,
 };
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
+use crate::bot::choose_action;
 use crate::protocol::{ClientMsg, ErrorCode, RoomInfo, SeatInfo, ServerMsg, ThemeId};
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH: usize = 6;
 const NAME_LIMIT: usize = 20;
 const FILE_VERSION: u64 = 1;
+/// While the admin can still undo a call, bots wait at least this long, so their move does not
+/// take the undo away at once.
+const BOT_WAIT_AFTER_CALL_MS: u64 = 8_000;
 
 pub type ClientId = u64;
 
@@ -48,6 +53,8 @@ pub struct Options {
     pub max_rooms: usize,
     pub room_ttl_ms: u64,
     pub create_limit: CreateLimit,
+    /// Average thinking time of a bot seat before each move (half to one and a half of it).
+    pub bot_delay_ms: u64,
 }
 
 impl Default for Options {
@@ -56,6 +63,7 @@ impl Default for Options {
             data_dir: None,
             now: Box::new(system_now),
             skip_after_ms: 30_000,
+            bot_delay_ms: 1_500,
             max_rooms: 200,
             room_ttl_ms: 7 * 24 * 3600 * 1000,
             create_limit: CreateLimit {
@@ -83,8 +91,18 @@ struct Client {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SeatData {
     name: String,
-    /// Secret that lets a browser re-attach to this seat. `None` = released, anyone may claim it.
+    /// Secret that lets a browser re-attach to this seat. `None` = released, anyone may claim it
+    /// (unless it is a bot).
     token: Option<String>,
+    /// Played by the server; never has a token.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    bot: bool,
+}
+
+impl SeatData {
+    fn open(&self) -> bool {
+        self.token.is_none() && !self.bot
+    }
 }
 
 /// The admin's last called result: the game before it, and the room's game version it produced.
@@ -108,8 +126,10 @@ struct Room {
     version: u64,
     last_call: Option<LastCall>,
     clients: Vec<ClientId>,
-    /// Per seat: when its last connection dropped (`None` while connected).
+    /// Per seat: when its last connection dropped (`None` while connected, and always for a bot).
     away: Vec<Option<u64>>,
+    /// When a bot that owes a move makes it.
+    bot_due: Option<u64>,
 }
 
 impl Room {
@@ -127,6 +147,18 @@ impl Room {
 
     fn has_seat(&self, seat: Seat) -> bool {
         usize::from(seat) < self.seats.len()
+    }
+
+    fn is_bot(&self, seat: Seat) -> bool {
+        self.seats.get(usize::from(seat)).is_some_and(|s| s.bot)
+    }
+
+    fn require_admin(&self, seat: Seat, doing: &str) -> Result<(), Fail> {
+        if seat == self.admin {
+            Ok(())
+        } else {
+            fail(format!("Only the room admin can {doing}"))
+        }
     }
 }
 
@@ -225,6 +257,7 @@ pub struct Rooms {
     max_rooms: usize,
     room_ttl_ms: u64,
     create_limit: CreateLimit,
+    bot_delay_ms: u64,
     store: Option<Store>,
     /// Clients whose queue overflowed, disconnected once the current message is done.
     dropped: Vec<ClientId>,
@@ -246,6 +279,7 @@ impl Rooms {
             max_rooms: opts.max_rooms,
             room_ttl_ms: opts.room_ttl_ms,
             create_limit: opts.create_limit,
+            bot_delay_ms: opts.bot_delay_ms,
             store: None,
             dropped: Vec::new(),
         };
@@ -366,6 +400,62 @@ impl Rooms {
         }
     }
 
+    /// Plays bot seats: a bot that owes a move makes it once its thinking time has passed. Called
+    /// a few times a second. Only rooms someone is watching move, so an abandoned game waits.
+    pub fn tick(&mut self) {
+        let now = (self.now)();
+        let mut rng = rand::rng();
+        let mut moved = Vec::new();
+        for room in self.rooms.values_mut() {
+            let bot = room.game.as_ref().filter(|_| !room.clients.is_empty()).and_then(|g| {
+                pending(g)
+                    .into_iter()
+                    .filter(|&s| room.is_bot(s))
+                    .collect::<Vec<_>>()
+                    .choose(&mut rng)
+                    .copied()
+            });
+            let (Some(seat), Some(game)) = (bot, &room.game) else {
+                room.bot_due = None;
+                continue;
+            };
+            let due = *room.bot_due.get_or_insert_with(|| {
+                let think = rng.random_range(self.bot_delay_ms / 2..=self.bot_delay_ms * 3 / 2);
+                let undoable = room.last_call.as_ref().is_some_and(|c| c.version == room.version);
+                now + if undoable {
+                    think.max(BOT_WAIT_AFTER_CALL_MS)
+                } else {
+                    think
+                }
+            });
+            if due > now {
+                continue;
+            }
+            room.bot_due = None;
+            let next = choose_action(&view_for(game, Some(seat)), &mut rng)
+                .ok_or_else(|| Fail::new("No move found"))
+                .and_then(|action| {
+                    debug!(room = %room.code, seat, "Bot move {action:?}");
+                    apply_action(game, seat, &action).map_err(Fail::from)
+                })
+                .or_else(|e| {
+                    warn!(room = %room.code, seat, "Bot move refused ({}); skipping it", e.message);
+                    apply_skip(game, seat).map_err(Fail::from)
+                });
+            match next {
+                Ok(game) => {
+                    room.set_game(game);
+                    moved.push(room.code.clone());
+                }
+                Err(e) => error!(room = %room.code, seat, "Bot cannot move: {}", e.message),
+            }
+        }
+        for code in moved {
+            self.changed(&code);
+        }
+        self.drop_overflowed();
+    }
+
     /// Waits until every save so far is on disk.
     pub fn flush(&self) {
         if let Some(store) = &self.store {
@@ -426,7 +516,7 @@ impl Rooms {
             ClientMsg::Claim { seat, name } => {
                 let has_seat = self.client(id)?.seat.is_some();
                 let room = self.room_mut(&code)?;
-                let open = room.game.is_some() && room.seats.get(usize::from(seat)).is_some_and(|s| s.token.is_none());
+                let open = room.game.is_some() && room.seats.get(usize::from(seat)).is_some_and(SeatData::open);
                 if !open {
                     return fail("That seat is taken");
                 }
@@ -473,6 +563,9 @@ impl Rooms {
             if !room.has_seat(seat) {
                 return fail("No such seat");
             }
+            if room.is_bot(seat) {
+                return fail("A bot is playing that seat");
+            }
             let Some(since) = room.away.get(usize::from(seat)).copied().flatten() else {
                 return fail("That player is connected");
             };
@@ -487,6 +580,7 @@ impl Rooms {
                 if room.game.is_some() {
                     return fail("The game has already started");
                 }
+                room.require_admin(me, "start the game")?;
                 let n = u8::try_from(room.seats.len()).unwrap_or(u8::MAX);
                 let cfg = config();
                 if !cfg.players.contains_key(&n) {
@@ -500,9 +594,72 @@ impl Rooms {
                 let Some(game) = room.game.as_ref().filter(|g| g.over) else {
                     return fail("The game is not over yet");
                 };
+                room.require_admin(me, "start a rematch")?;
                 let (n, seed) = (game.n, new_seed());
                 room.set_game(new_game(n, seed)?);
                 info!(room = %code, seat = me, "Rematch with {n} players (seed {seed})");
+            }
+            ClientMsg::Bot { seat } => {
+                room.require_admin(me, "add a bot")?;
+                if room.game.is_some() {
+                    let Some(seat) = seat else {
+                        return fail("The game has started; seats are locked");
+                    };
+                    if !room.has_seat(seat) {
+                        return fail("No such seat");
+                    }
+                    if room.is_bot(seat) {
+                        return fail("A bot is already playing that seat");
+                    }
+                    if room.away.get(usize::from(seat)).copied().flatten().is_none() {
+                        return fail("That player is connected");
+                    }
+                    if let Some(s) = room.seats.get_mut(usize::from(seat)) {
+                        s.bot = true;
+                    }
+                    info!(room = %code, seat = me, "A bot plays seat {seat} until its player is back");
+                    self.changed(&code);
+                    return Ok(());
+                }
+                if room.seats.len() >= usize::from(config().max_players()) {
+                    return fail("The room is full");
+                }
+                // Fewer seats than bot numbers, so one is free.
+                let name = (1..=config().max_players())
+                    .map(|k| format!("Bot {k}"))
+                    .find(|n| room.seats.iter().all(|s| s.name != *n))
+                    .unwrap_or_default();
+                info!(room = %code, seat = me, "Added {name} in seat {}", room.seats.len());
+                room.seats.push(SeatData {
+                    name,
+                    token: None,
+                    bot: true,
+                });
+                room.away.push(None);
+            }
+            ClientMsg::Kick { seat } => {
+                room.require_admin(me, "kick a player")?;
+                if !room.has_seat(seat) {
+                    return fail("No such seat");
+                }
+                if seat == me {
+                    return fail("You cannot kick yourself");
+                }
+                if room.game.is_none() {
+                    info!(room = %code, seat = me, "Kicked seat {seat} from the lobby");
+                    self.remove_lobby_seat(&code, seat);
+                } else {
+                    // The token goes, so the player cannot come back to the seat; a bot plays on.
+                    if let Some(s) = room.seats.get_mut(usize::from(seat)) {
+                        s.token = None;
+                        s.bot = true;
+                    }
+                    if let Some(away) = room.away.get_mut(usize::from(seat)) {
+                        *away = None;
+                    }
+                    info!(room = %code, seat = me, "Kicked seat {seat}; a bot plays it");
+                    self.unseat(&code, seat);
+                }
             }
             ClientMsg::Action { action } => {
                 let before = room.game()?;
@@ -515,6 +672,7 @@ impl Rooms {
             }
             ClientMsg::Skip { seat } => {
                 let before = room.game()?;
+                room.require_admin(me, "skip a move")?;
                 require_away(room, seat)?;
                 let game = apply_skip(before, seat)?;
                 info!(room = %code, seat = me, "Skipped away seat {seat}");
@@ -557,9 +715,16 @@ impl Rooms {
                 if !room.has_seat(seat) {
                     return fail("No such seat");
                 }
+                if room.is_bot(seat) {
+                    return fail("A bot cannot be the admin");
+                }
                 if me == room.admin {
                     if seat == me {
                         return fail("You are already the admin");
+                    }
+                    // A disconnected admin would leave the room without one for the next 30 s.
+                    if room.away.get(usize::from(seat)).copied().flatten().is_some() {
+                        return fail("That player is not connected");
                     }
                 } else {
                     if seat != me {
@@ -579,12 +744,18 @@ impl Rooms {
                     return fail("You cannot release your own seat");
                 }
                 if room.game.is_some() {
+                    room.require_admin(me, "free a seat")?;
                     require_away(room, seat)?;
                     if let Some(s) = room.seats.get_mut(usize::from(seat)) {
                         s.token = None;
                     }
                     info!(room = %code, seat = me, "Released away seat {seat}");
+                } else if room.is_bot(seat) {
+                    room.require_admin(me, "remove a seat")?;
+                    info!(room = %code, seat = me, "Removed the bot in seat {seat} from the lobby");
+                    self.remove_lobby_seat(&code, seat);
                 } else {
+                    room.require_admin(me, "remove a seat")?;
                     if room.away.get(usize::from(seat)).copied().flatten().is_none() {
                         return fail("That player is connected");
                     }
@@ -653,6 +824,7 @@ impl Rooms {
                 seats: vec![SeatData {
                     name,
                     token: Some(token.clone()),
+                    bot: false,
                 }],
                 admin: 0,
                 game: None,
@@ -662,6 +834,7 @@ impl Rooms {
                 last_call: None,
                 clients: Vec::new(),
                 away: vec![Some(now)],
+                bot_due: None,
             },
         );
         self.attach(id, &code, Some(0));
@@ -691,10 +864,18 @@ impl Rooms {
             .and_then(|t| room.seats.iter().position(|s| s.token.as_deref() == Some(t)));
         let mut seat = None;
         let mut seat_token = None;
+        let mut took_back = false;
         if let Some(known) = known {
             seat = u8::try_from(known).ok();
-            seat_token = room.seats.get(known).and_then(|s| s.token.clone());
-            info!(client = id, room = %code, seat, "Rejoined");
+            if let Some(s) = room.seats.get_mut(known) {
+                seat_token.clone_from(&s.token);
+                took_back = std::mem::take(&mut s.bot);
+            }
+            if took_back {
+                info!(client = id, room = %code, seat, "Rejoined and took the seat back from its bot");
+            } else {
+                info!(client = id, room = %code, seat, "Rejoined");
+            }
         } else if room.game.is_none()
             && let Some(raw_name) = raw_name
         {
@@ -707,6 +888,7 @@ impl Rooms {
             room.seats.push(SeatData {
                 name,
                 token: Some(token.clone()),
+                bot: false,
             });
             room.away.push(Some(now));
             seat = u8::try_from(room.seats.len() - 1).ok();
@@ -724,7 +906,7 @@ impl Rooms {
                 token: seat_token,
             },
         );
-        if seat.is_some() && known.is_none() {
+        if seat.is_some() && (known.is_none() || took_back) {
             self.changed(&code);
         } else {
             self.broadcast(&code);
@@ -773,7 +955,30 @@ impl Rooms {
         self.broadcast(&code);
     }
 
+    /// Clients on `seat` become watchers, and are told so.
+    fn unseat(&mut self, code: &str, seat: Seat) {
+        let Some(room) = self.rooms.get(code) else {
+            return;
+        };
+        for &cid in &room.clients {
+            if let Some(c) = self.clients.get_mut(&cid)
+                && c.seat == Some(seat)
+            {
+                c.seat = None;
+                let msg = ServerMsg::Joined {
+                    room: code.to_owned(),
+                    seat: None,
+                    token: None,
+                };
+                if !(c.sink)(&msg) {
+                    self.dropped.push(cid);
+                }
+            }
+        }
+    }
+
     fn remove_lobby_seat(&mut self, code: &str, seat: Seat) {
+        self.unseat(code, seat);
         let Some(room) = self.rooms.get_mut(code) else {
             return;
         };
@@ -785,28 +990,22 @@ impl Rooms {
             room.away.remove(i);
         }
         if seat == room.admin {
-            room.admin = 0;
+            // The first player left, never a bot. With no player left the bots go too.
+            if let Some(p) = room.seats.iter().position(|s| !s.bot) {
+                room.admin = u8::try_from(p).unwrap_or(0);
+            } else {
+                room.seats.clear();
+                room.away.clear();
+                room.admin = 0;
+            }
         } else if seat < room.admin {
             room.admin -= 1;
         }
         for &cid in &room.clients {
-            let Some(c) = self.clients.get_mut(&cid) else {
-                continue;
-            };
-            match c.seat {
-                Some(s) if s == seat => {
-                    c.seat = None;
-                    let msg = ServerMsg::Joined {
-                        room: code.to_owned(),
-                        seat: None,
-                        token: None,
-                    };
-                    if !(c.sink)(&msg) {
-                        self.dropped.push(cid);
-                    }
-                }
-                Some(s) if s > seat => c.seat = Some(s - 1),
-                _ => {}
+            if let Some(c) = self.clients.get_mut(&cid)
+                && let Some(s) = c.seat.filter(|&s| s > seat)
+            {
+                c.seat = Some(s - 1);
             }
         }
     }
@@ -828,7 +1027,8 @@ impl Rooms {
                         name: s.name.clone(),
                         connected: away.is_none(),
                         away_ms: away.map(|since| now.saturating_sub(since)),
-                        open: s.token.is_none(),
+                        open: s.open(),
+                        bot: s.bot,
                     }
                 })
                 .collect(),
@@ -912,7 +1112,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
     Ok(Some(Room {
         code: code.to_owned(),
         theme: saved.theme,
-        away: vec![Some(now); saved.seats.len()],
+        away: saved.seats.iter().map(|s| (!s.bot).then_some(now)).collect(),
         seats: saved.seats,
         admin,
         game: saved.game,
@@ -921,6 +1121,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         version: 0,
         last_call: None,
         clients: Vec::new(),
+        bot_due: None,
     }))
 }
 

@@ -31,7 +31,9 @@ The engine is checked against games recorded from the original TypeScript engine
 
 ### Try it alone
 
-Open the app, create a room, then seat bots that play random legal moves:
+Open the app, create a room and press *Add a bot* on an empty seat in the lobby until there are enough players, then *Start*. The server plays those seats with random legal moves.
+
+For testing the connection handling, bots can also join over the socket like a browser:
 
 ```sh
 npm run bots -- ABC234 3          # 3 bots join room ABC234; you press Start
@@ -82,7 +84,7 @@ Logs go to stderr (`docker compose logs -f`). `RUST_LOG=debug` adds every connec
 | `PORT` | `8787` | HTTP and WebSocket port |
 | `HOST` | `0.0.0.0` | Address to listen on; `::` for IPv6 |
 | `DATA_DIR` | `./data` | Where room files are kept; empty keeps rooms in memory only |
-| `SKIP_AFTER_MS` | `30000` | How long a seat must be disconnected before others can skip it, free it or take admin |
+| `SKIP_AFTER_MS` | `30000` | How long a seat must be disconnected before the admin can skip it or free it, or (for the admin's seat) others can take admin |
 | `CREATE_LIMIT` | `10` | Rooms one address may create per 10 minutes |
 | `STATIC_DIR` | `./dist` | Built frontend |
 | `ALLOWED_ORIGINS` | empty (any) | Comma-separated origins allowed to open the WebSocket, e.g. `https://adda.example.com` |
@@ -95,9 +97,10 @@ Each one is also a command-line option; `auction-adda --help` lists them. Relati
 ## During a game
 
 - **Refresh or lost connection:** reopen the link in the same browser; you get your seat back.
-- **Someone walked away:** once their seat has been disconnected for 30 seconds, any player can press *Skip their move* (they pass) or *Free seat* (whoever opens the link next can take it over, with its hand and money).
+- **Someone walked away:** once their seat has been disconnected for 30 seconds, the admin can press *Skip their move* (they pass) or *Free seat* (whoever opens the link next can take it over, with its hand and money).
 - **Bidding by voice:** the room creator is admin (★). Open *Call it from voice* on the stage to end the running auction with whatever the table agreed: pick the buyer and price, then confirm. The log shows who called it. The admin can hand the role over from the *Room* menu; if the admin is away for 30 seconds, anyone can press *Become admin*.
-- **Another game:** after the final result, *New game, same players*.
+- **Bots and kicking (admin):** on a disconnected player's seat, *Bot plays* lets a bot move for them until they reopen the link; then the seat is theirs again. *Kick* (in the player's seat sheet) takes the seat away for good: in the lobby the seat goes, in a game a bot plays it to the end.
+- **Another game:** after the final result, the admin presses *New game, same players*.
 - Rooms nobody has touched for 7 days are deleted.
 
 ## Layout

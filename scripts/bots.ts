@@ -200,12 +200,13 @@ function bot(index: number): void {
         return send({ type: 'admin', seat: human });
       }
     }
+    // Starting and rematches are the admin's; a bot that handed the role over leaves them to the human.
     if (!game) {
-      if (index === 0 && startAt && info.seats.length >= startAt) send({ type: 'start' });
+      if (info.admin === seat && startAt && info.seats.length >= startAt) send({ type: 'start' });
       return;
     }
     if (game.over) {
-      if (rematch && index === 0) send({ type: 'rematch' });
+      if (rematch && info.admin === seat) send({ type: 'rematch' });
       return;
     }
     const action = chooseAction(game, Math.random);

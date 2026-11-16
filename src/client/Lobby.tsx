@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ClientMsg } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { initials } from './derive.ts';
@@ -40,6 +40,17 @@ export function Lobby({ state, send, join, theme }: Props) {
   const count = room.seats.length;
   const canStart = count >= room.minPlayers && count <= room.maxPlayers;
   const empty = Array.from({ length: room.maxPlayers - count });
+  const isAdmin = you !== null && room.admin === you;
+  const adminName = room.seats[room.admin]?.name;
+  // An admin who has been away long enough can be replaced, or nobody could start the game.
+  const adminAwayMs = room.seats[room.admin]?.awayMs ?? null;
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (adminAwayMs === null) return;
+    const timer = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(timer);
+  }, [adminAwayMs === null]);
+  const adminAway = you !== null && !isAdmin && adminAwayMs !== null && adminAwayMs + (Date.now() - state.receivedAt) >= room.skipAfterMs;
 
   return (
     <main className="center-card lobby">
@@ -68,11 +79,17 @@ export function Lobby({ state, send, join, theme }: Props) {
                 </span>
               )}
               {i === you && <em> (you)</em>}
+              {s.bot && <em> · bot</em>}
               {!s.connected && <em> · disconnected</em>}
             </span>
-            {you !== null && i !== you && !s.connected && (
-              <button className="btn small" onClick={() => send({ type: 'release', seat: i })}>
-                Remove
+            {isAdmin && i !== you && (
+              <button className="btn small" onClick={() => send({ type: 'kick', seat: i })}>
+                {s.bot ? 'Remove' : 'Kick'}
+              </button>
+            )}
+            {adminAway && i === room.admin && (
+              <button className="btn small" onClick={() => send({ type: 'admin', seat: you! })}>
+                Become admin
               </button>
             )}
           </li>
@@ -81,13 +98,18 @@ export function Lobby({ state, send, join, theme }: Props) {
           <li key={`e${i}`} className="empty">
             <span className="avatar empty" aria-hidden="true" />
             <span className="grow">Empty seat</span>
+            {isAdmin && i === 0 && (
+              <button className="btn small" onClick={() => send({ type: 'bot' })}>
+                Add a bot
+              </button>
+            )}
           </li>
         ))}
       </ol>
       <p className="admin-note">
-        <span className="admin-mark">★</span> <b>{room.admin === you ? 'You are' : `${room.seats[room.admin]?.name} is`} the room admin.</b>{' '}
-        Playing on voice? The admin can end an auction with the result the table agreed (and undo a wrong call). Hand the role over any
-        time from the Room menu.
+        <span className="admin-mark">★</span> <b>{isAdmin ? 'You are' : `${adminName} is`} the room admin.</b> The admin starts the game
+        and can fill empty seats with bots. Playing on voice? The admin can end an auction with the result the table agreed (and undo a
+        wrong call). Hand the role over any time from the Room menu.
       </p>
 
       {you === null ? (
@@ -114,15 +136,19 @@ export function Lobby({ state, send, join, theme }: Props) {
         )
       ) : (
         <div className="row">
-          <button className="btn primary big grow" disabled={!canStart} onClick={() => send({ type: 'start' })}>
-            {canStart ? `Start with ${count} players` : `Waiting for players (${count}/${room.minPlayers} minimum)`}
+          <button className="btn primary big grow" disabled={!canStart || !isAdmin} onClick={() => send({ type: 'start' })}>
+            {!canStart
+              ? `Waiting for players (${count}/${room.minPlayers} minimum)`
+              : isAdmin
+                ? `Start with ${count} players`
+                : `Waiting for ${adminName} to start`}
           </button>
           <button className="btn" onClick={() => send({ type: 'leave' })}>
             Leave
           </button>
         </div>
       )}
-      {you !== null && <p className="muted small">Anyone seated can start. Seats are locked once the game begins.</p>}
+      {you !== null && <p className="muted small">Only the admin can start. Seats are locked once the game begins.</p>}
 
       <Rules theme={theme} />
     </main>
