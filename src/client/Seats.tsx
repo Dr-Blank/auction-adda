@@ -3,7 +3,8 @@ import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { Card, ClientMsg, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
-import { aroundTable, countBySuit, doing, hammerOrder, initials, lastWords, purchases } from './derive.ts';
+import { Avatar } from './Avatar.tsx';
+import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from './derive.ts';
 import { COMPACT, TOUCH } from './hooks.ts';
 import { Sheet } from './Sheet.tsx';
 
@@ -116,9 +117,7 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
     >
       <div className="avatar-wrap">
         <button className="avatar-btn" onClick={() => setInfo(true)} aria-haspopup="dialog" aria-label={`About ${name === 'You' ? 'your seat' : name}`}>
-          <span className={`avatar ${seat.connected ? 'on' : ''}`} title={seat.connected ? 'Connected' : 'Disconnected'}>
-            {initials(seat.name)}
-          </span>
+          <Avatar code={seat.avatar} name={seat.name} className={seat.connected ? 'on' : ''} title={seat.connected ? 'Connected' : 'Disconnected'} />
         </button>
         {holds && (
           <span className="role" title={a ? 'Seller' : `Choosing a ${theme.nouns.card} to sell`}>
@@ -203,7 +202,7 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         <Sheet
           title={
             <>
-              <span className="avatar small">{initials(seat.name)}</span> {i === me ? `You (${seat.name})` : seat.name}
+              <Avatar code={seat.avatar} name={seat.name} className="small" /> {i === me ? `You (${seat.name})` : seat.name}
             </>
           }
           label={`About ${name === 'You' ? 'your seat' : name}`}

@@ -317,9 +317,49 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
   letter-spacing: 0.02em;
   box-shadow: 0 0 0 2px var(--dim);
 }
+.avatar { overflow: hidden; flex: none; }
+.avatar svg { width: 100%; height: 100%; display: block; }
 .avatar.on { box-shadow: 0 0 0 2px var(--ok); }
 .avatar.small { width: 26px; height: 26px; font-size: 0.65rem; box-shadow: none; }
 .avatar.big { width: 64px; height: 64px; font-size: 1.3rem; }
+.avatar.huge { width: 112px; height: 112px; }
+
+/* Picture editor: your face on top, then one strip of choices per part. */
+.you-row { display: flex; gap: 12px; align-items: end; }
+.you-row label { flex: 1; min-width: 0; }
+.avatar-btn.look-btn { position: relative; flex: none; }
+.look-edit {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 0.7rem;
+}
+.look-editor { display: grid; gap: 10px; }
+.look-top { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.look-row { display: grid; gap: 4px; min-width: 0; }
+.look-row-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; }
+.look-strip { display: flex; gap: 6px; overflow-x: auto; padding: 3px; scrollbar-width: thin; scroll-snap-type: x proximity; }
+.look-pick {
+  all: unset;
+  flex: none;
+  border-radius: 50%;
+  cursor: pointer;
+  scroll-snap-align: center;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.12s;
+}
+.look-pick .avatar { width: 48px; height: 48px; box-shadow: none; }
+.look-pick:hover { box-shadow: 0 0 0 2px var(--edge); }
+.look-pick.on { box-shadow: 0 0 0 3px var(--gold); }
+.look-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.look-swatch { display: block; width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 15%); }
 .seat.me .avatar { background: linear-gradient(160deg, var(--edge), var(--deep)); }
 .seat.owing .avatar { animation: owe 1.6s ease-in-out infinite; }
 @keyframes owe {

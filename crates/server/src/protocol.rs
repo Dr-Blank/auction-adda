@@ -54,6 +54,10 @@ pub enum ClientMsg {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         prefs: Option<Prefs>,
+        /// The creator's look, as in `SeatInfo`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        avatar: Option<String>,
     },
     Join {
         room: String,
@@ -63,10 +67,21 @@ pub enum ClientMsg {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         name: Option<String>,
+        /// Used when the join takes a new seat.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        avatar: Option<String>,
     },
     Claim {
         seat: Seat,
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        avatar: Option<String>,
+    },
+    /// The sender's new look, in the lobby or a game.
+    Avatar {
+        avatar: String,
     },
     /// Admin only.
     Start,
@@ -132,6 +147,7 @@ impl ClientMsg {
             Self::Create { .. } => "create",
             Self::Join { .. } => "join",
             Self::Claim { .. } => "claim",
+            Self::Avatar { .. } => "avatar",
             Self::Start => "start",
             Self::Bot { .. } => "bot",
             Self::Kick { .. } => "kick",
@@ -162,6 +178,10 @@ pub struct SeatInfo {
     /// Played by the server; never open, never admin. A bot standing in for a player who may come
     /// back shows as disconnected.
     pub bot: bool,
+    /// The seat's look: up to 16 base-36 digits, one per part, that the client draws (each digit
+    /// modulo that part's choices, so any string draws). Empty = drawn from the name. The server
+    /// only cleans it, and rolls one for each bot.
+    pub avatar: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

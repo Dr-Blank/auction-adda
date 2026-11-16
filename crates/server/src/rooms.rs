@@ -26,6 +26,8 @@ use crate::protocol::{Cast, ClientMsg, ErrorCode, Prefs, RoomInfo, SeatInfo, Ser
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH: usize = 6;
 const NAME_LIMIT: usize = 20;
+/// Base-36 digits in a seat's look; the client reads as many as it has parts.
+const AVATAR_LIMIT: usize = 16;
 const FILE_VERSION: u64 = 1;
 /// While the admin can still undo a call, bots wait at least this long, so their move does not
 /// take the undo away at once.
@@ -153,6 +155,9 @@ struct SeatData {
     /// Played by the server; never has a token.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     bot: bool,
+    /// As in `SeatInfo`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    avatar: String,
 }
 
 impl SeatData {
@@ -351,6 +356,24 @@ fn clean_name(raw: &str) -> Result<String, Fail> {
         return fail("Enter a name");
     }
     Ok(name.to_owned())
+}
+
+/// Keeps the base-36 digits of a look, lower-cased, up to the limit. Nothing is refused: the
+/// client draws any string.
+fn clean_avatar(raw: Option<&str>) -> String {
+    raw.unwrap_or_default()
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .take(AVATAR_LIMIT)
+        .collect()
+}
+
+fn random_avatar() -> String {
+    let mut rng = rand::rng();
+    (0..AVATAR_LIMIT)
+        .filter_map(|_| char::from_digit(rng.random_range(0..36), 36))
+        .collect()
 }
 
 fn new_token() -> String {
@@ -646,9 +669,25 @@ impl Rooms {
     )]
     fn dispatch(&mut self, id: ClientId, msg: ClientMsg) -> Result<(), Fail> {
         let msg = match msg {
-            ClientMsg::Create { theme, name, prefs } => return self.create(id, &theme, &name, prefs),
-            ClientMsg::Join { room, token, name } => {
-                return self.join(id, &room, token.as_deref(), name.as_deref());
+            ClientMsg::Create {
+                theme,
+                name,
+                prefs,
+                avatar,
+            } => return self.create(id, &theme, &name, prefs, clean_avatar(avatar.as_deref())),
+            ClientMsg::Join {
+                room,
+                token,
+                name,
+                avatar,
+            } => {
+                return self.join(
+                    id,
+                    &room,
+                    token.as_deref(),
+                    name.as_deref(),
+                    clean_avatar(avatar.as_deref()),
+                );
             }
             msg => msg,
         };
@@ -658,7 +697,7 @@ impl Rooms {
             .clone()
             .ok_or_else(|| Fail::new("Join a room first"))?;
         let msg = match msg {
-            ClientMsg::Claim { seat, name } => {
+            ClientMsg::Claim { seat, name, avatar } => {
                 let has_seat = self.client(id)?.seat.is_some();
                 let room = self.room_mut(&code)?;
                 let open = room.game.is_some() && room.seats.get(usize::from(seat)).is_some_and(SeatData::open);
@@ -674,6 +713,7 @@ impl Rooms {
                 if let Some(s) = room.seats.get_mut(usize::from(seat)) {
                     s.name = name;
                     s.token = Some(token.clone());
+                    s.avatar = clean_avatar(avatar.as_deref());
                 }
                 self.attach(id, &code, Some(seat));
                 self.send(
@@ -721,6 +761,12 @@ impl Rooms {
         };
         let room = self.room_mut(&code)?;
         match msg {
+            ClientMsg::Avatar { avatar } => {
+                if let Some(s) = room.seats.get_mut(usize::from(me)) {
+                    s.avatar = clean_avatar(Some(&avatar));
+                }
+                debug!(room = %code, seat = me, "New look");
+            }
             ClientMsg::Start => {
                 if room.game.is_some() {
                     return fail("The game has already started");
@@ -781,6 +827,7 @@ impl Rooms {
                     name,
                     token: None,
                     bot: true,
+                    avatar: random_avatar(),
                 });
                 room.away.push(None);
             }
@@ -936,7 +983,14 @@ impl Rooms {
         Ok(())
     }
 
-    fn create(&mut self, id: ClientId, theme: &str, raw_name: &str, prefs: Option<Prefs>) -> Result<(), Fail> {
+    fn create(
+        &mut self,
+        id: ClientId,
+        theme: &str,
+        raw_name: &str,
+        prefs: Option<Prefs>,
+        avatar: String,
+    ) -> Result<(), Fail> {
         let name = clean_name(raw_name)?;
         if ThemeId::parse(theme).is_none() {
             return fail("Unknown theme");
@@ -1002,6 +1056,7 @@ impl Rooms {
                     name,
                     token: Some(token.clone()),
                     bot: false,
+                    avatar,
                 }],
                 admin: 0,
                 game: None,
@@ -1030,7 +1085,14 @@ impl Rooms {
         Ok(())
     }
 
-    fn join(&mut self, id: ClientId, raw_code: &str, token: Option<&str>, raw_name: Option<&str>) -> Result<(), Fail> {
+    fn join(
+        &mut self,
+        id: ClientId,
+        raw_code: &str,
+        token: Option<&str>,
+        raw_name: Option<&str>,
+        avatar: String,
+    ) -> Result<(), Fail> {
         let code = raw_code.trim().to_uppercase();
         let now = (self.now)();
         let Some(room) = self.rooms.get_mut(&code) else {
@@ -1069,6 +1131,7 @@ impl Rooms {
                 name,
                 token: Some(token.clone()),
                 bot: false,
+                avatar,
             });
             room.away.push(Some(now));
             seat = u8::try_from(room.seats.len() - 1).ok();
@@ -1210,6 +1273,7 @@ impl Rooms {
                         away_ms: away.map(|since| now.saturating_sub(since)),
                         open: s.open(),
                         bot: s.bot,
+                        avatar: s.avatar.clone(),
                     }
                 })
                 .collect(),

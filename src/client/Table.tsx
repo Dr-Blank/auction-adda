@@ -4,10 +4,11 @@ import { ROUNDS } from '../config.ts';
 import type { Action, AuctionType, AuctionView, Card, ClientMsg, LogEntry, RoomInfo, View } from '../generated/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { BidBox, BidClock } from './BidBox.tsx';
-import { dealNote, groupLog, hammerOrder, initials, rail, reducedMotion } from './derive.ts';
+import { Avatar } from './Avatar.tsx';
+import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from './derive.ts';
 import { PHONE, useCountUp, useMedia } from './hooks.ts';
 import { BidTimer, ShareLink } from './Lobby.tsx';
-import { saveName, savedName } from './net.ts';
+import { saveName, savedAvatar, savedName } from './net.ts';
 import type { RoomState } from './net.ts';
 import { Premiere } from './Premiere.tsx';
 import { Ruling } from './Ruling.tsx';
@@ -296,7 +297,7 @@ export function Table({ state, send, theme }: Props) {
         return {
           body: (
             <div className="idle">
-              <span className="avatar big">{initials(names[g.turn])}</span>
+              <Avatar code={room.seats[g.turn].avatar} name={names[g.turn]} className="big" />
               <div>
                 <p className="status">
                   <b>{names[g.turn]}</b> is choosing a {theme.nouns.card} to put up for auction…
@@ -406,7 +407,7 @@ export function Table({ state, send, theme }: Props) {
           <ol className={`rail rail-${a.kind}`} aria-label="Order round the table">
             {stops.map((st) => (
               <li key={st.seat} className={`stop ${st.state} ${st.seat === me ? 'me' : ''}`}>
-                <span className="avatar small">{initials(names[st.seat])}</span>
+                <Avatar code={room.seats[st.seat].avatar} name={names[st.seat]} className="small" />
                 <span className="stop-name">
                   {who(st.seat)}
                   {st.seller && ' 🔨'}
@@ -1089,7 +1090,7 @@ function Spectator({ openSeats, names, send }: { openSeats: number[]; names: str
           disabled={!name.trim()}
           onClick={() => {
             saveName(name.trim());
-            send({ type: 'claim', seat: i, name });
+            send({ type: 'claim', seat: i, name, avatar: savedAvatar() });
           }}
         >
           Take {names[i]}’s seat

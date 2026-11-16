@@ -4,8 +4,8 @@ import type { ClientMsg, RoomInfo } from '../generated/index.ts';
 import { castGenres } from '../themes/cast.ts';
 import { getDef } from '../themes/index.ts';
 import type { Theme } from '../themes/types.ts';
-import { initials } from './derive.ts';
-import { saveGenres, saveName, savedName, saveTimer } from './net.ts';
+import { Avatar, LookButton } from './Avatar.tsx';
+import { saveGenres, saveName, savedName, saveTimer, useSavedLook } from './net.ts';
 import type { RoomState } from './net.ts';
 import { Rules } from './Rules.tsx';
 
@@ -172,6 +172,7 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
 export function Lobby({ state, send, join, theme }: Props) {
   const { room, you } = state;
   const [name, setName] = useState(savedName);
+  const [look, setLook] = useSavedLook();
   const count = room.seats.length;
   const canStart = count >= room.minPlayers && count <= room.maxPlayers;
   const empty = Array.from({ length: room.maxPlayers - count });
@@ -203,9 +204,19 @@ export function Lobby({ state, send, join, theme }: Props) {
       <ol className="lobby-seats">
         {room.seats.map((s, i) => (
           <li key={i} className={`${s.connected ? '' : 'away'} ${i === you ? 'me' : ''}`}>
-            <span className={`avatar ${s.connected ? 'on' : ''}`} title={s.connected ? 'Connected' : 'Disconnected'}>
-              {initials(s.name)}
-            </span>
+            {i === you ? (
+              <LookButton
+                code={s.avatar}
+                name={s.name}
+                className={s.connected ? 'on' : ''}
+                onChange={(code) => {
+                  setLook(code);
+                  send({ type: 'avatar', avatar: code });
+                }}
+              />
+            ) : (
+              <Avatar code={s.avatar} name={s.name} className={s.connected ? 'on' : ''} title={s.connected ? 'Connected' : 'Disconnected'} />
+            )}
             <span className="grow">
               <b>{s.name}</b>
               {room.admin === i && (
@@ -266,10 +277,13 @@ export function Lobby({ state, send, join, theme }: Props) {
               join(room.code, name);
             }}
           >
-            <label>
-              Your name
-              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} autoFocus />
-            </label>
+            <div className="you-row">
+              <LookButton code={look} name={name.trim()} onChange={setLook} />
+              <label>
+                Your name
+                <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} autoFocus />
+              </label>
+            </div>
             <button className="btn primary" disabled={!name.trim()}>
               Take a seat
             </button>

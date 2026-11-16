@@ -27,6 +27,19 @@ const store = {
 
 export const savedName = () => store.get('aa:name') ?? '';
 export const saveName = (name: string) => store.set('aa:name', name);
+/** The look this person built; empty = drawn from their name. */
+export const savedAvatar = () => store.get('aa:avatar') ?? '';
+/** The saved look, and a setter that keeps it for next time. */
+export function useSavedLook(): [string, (code: string) => void] {
+  const [look, setLook] = useState(savedAvatar);
+  return [
+    look,
+    useCallback((code: string) => {
+      store.set('aa:avatar', code);
+      setLook(code);
+    }, []),
+  ];
+}
 export const savedTheme = () => store.get('aa:theme');
 export const saveTheme = (theme: string) => store.set('aa:theme', theme);
 
@@ -66,7 +79,7 @@ export function useRoom(code: string | null) {
   }, []);
 
   const join = useCallback(
-    (room: string, name?: string) => send({ type: 'join', room, token: store.get(tokenKey(room)), name }),
+    (room: string, name?: string) => send({ type: 'join', room, token: store.get(tokenKey(room)), name, avatar: savedAvatar() }),
     [send],
   );
 

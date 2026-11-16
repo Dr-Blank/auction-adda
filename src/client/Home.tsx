@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { ClientMsg, ThemeId } from '../generated/index.ts';
 import { THEME_IDS, THEMES } from '../themes/index.ts';
-import { saveName, savedName, savedPrefs, savedTheme, saveTheme } from './net.ts';
+import { LookButton } from './Avatar.tsx';
+import { saveName, savedName, savedPrefs, savedTheme, saveTheme, useSavedLook } from './net.ts';
 
 export function Home({ send, online }: { send: (m: ClientMsg) => void; online: boolean }) {
   const [name, setName] = useState(savedName);
+  const [look, setLook] = useSavedLook();
   const [theme, setTheme] = useState<ThemeId>(() => THEME_IDS.find((id) => id === savedTheme()) ?? THEME_IDS[0]);
   const [code, setCode] = useState('');
   const cleanCode = code.trim().toUpperCase();
@@ -20,13 +22,16 @@ export function Home({ send, online }: { send: (m: ClientMsg) => void; online: b
           if (!name.trim()) return;
           saveName(name.trim());
           saveTheme(theme);
-          send({ type: 'create', theme, name, prefs: savedPrefs(theme) });
+          send({ type: 'create', theme, name, prefs: savedPrefs(theme), avatar: look });
         }}
       >
-        <label>
-          Your name
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="e.g. Chintu" autoFocus />
-        </label>
+        <div className="you-row">
+          <LookButton code={look} name={name.trim()} onChange={setLook} className="big" />
+          <label>
+            Your name
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="e.g. Chintu" autoFocus />
+          </label>
+        </div>
         <fieldset>
           <legend>Theme</legend>
           {THEME_IDS.map((id) => (

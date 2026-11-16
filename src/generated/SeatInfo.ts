@@ -13,4 +13,10 @@ open: boolean,
  * Played by the server; never open, never admin. A bot standing in for a player who may come
  * back shows as disconnected.
  */
-bot: boolean, };
+bot: boolean, 
+/**
+ * The seat's look: up to 16 base-36 digits, one per part, that the client draws (each digit
+ * modulo that part's choices, so any string draws). Empty = drawn from the name. The server
+ * only cleans it, and rolls one for each bot.
+ */
+avatar: string, };

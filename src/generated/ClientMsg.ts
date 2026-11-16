@@ -2,4 +2,12 @@
 import type { Action } from "./Action.ts";
 import type { Prefs } from "./Prefs.ts";
 
-export type ClientMsg = { "type": "create", theme: string, name: string, prefs?: Prefs | null, } | { "type": "join", room: string, token?: string | null, name?: string | null, } | { "type": "claim", seat: number, name: string, } | { "type": "start" } | { "type": "bot", seat?: number | null, } | { "type": "kick", seat: number, } | { "type": "action", action: Action, } | { "type": "skip", seat: number, } | { "type": "release", seat: number, } | { "type": "leave" } | { "type": "rematch" } | { "type": "rule", winner: number | null, price: number, } | { "type": "undo" } | { "type": "admin", seat: number, } | { "type": "timer", seconds: number, extend: number, } | { "type": "cast", genres: Array<number>, reroll: boolean, };
+export type ClientMsg = { "type": "create", theme: string, name: string, prefs?: Prefs | null, 
+/**
+ * The creator's look, as in `SeatInfo`.
+ */
+avatar?: string | null, } | { "type": "join", room: string, token?: string | null, name?: string | null, 
+/**
+ * Used when the join takes a new seat.
+ */
+avatar?: string | null, } | { "type": "claim", seat: number, name: string, avatar?: string | null, } | { "type": "avatar", avatar: string, } | { "type": "start" } | { "type": "bot", seat?: number | null, } | { "type": "kick", seat: number, } | { "type": "action", action: Action, } | { "type": "skip", seat: number, } | { "type": "release", seat: number, } | { "type": "leave" } | { "type": "rematch" } | { "type": "rule", winner: number | null, price: number, } | { "type": "undo" } | { "type": "admin", seat: number, } | { "type": "timer", seconds: number, extend: number, } | { "type": "cast", genres: Array<number>, reroll: boolean, };

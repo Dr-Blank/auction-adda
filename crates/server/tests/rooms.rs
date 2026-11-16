@@ -794,6 +794,42 @@ fn the_admin_kicks_from_the_lobby() {
 }
 
 #[test]
+fn players_bring_and_change_their_look_bots_get_one() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let a = fake(&mut rooms, "10.0.0.1");
+    send(
+        &mut rooms,
+        &a,
+        json!({ "type": "create", "theme": "box-office", "name": "A", "avatar": "Ab-3<z>" }),
+    );
+    let code = joined(&a).0;
+    let b = fake(&mut rooms, "10.0.0.2");
+    send(&mut rooms, &b, json!({ "type": "join", "room": code, "name": "B" }));
+    send(&mut rooms, &a, json!({ "type": "bot" }));
+    let seats = state(&a).room.seats;
+    assert_eq!(seats[0].avatar, "ab3z");
+    assert_eq!(seats[1].avatar, "");
+    assert_eq!(seats[2].avatar.len(), 16);
+    assert!(
+        seats[2]
+            .avatar
+            .chars()
+            .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase())
+    );
+
+    send(
+        &mut rooms,
+        &b,
+        json!({ "type": "avatar", "avatar": "0123456789abcdefXYZ" }),
+    );
+    assert_eq!(state(&a).room.seats[1].avatar, "0123456789abcdef");
+    let watcher = fake(&mut rooms, "10.0.0.3");
+    send(&mut rooms, &watcher, json!({ "type": "join", "room": code }));
+    send(&mut rooms, &watcher, json!({ "type": "avatar", "avatar": "1" }));
+    assert_error(&watcher, "take a seat");
+}
+
+#[test]
 fn limits_room_creation_per_address() {
     let mut rooms = Rooms::new(Options {
         create_limit: CreateLimit {
