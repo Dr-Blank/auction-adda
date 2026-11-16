@@ -548,8 +548,42 @@ fn only_the_admin_adds_bots_starts_and_rematches_bots_play_their_seats() {
 
     send(&mut rooms, b, json!({ "type": "rematch" }));
     assert_error(b, "Only the room admin can start a rematch");
+    let cast = state(a).room.cast;
     send(&mut rooms, a, json!({ "type": "rematch" }));
     assert!(!game(a).over);
+    // Same genres, new names.
+    let after = state(a).room.cast;
+    assert_eq!(after.genres, cast.genres);
+    assert_ne!(after.seed, cast.seed);
+}
+
+#[test]
+fn the_admin_picks_the_cast_in_the_lobby() {
+    let (_, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    let (a, b) = (&clients[0], &clients[1]);
+    let first = state(a).room.cast;
+    assert_eq!(first.genres, [0u8; 0]);
+
+    send(&mut rooms, b, json!({ "type": "cast", "genres": [] }));
+    assert_error(b, "Only the room admin can pick the cast");
+    for bad in [json!([0, 1, 2, 3]), json!([0, 1, 2, 3, 3]), json!([0, 1, 2, 3, 64])] {
+        send(&mut rooms, a, json!({ "type": "cast", "genres": bad }));
+        assert_error(a, "Pick 5 different genres");
+    }
+    send(&mut rooms, a, json!({ "type": "cast", "genres": [5, 0, 2, 3, 1] }));
+    let cast = state(a).room.cast;
+    assert_eq!(cast.genres, [0, 1, 2, 3, 5]);
+    assert_eq!(cast.seed, first.seed, "a pick keeps the names");
+    send(&mut rooms, a, json!({ "type": "cast", "genres": [], "reroll": true }));
+    let cast = state(b).room.cast;
+    assert_eq!(cast.genres, [0u8; 0]);
+    assert_ne!(cast.seed, first.seed);
+
+    send(&mut rooms, a, json!({ "type": "start" }));
+    send(&mut rooms, a, json!({ "type": "cast", "genres": [], "reroll": true }));
+    assert_error(a, "the cast is set");
 }
 
 #[test]
@@ -770,6 +804,7 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
         [
             "admin",
             "bidTimerS",
+            "cast",
             "code",
             "createdAt",
             "game",

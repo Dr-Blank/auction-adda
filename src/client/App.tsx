@@ -30,7 +30,15 @@ export function App() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  const theme = getTheme(net.state?.room.theme ?? DEFAULT_THEME);
+  const theme = getTheme(net.state?.room.theme ?? DEFAULT_THEME, net.state?.room.cast);
+
+  // The theme's colours for the whole page, background included.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const vars = Object.entries(theme.chrome);
+    for (const [k, v] of vars) root.setProperty(k, v);
+    return () => vars.forEach(([k]) => root.removeProperty(k));
+  }, [theme.chrome]);
 
   let body;
   if (!code) {

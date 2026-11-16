@@ -10,6 +10,20 @@ use ts_rs::TS;
 #[serde(rename_all = "kebab-case")]
 pub enum ThemeId {
     BoxOffice,
+    LeatherWillow,
+}
+
+/// Which of a theme's genres play and which of their names show. The server stores it; every
+/// client resolves it the same way from the theme's lists.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Cast {
+    /// Picks the names, labels and titles shown, and the genres when none are picked. New for
+    /// every game.
+    pub seed: u32,
+    /// Genres (indices into the theme's list) the admin picked, one per suit. Empty = picked by
+    /// `seed`.
+    #[serde(default)]
+    pub genres: Vec<u8>,
 }
 
 impl ThemeId {
@@ -80,6 +94,13 @@ pub enum ClientMsg {
     Timer {
         seconds: u16,
     },
+    /// Admin only, in the lobby: the genres that play (one per suit, or empty for a random pick);
+    /// `reroll` draws new names.
+    Cast {
+        genres: Vec<u8>,
+        #[serde(default)]
+        reroll: bool,
+    },
     /// Any other `type`: answered with "Unknown message".
     #[serde(other)]
     #[ts(skip)]
@@ -106,6 +127,7 @@ impl ClientMsg {
             Self::Undo => "undo",
             Self::Admin { .. } => "admin",
             Self::Timer { .. } => "timer",
+            Self::Cast { .. } => "cast",
             Self::Unknown => "unknown",
         }
     }
@@ -130,6 +152,7 @@ pub struct SeatInfo {
 pub struct RoomInfo {
     pub code: String,
     pub theme: String,
+    pub cast: Cast,
     pub started: bool,
     pub seats: Vec<SeatInfo>,
     /// Seat that may call auction results by voice (`rule`). Starts as the room creator.

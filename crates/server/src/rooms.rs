@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
-use crate::protocol::{ClientMsg, ErrorCode, RoomInfo, SeatInfo, ServerMsg, ThemeId};
+use crate::protocol::{Cast, ClientMsg, ErrorCode, RoomInfo, SeatInfo, ServerMsg, ThemeId};
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH: usize = 6;
@@ -33,6 +33,8 @@ const BOT_WAIT_AFTER_CALL_MS: u64 = 8_000;
 /// Open auctions: seconds after the lot goes up or the last bid before everyone still in is done.
 const DEFAULT_BID_TIMER_S: u16 = 15;
 const MAX_BID_TIMER_S: u16 = 120;
+/// Upper bound on a theme's genre list; the server does not know each theme's length.
+const MAX_GENRES: u8 = 64;
 
 const fn default_bid_timer() -> u16 {
     DEFAULT_BID_TIMER_S
@@ -122,6 +124,7 @@ struct LastCall {
 struct Room {
     code: String,
     theme: String,
+    cast: Cast,
     seats: Vec<SeatData>,
     /// Seat allowed to call auction results by voice.
     admin: Seat,
@@ -205,14 +208,15 @@ fn time_up(game: &GameState) -> Result<GameState, RuleError> {
     })
 }
 
-/// The save file, version 1: `{ v, code, theme, seats, admin, game, createdAt, updatedAt,
-/// bidTimerS }` (`bidTimerS` missing in older files: the default).
+/// The save file, version 1: `{ v, code, theme, cast, seats, admin, game, createdAt, updatedAt,
+/// bidTimerS }` (`cast` or `bidTimerS` missing in older files: the default).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedRef<'a> {
     v: u64,
     code: &'a str,
     theme: &'a str,
+    cast: &'a Cast,
     seats: &'a [SeatData],
     admin: Seat,
     game: &'a Option<GameState>,
@@ -225,6 +229,8 @@ struct SavedRef<'a> {
 #[serde(rename_all = "camelCase")]
 struct Saved {
     theme: String,
+    #[serde(default)]
+    cast: Cast,
     seats: Vec<SeatData>,
     #[serde(default)]
     admin: serde_json::Value,
@@ -663,6 +669,8 @@ impl Rooms {
                 room.require_admin(me, "start a rematch")?;
                 let (n, seed) = (game.n, new_seed());
                 room.set_game(new_game(n, seed)?);
+                // Same genres, new names.
+                room.cast.seed = new_seed();
                 info!(room = %code, seat = me, "Rematch with {n} players (seed {seed})");
             }
             ClientMsg::Bot { seat } => {
@@ -812,6 +820,28 @@ impl Rooms {
                 room.bid_clock = None;
                 info!(room = %code, seat = me, "Bid timer set to {seconds} s");
             }
+            ClientMsg::Cast { genres, reroll } => {
+                room.require_admin(me, "pick the cast")?;
+                if room.game.is_some() {
+                    return fail("The game has started; the cast is set");
+                }
+                let suits = usize::from(config().suits);
+                let mut sorted = genres.clone();
+                sorted.sort_unstable();
+                sorted.dedup();
+                if !genres.is_empty()
+                    && (sorted.len() != genres.len()
+                        || genres.len() != suits
+                        || sorted.iter().any(|&g| g >= MAX_GENRES))
+                {
+                    return fail(format!("Pick {suits} different genres, or none for a random cast"));
+                }
+                room.cast.genres = sorted;
+                if reroll {
+                    room.cast.seed = new_seed();
+                }
+                info!(room = %code, seat = me, "Cast set: genres {:?}, seed {}", room.cast.genres, room.cast.seed);
+            }
             ClientMsg::Release { seat } => {
                 if !room.has_seat(seat) {
                     return fail("No such seat");
@@ -897,6 +927,10 @@ impl Rooms {
             Room {
                 code: code.clone(),
                 theme: theme.to_owned(),
+                cast: Cast {
+                    seed: new_seed(),
+                    genres: Vec::new(),
+                },
                 seats: vec![SeatData {
                     name,
                     token: Some(token.clone()),
@@ -1094,6 +1128,7 @@ impl Rooms {
         RoomInfo {
             code: room.code.clone(),
             theme: room.theme.clone(),
+            cast: room.cast.clone(),
             started: room.game.is_some(),
             seats: room
                 .seats
@@ -1193,6 +1228,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
     Ok(Some(Room {
         code: code.to_owned(),
         theme: saved.theme,
+        cast: saved.cast,
         away: saved.seats.iter().map(|s| (!s.bot).then_some(now)).collect(),
         seats: saved.seats,
         admin,
@@ -1309,6 +1345,7 @@ impl Store {
             v: FILE_VERSION,
             code: &room.code,
             theme: &room.theme,
+            cast: &room.cast,
             seats: &room.seats,
             admin: room.admin,
             game: &room.game,

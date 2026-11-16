@@ -4,4 +4,4 @@
  * Themes the server accepts. The client's theme registry is typed by this, so a theme missing on
  * either side does not compile.
  */
-export type ThemeId = "box-office";
+export type ThemeId = "box-office" | "leather-willow";

@@ -5,6 +5,7 @@ export type * from './AuctionKind.ts';
 export type * from './AuctionType.ts';
 export type * from './AuctionView.ts';
 export type * from './Card.ts';
+export type * from './Cast.ts';
 export type * from './ClientMsg.ts';
 export type * from './ErrorCode.ts';
 export type * from './LogEntry.ts';

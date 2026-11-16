@@ -29,6 +29,8 @@ const [out = './shots', secs = '120', mode = 'desktop'] = process.argv.slice(2);
 /** `phone`: the whole game is played at 390 × 844 with touch (no hover), and the phone rules are checked on every tick. */
 const phone = mode === 'phone';
 const port = process.env.PORT ?? '8799';
+/** Theme of the rooms played (`THEME=leather-willow`). */
+const theme = process.env.THEME ?? 'box-office';
 const BASE = `http://localhost:${port}`;
 const WS = `ws://localhost:${port}/ws`;
 const DEBUG_PORT = 9333;
@@ -44,7 +46,7 @@ const fail = (msg) => {
 // ---- room with three bots; this seat is "tp" and is the admin ----
 const sock = new WebSocket(WS);
 const { code, token } = await new Promise((resolve) => {
-  sock.onopen = () => sock.send(JSON.stringify({ type: 'create', theme: 'box-office', name: 'tp' }));
+  sock.onopen = () => sock.send(JSON.stringify({ type: 'create', theme, name: 'tp' }));
   sock.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === 'joined') resolve({ code: m.room, token: m.token });
@@ -471,7 +473,7 @@ await sleep(800);
 await shot('home');
 const lobby = new WebSocket(WS);
 const seat = await new Promise((resolve) => {
-  lobby.onopen = () => lobby.send(JSON.stringify({ type: 'create', theme: 'box-office', name: 'tp' }));
+  lobby.onopen = () => lobby.send(JSON.stringify({ type: 'create', theme, name: 'tp' }));
   lobby.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === 'joined') resolve({ code: m.room, token: m.token });

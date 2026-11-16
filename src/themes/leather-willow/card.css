@@ -1,0 +1,47 @@
+/* Leather & Willow: ivory card stock, one team colour, serif names. Sizes and layout come from
+   the shared .poster rules; this only restyles them. */
+.poster.willow {
+  background: #f4efe2;
+  color: #2b2822;
+  box-shadow: 0 0.12em 0.45em rgb(0 0 0 / 35%), inset 0 0 0 1px rgb(0 0 0 / 6%);
+}
+.willow .poster-type {
+  background: var(--team);
+  color: var(--team-ink);
+  border-radius: 0.2em;
+  box-shadow: none;
+  letter-spacing: 0.04em;
+}
+.willow .poster-foot {
+  padding: 0 0.6em 0.55em;
+}
+.willow .poster-title {
+  color: #1d1b17;
+  text-shadow: none;
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.willow-role {
+  margin-top: 0.3em;
+  font-family: system-ui, sans-serif;
+  font-size: 0.5em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b6457;
+}
+.willow .poster-tag {
+  color: #5d574c;
+  opacity: 1;
+}
+.willow .poster-star {
+  color: var(--team);
+  border-top: 1px solid color-mix(in srgb, var(--team) 35%, transparent);
+  padding-top: 0.35em;
+}
+.poster-sm.willow .willow-role { display: none; }
+.poster-sm.willow .poster-code {
+  color: var(--team);
+  text-shadow: none;
+  font-family: Georgia, 'Times New Roman', serif;
+}

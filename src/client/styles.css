@@ -13,6 +13,28 @@
   --ok: #5ad19a;
   --danger: #ef6461;
   --display: 'Anton', Impact, 'Haettenschweiler', 'Arial Narrow Bold', 'Oswald', sans-serif;
+  /* The light behind the table; a theme's `chrome` may change it with the colours above. */
+  --glow: #2a1f45;
+  --glow-2: #3a2a5e;
+  --night: #0a0712;
+  /* Input fields, and the see-through panel behind a sold moment. */
+  --field: #0e0a17;
+  --shade-rgb: 18 12 30;
+  /* Highlights that are not yours (whose turn, focus, admin) and the darker tints of the chrome. */
+  --accent: #b9a8ff;
+  --accent-rgb: 185 168 255;
+  --accent-soft: #d9ceff;
+  --accent-line: #8a7bb8;
+  --edge: #6a5a9c;
+  --edge-2: #6a6085;
+  --edge-3: #4a3f6b;
+  --deep: #3a2f5c;
+  --deep-2: #241b3d;
+  --dim: #5d5672;
+  --dim-2: #4f4670;
+  /* Card backs. */
+  --back-1: #4b3d78;
+  --back-2: #33285a;
   color-scheme: dark;
 }
 
@@ -21,7 +43,7 @@ html, body { margin: 0; }
 body {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(ellipse 90% 70% at 50% 25%, #2a1f45 0%, var(--felt) 55%, #0a0712 100%) fixed,
+    radial-gradient(ellipse 90% 70% at 50% 25%, var(--glow) 0%, var(--felt) 55%, var(--night) 100%) fixed,
     var(--bg);
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -72,7 +94,7 @@ kbd {
   text-decoration: none;
   display: inline-block;
 }
-.btn:hover:not(:disabled) { border-color: #8a7bb8; }
+.btn:hover:not(:disabled) { border-color: var(--accent-line); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
@@ -92,12 +114,12 @@ kbd {
 }
 .icon-btn:hover { border-color: var(--line); background: rgb(255 255 255 / 4%); }
 .icon-btn .lbl { font-size: 0.85rem; }
-:focus-visible { outline: 2px solid #b9a8ff; outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 input, select {
   font: inherit;
   color: var(--text);
-  background: #0e0a17;
+  background: var(--field);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
@@ -152,11 +174,11 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
 .lobby-seats li { display: flex; align-items: center; gap: 12px; padding: 2px 0; }
 .lobby-seats li.empty { color: var(--muted); }
 .lobby-seats li.away .avatar { opacity: 0.55; }
-.lobby-seats li.me .avatar { background: linear-gradient(160deg, #6a5a9c, #3a2f5c); box-shadow: 0 0 0 2px var(--gold); }
+.lobby-seats li.me .avatar { background: linear-gradient(160deg, var(--edge), var(--deep)); box-shadow: 0 0 0 2px var(--gold); }
 .lobby-seats .avatar { width: 38px; height: 38px; font-size: 0.85rem; }
 .avatar.empty { background: none; box-shadow: none; border: 2px dashed var(--line); }
 
-.dot { width: 9px; height: 9px; border-radius: 50%; background: #5d5672; flex: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
 .dot.on { background: var(--ok); }
 
 /* ---- banners ---- */
@@ -228,7 +250,7 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
 }
 .menu-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .menu-admin p { margin: 0; }
-.admin-mark { color: #b9a8ff; margin-left: 4px; font-size: 0.85em; }
+.admin-mark { color: var(--accent); margin-left: 4px; font-size: 0.85em; }
 
 .drawer-back { position: fixed; inset: 0; background: rgb(8 5 14 / 55%); z-index: 30; }
 .drawer {
@@ -252,7 +274,7 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
 .log .steps { list-style: none; margin: 6px 0 2px; padding: 0 0 0 4px; display: grid; gap: 3px; font-size: 0.82rem; color: var(--muted); }
 .log .steps li { border-left: 0; padding-left: 0; }
 .log .live { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--ok); margin-right: 6px; }
-.log-round, .log-score, .log-end { font-weight: 600; border-left-color: #8a7bb8 !important; }
+.log-round, .log-score, .log-end { font-weight: 600; border-left-color: var(--accent-line) !important; }
 .log-sold, .log-free { border-left-color: var(--ok) !important; }
 .log-shelved { border-left-color: var(--danger) !important; }
 .log-pass, .log-decline, .log-skip { color: var(--muted); }
@@ -283,20 +305,20 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(160deg, #3a2f5c, #241b3d);
+  background: linear-gradient(160deg, var(--deep), var(--deep-2));
   font-weight: 800;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
-  box-shadow: 0 0 0 2px #5d5672;
+  box-shadow: 0 0 0 2px var(--dim);
 }
 .avatar.on { box-shadow: 0 0 0 2px var(--ok); }
 .avatar.small { width: 26px; height: 26px; font-size: 0.65rem; box-shadow: none; }
 .avatar.big { width: 64px; height: 64px; font-size: 1.3rem; }
-.seat.me .avatar { background: linear-gradient(160deg, #6a5a9c, #3a2f5c); }
+.seat.me .avatar { background: linear-gradient(160deg, var(--edge), var(--deep)); }
 .seat.owing .avatar { animation: owe 1.6s ease-in-out infinite; }
 @keyframes owe {
-  0%, 100% { box-shadow: 0 0 0 2px #b9a8ff, 0 0 0 0 rgb(185 168 255 / 0%); }
-  50% { box-shadow: 0 0 0 2px #b9a8ff, 0 0 0 7px rgb(185 168 255 / 22%); }
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 0 rgb(var(--accent-rgb)/ 0%); }
+  50% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 7px rgb(var(--accent-rgb)/ 22%); }
 }
 .seat.me.owing .avatar { animation-name: owe-me; }
 @keyframes owe-me {
@@ -319,9 +341,9 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
   place-items: center;
   box-shadow: 0 1px 4px rgb(0 0 0 / 50%);
 }
-.seat.owing .seat-name { color: #d9ceff; }
+.seat.owing .seat-name { color: var(--accent-soft); }
 .seat.me.owing .seat-name { color: var(--gold); }
-.seat-name .mark.now { color: #1d1530; background: #b9a8ff; border-color: transparent; font-weight: 800; }
+.seat-name .mark.now { color: #1d1530; background: var(--accent); border-color: transparent; font-weight: 800; }
 .seat.me .seat-name .mark.now { background: var(--gold); }
 /* Where the hammer goes after this lot (and, on your seat, how far off your turn to sell is). */
 .seat-tag { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); opacity: 0.85; white-space: nowrap; }
@@ -357,8 +379,8 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
   width: 11px;
   height: 16px;
   border-radius: 2px;
-  background: repeating-linear-gradient(45deg, #4b3d78 0 2px, #33285a 2px 4px);
-  border: 1px solid #6a5a9c;
+  background: repeating-linear-gradient(45deg, var(--back-1) 0 2px, var(--back-2) 2px 4px);
+  border: 1px solid var(--edge);
   margin-right: -5px;
   transform: rotate(calc(var(--k, 0) * 1deg));
 }
@@ -426,7 +448,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   place-items: center;
   box-shadow: 0 1px 3px rgb(0 0 0 / 50%);
 }
-.mini-card.empty { background: none; box-shadow: none; border: 1.5px dashed #4f4670; }
+.mini-card.empty { background: none; box-shadow: none; border: 1.5px dashed var(--dim-2); }
 .bought-pop {
   position: fixed;
   z-index: 28;
@@ -520,8 +542,8 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
 .rail-once, .rail-fixed, .rail-offer { gap: 4px; }
 .stop-name { font-weight: 600; white-space: nowrap; }
 .stop-state { color: var(--muted); font-variant-numeric: tabular-nums; }
-.stop.now { border-color: #b9a8ff; background: rgb(185 168 255 / 14%); }
-.stop.now .stop-state { color: #d9ceff; font-weight: 700; }
+.stop.now { border-color: var(--accent); background: rgb(var(--accent-rgb)/ 14%); }
+.stop.now .stop-state { color: var(--accent-soft); font-weight: 700; }
 .stop.me.now { border-color: var(--gold); background: rgb(242 193 78 / 14%); }
 .stop.me.now .stop-state { color: var(--gold); }
 .stop.lead { border-color: var(--ok); }
@@ -583,9 +605,9 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
 }
 .chip-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.ruling { border: 1px dashed #6a5a9c; border-radius: 10px; padding: 6px 10px; font-size: 0.9rem; }
+.ruling { border: 1px dashed var(--edge); border-radius: 10px; padding: 6px 10px; font-size: 0.9rem; }
 .ruling summary { cursor: pointer; font-weight: 600; }
-.ruling summary small { color: #b9a8ff; margin-left: 4px; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
+.ruling summary small { color: var(--accent); margin-left: 4px; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
 .ruling-row { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .ruling-row label { color: var(--text); display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
 .ruling-row select, .ruling-row input { padding: 5px 8px; }
@@ -599,7 +621,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   inset: 0;
   z-index: 6;
   border-radius: 18px;
-  background: rgb(18 12 30 / 88%);
+  background: rgb(var(--shade-rgb) / 88%);
   backdrop-filter: blur(3px);
   display: flex;
   gap: 24px;
@@ -706,6 +728,13 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
 .btn.timed .bid-clock .drain { position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 4px; border-radius: 0; }
 .bid-timer { display: grid; gap: 4px; font-size: 0.9rem; }
 .bid-timer select { margin-left: 6px; }
+.cast { display: grid; gap: 8px; margin-top: 12px; }
+.cast-suits { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cast-suits li { display: flex; gap: 8px; align-items: center; }
+.cast-suits span { display: grid; line-height: 1.2; }
+.cast-suits small { color: var(--muted); }
+.cast-genres { display: flex; gap: 6px; flex-wrap: wrap; }
+.cast-genres .chip-btn.on { background: var(--suit); border-color: var(--suit); color: var(--suit-ink); }
 .dealt-note {
   align-self: center;
   padding: 2px 8px;
@@ -742,7 +771,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   align-items: center;
   flex-wrap: wrap;
   font-size: 0.88rem;
-  border: 1px dashed #6a5a9c;
+  border: 1px dashed var(--edge);
   border-radius: 10px;
   padding: 6px 10px;
 }
@@ -777,7 +806,7 @@ b.you { color: var(--gold); }
   width: 18px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid #6a6085;
+  border: 1px solid var(--edge-2);
   background:
     radial-gradient(circle at 3px 3px, rgb(0 0 0 / 35%) 1px, transparent 1.5px) 0 0 / 6px 14px;
 }
@@ -818,7 +847,7 @@ b.you { color: var(--gold); }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #4a3f6b;
+  background: var(--edge-3);
   color: var(--text);
 }
 .trophies i.t0 { background: linear-gradient(160deg, #fff1c4, #c99a2e); color: #2a1c00; }
@@ -860,7 +889,7 @@ b.you { color: var(--gold); }
 .results thead th { font-size: 0.72rem; color: var(--muted); }
 .results tr.flop { opacity: 0.55; }
 
-.premiere { background: radial-gradient(ellipse at 50% 0%, #3a2a5e, var(--panel) 70%); }
+.premiere { background: radial-gradient(ellipse at 50% 0%, var(--glow-2), var(--panel) 70%); }
 .premiere header small { color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.72rem; }
 .premiere header h2 { font-family: var(--display); font-weight: 400; text-transform: uppercase; letter-spacing: 0.05em; font-size: 2rem; }
 .marquee { display: flex; gap: 14px; justify-content: center; align-items: flex-end; flex-wrap: wrap; }
@@ -980,7 +1009,7 @@ b.you { color: var(--gold); }
 /* An overlay's own grid track must not grow to its content, or long text pushes the sheet off screen. */
 .sheet-back { grid-template-columns: minmax(0, 1fr); }
 .avatar-btn { all: unset; display: block; border-radius: 50%; cursor: pointer; }
-.avatar-btn:focus-visible { outline: 2px solid #b9a8ff; outline-offset: 2px; }
+.avatar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sheet {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1130,7 +1159,7 @@ b.you { color: var(--gold); }
   .seats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; overflow: visible; padding: 0; margin: 0; }
   .seats .seat { min-width: 0; flex-direction: column; align-items: center; gap: 2px; padding: 2px; cursor: pointer; }
   .seats .avatar { width: 34px; height: 34px; font-size: 0.78rem; }
-  .seats .seat.owing .avatar { box-shadow: 0 0 0 2px #b9a8ff; }
+  .seats .seat.owing .avatar { box-shadow: 0 0 0 2px var(--accent); }
   .seats .role { width: 18px; height: 18px; font-size: 0.7rem; }
   .seats .seat-body { justify-items: center; gap: 1px; width: 100%; }
   .seats .seat-name { font-size: 0.78rem; max-width: 100%; }
@@ -1168,7 +1197,7 @@ b.you { color: var(--gold); }
   .stop .avatar { display: none; }
   /* The sold moment sits at the top of the stage (a tall stage may run under the pinned hand), in one row. */
   .stage { min-height: 170px; }
-  .moment { gap: 6px 4px; padding: 14px 10px; border-radius: 14px; flex-wrap: nowrap; align-items: flex-start; background: rgb(18 12 30 / 94%); }
+  .moment { gap: 6px 4px; padding: 14px 10px; border-radius: 14px; flex-wrap: nowrap; align-items: flex-start; background: rgb(var(--shade-rgb) / 94%); }
   .moment-posters { margin-inline: 26px; flex: none; }
   .moment-info { min-width: 0; }
   .moment-cry { display: none; }
@@ -1188,7 +1217,7 @@ b.you { color: var(--gold); }
   /* Admin: one line on the stage; the controls open in a sheet with full-size fields. */
   .ruling, .undo-call { font-size: 0.85rem; }
   .ruling-btn { appearance: none; background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; min-height: 44px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .ruling-btn small { color: #b9a8ff; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
+  .ruling-btn small { color: var(--accent); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
   .ruling-sheet .ruling-row { margin-top: 0; gap: 12px; }
   .ruling-sheet .ruling-row label { flex: 1 1 100%; font-size: 1rem; }
   .ruling-sheet .ruling-row select, .ruling-sheet .ruling-row input { flex: 1; padding: 10px; min-height: 44px; }

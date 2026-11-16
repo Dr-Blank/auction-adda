@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { SUITS } from '../config.ts';
 import type { ClientMsg, RoomInfo } from '../generated/index.ts';
+import { castGenres } from '../themes/cast.ts';
+import { getDef } from '../themes/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { initials } from './derive.ts';
 import { saveName, savedName } from './net.ts';
@@ -62,6 +65,89 @@ export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null
           : `When a lot goes up, and again after every bid, players still in have ${s} s to bid; then they are done.`}
       </small>
     </div>
+  );
+}
+
+/** This game's suits; the admin picks which genres play and can draw new names. */
+export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void; theme: Theme }) {
+  const { genres } = getDef(room.theme);
+  const playing = castGenres(genres.length, room.cast);
+  // A pick of fewer than SUITS genres stays here until it is complete.
+  const [draft, setDraft] = useState<number[] | null>(null);
+  const isAdmin = room.admin === me;
+  const chosen = draft ?? playing;
+  const toggle = (g: number) => {
+    const next = chosen.includes(g) ? chosen.filter((x) => x !== g) : [...chosen, g];
+    if (next.length === SUITS) {
+      setDraft(null);
+      send({ type: 'cast', genres: next, reroll: false });
+    } else if (next.length < SUITS) {
+      setDraft(next);
+    }
+  };
+  const { suit } = theme.nouns;
+  const suits = `${suit}s`;
+  return (
+    <section className="cast">
+      <h2>This game’s {suits}</h2>
+      <ul className="cast-suits">
+        {theme.suits.map((s, i) => (
+          <li key={s.key}>
+            {theme.renderSuit(i, 36)}
+            <span>
+              <b>{s.name}</b>
+              <small>
+                {s.glyph} {s.genre}
+              </small>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {isAdmin && (
+        <>
+          {genres.length > SUITS && (
+            <div className="cast-genres" role="group" aria-label={`Pick ${SUITS} ${suits}`}>
+              {genres.map((g, i) => (
+                <button
+                  key={i}
+                  className={`chip-btn ${chosen.includes(i) ? 'on' : ''}`}
+                  aria-pressed={chosen.includes(i)}
+                  style={{ ['--suit' as string]: g.color, ['--suit-ink' as string]: g.ink }}
+                  onClick={() => toggle(i)}
+                >
+                  {g.glyph} {g.labels[0]}
+                </button>
+              ))}
+            </div>
+          )}
+          {draft && (
+            <p className="muted small">
+              Pick {SUITS - draft.length} more to make {SUITS}.
+            </p>
+          )}
+          <div className="row">
+            <button className="btn small" onClick={() => send({ type: 'cast', genres: room.cast.genres, reroll: true })}>
+              New names
+            </button>
+            {genres.length > SUITS && (
+              <button
+                className="btn small"
+                onClick={() => {
+                  setDraft(null);
+                  send({ type: 'cast', genres: [], reroll: true });
+                }}
+              >
+                Random {suits}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      <p className="muted small">
+        {room.cast.genres.length ? `The admin picked these ${suits}.` : `Picked at random from ${genres.length}.`} Every {suit} gets new names
+        each game.
+      </p>
+    </section>
   );
 }
 
@@ -143,6 +229,7 @@ export function Lobby({ state, send, join, theme }: Props) {
         wrong call). Hand the role over any time from the Room menu.
       </p>
       <BidTimer room={room} me={you} send={send} />
+      <CastPicker room={room} me={you} send={send} theme={theme} />
 
       {you === null ? (
         count < room.maxPlayers ? (
