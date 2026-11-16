@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import type { ClientMsg, ThemeId } from '../generated/index.ts';
 import { THEME_IDS, THEMES } from '../themes/index.ts';
-import { saveName, savedName } from './net.ts';
+import { saveName, savedName, savedPrefs, savedTheme, saveTheme } from './net.ts';
 
 export function Home({ send, online }: { send: (m: ClientMsg) => void; online: boolean }) {
   const [name, setName] = useState(savedName);
-  const [theme, setTheme] = useState<ThemeId>(THEME_IDS[0]);
+  const [theme, setTheme] = useState<ThemeId>(() => THEME_IDS.find((id) => id === savedTheme()) ?? THEME_IDS[0]);
   const [code, setCode] = useState('');
   const cleanCode = code.trim().toUpperCase();
 
@@ -19,7 +19,8 @@ export function Home({ send, online }: { send: (m: ClientMsg) => void; online: b
           e.preventDefault();
           if (!name.trim()) return;
           saveName(name.trim());
-          send({ type: 'create', theme, name });
+          saveTheme(theme);
+          send({ type: 'create', theme, name, prefs: savedPrefs(theme) });
         }}
       >
         <label>

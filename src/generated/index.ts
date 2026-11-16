@@ -10,6 +10,7 @@ export type * from './ClientMsg.ts';
 export type * from './ErrorCode.ts';
 export type * from './LogEntry.ts';
 export type * from './PlayerView.ts';
+export type * from './Prefs.ts';
 export type * from './RoomInfo.ts';
 export type * from './RoundSummary.ts';
 export type * from './Sale.ts';

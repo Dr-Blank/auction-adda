@@ -64,7 +64,9 @@ export function Deck({ theme, n }: { theme: Theme; n?: number }) {
             {CARD_TABLE.map((row, s) => (
               <tr key={s}>
                 <th className="left">
-                  {theme.suits[s].glyph} {theme.suits[s].name}
+                  <span className="suit-chip" style={{ ['--suit' as string]: theme.suits[s].color, ['--suit-ink' as string]: theme.suits[s].ink }}>
+                    {theme.suits[s].glyph} {theme.suits[s].name}
+                  </span>
                 </th>
                 {TYPES.map((t) => (
                   <td key={t}>{row[t]}</td>

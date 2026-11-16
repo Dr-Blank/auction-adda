@@ -93,7 +93,8 @@ const GENRES: Genre[] = [
       'Has played in four eras of jersey.', 'Runs singles in slow motion.', 'Knows every umpire by first name.',
       'One more season. Every season.', 'Experience: priceless. Knees: questionable.',
     ],
-    color: '#3a3a3f', ink: '#fff', glyph: '★',
+    // Not grey: a grey suit reads as plain or muted text.
+    color: '#6b3a7a', ink: '#fff', glyph: '★',
   },
 ];
 

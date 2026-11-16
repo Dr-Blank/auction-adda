@@ -30,6 +30,29 @@ const canPair = (double: Card, second: Card) =>
 const sameLot = (x: AuctionView | null, y: AuctionView | null) =>
   !!x && !!y && x.auctioneer === y.auctioneer && x.kind === y.kind && x.cards[0].id === y.cards[0].id;
 
+/** How far the game is: one ring segment per round, filled once scored; the one being played glows. */
+function RoundRing({ done }: { done: number }) {
+  const r = 8;
+  const c = 2 * Math.PI * r;
+  const seg = c / ROUNDS;
+  return (
+    <svg className="round-ring" viewBox="0 0 22 22" width="22" height="22" aria-hidden="true">
+      {Array.from({ length: ROUNDS }, (_, i) => (
+        <circle
+          key={i}
+          cx="11"
+          cy="11"
+          r={r}
+          className={i < done ? 'done' : i === done ? 'now' : ''}
+          strokeDasharray={`${seg - 2.2} ${c}`}
+          strokeDashoffset={-i * seg - 1.1}
+          transform="rotate(-90 11 11)"
+        />
+      ))}
+    </svg>
+  );
+}
+
 /** A finished lot, shown on the stage for a moment before the next one. */
 interface Moment {
   key: number;
@@ -155,24 +178,39 @@ export function Table({ state, send, theme }: Props) {
   const summary = g.summaries.length > seenSummaries ? g.summaries[g.summaries.length - 1] : null;
 
   // ---- cards dealt at a round start ----
-  // Marked "new" until you play one of your cards; they fly in once the results are closed.
+  // Kept out of the hand until the last lot's moment and the results are closed, then they fly in.
+  // Marked "new" until the first auction you take part in with a card from your hand is over.
   const [fresh, setFresh] = useState<number[]>([]);
   const [dealing, setDealing] = useState(false);
   const lastHand = useRef({ round: g.round, ids: g.hand.map((c) => c.id) });
+  /** A card has left your hand since the deal; the tags go once that auction is over. */
+  const handPlayed = useRef(false);
   useEffect(() => {
     const before = lastHand.current;
     const ids = g.hand.map((c) => c.id);
     lastHand.current = { round: g.round, ids };
     if (g.round > before.round) {
       const added = ids.filter((id) => !before.ids.includes(id));
+      handPlayed.current = false;
       setFresh(added);
       setDealing(added.length > 0);
-    } else if (g.round < before.round || ids.length < before.ids.length) {
+      return;
+    }
+    if (g.round < before.round) {
       setFresh([]);
       setDealing(false);
+      return;
+    }
+    if (ids.length < before.ids.length) handPlayed.current = true;
+    if (handPlayed.current && !g.auction) {
+      handPlayed.current = false;
+      setFresh([]);
     }
   }, [g]);
   const showDeal = dealing && !summary && !moment;
+  /** Dealt cards wait off the table while the results are still up. */
+  const hand = dealing && !showDeal ? g.hand.filter((c) => !fresh.includes(c.id)) : g.hand;
+  const newInHand = hand.filter((c) => fresh.includes(c.id)).length;
   useEffect(() => {
     if (!showDeal) return;
     play('deal');
@@ -194,7 +232,7 @@ export function Table({ state, send, theme }: Props) {
   };
   /** The open-auction clock: when everyone still in becomes done. */
   const bidClock =
-    room.bidMsLeft !== null && room.bidTimerS > 0 ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidTimerS * 1000 } : null;
+    room.bidMsLeft !== null && room.bidMsWindow !== null ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidMsWindow } : null;
 
   // ---- chrome ----
   const [menu, setMenu] = useState(false);
@@ -546,7 +584,7 @@ export function Table({ state, send, theme }: Props) {
 
   // Hand grouped by star.
   const groups = theme.suits
-    .map((_, suit) => ({ suit, cards: g.hand.filter((c) => c.suit === suit) }))
+    .map((_, suit) => ({ suit, cards: hand.filter((c) => c.suit === suit) }))
     .filter((x) => x.cards.length > 0);
 
   return (
@@ -554,6 +592,7 @@ export function Table({ state, send, theme }: Props) {
       <header className="topbar">
         <span className="brand">Auction Adda</span>
         <span className="round">
+          <RoundRing done={g.over ? ROUNDS : g.round} />
           {g.over ? 'Final result' : (
             <>
               <b>{theme.roundNames[g.round]}</b> · {theme.nouns.round} {g.round + 1} of {ROUNDS}
@@ -623,11 +662,11 @@ export function Table({ state, send, theme }: Props) {
           <div className="hand-head">
             <Seat g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} i={me} />
             <h2>
-              Your hand <small>{g.hand.length}</small>
+              Your hand <small>{hand.length}</small>
             </h2>
-            {fresh.length > 0 && (
+            {newInHand > 0 && (
               <span className={`dealt-note ${showDeal ? 'dealing' : ''}`} title={`Dealt at the start of ${theme.roundNames[g.round]}`}>
-                +{fresh.length} new
+                +{newInHand} new
               </span>
             )}
             {myPlay && !selCard && <span className="your-move">Pick one to auction</span>}
@@ -641,7 +680,7 @@ export function Table({ state, send, theme }: Props) {
             </span>
           </div>
           <div className="hand">
-            {g.hand.length === 0 && <span className="muted">No {theme.nouns.cards} left. You can still bid.</span>}
+            {hand.length === 0 && <span className="muted">No {theme.nouns.cards} left. You can still bid.</span>}
             {groups.map(({ suit, cards }) => (
               <div key={suit} className="hand-group" style={{ ['--suit' as string]: theme.suits[suit].color }}>
                 <span className="group-label">

@@ -16,11 +16,19 @@ canUndo: boolean, minPlayers: number, maxPlayers: number,
  */
 skipAfterMs: number, 
 /**
- * Open auctions: seconds from the lot going up or the last bid until everyone still in is
- * done. 0 = off.
+ * Open auctions: seconds from the lot going up until everyone still in is done. 0 = no clock.
  */
 bidTimerS: number, 
 /**
+ * Open auctions: after a bid, everyone still in has at least this many seconds left.
+ */
+bidExtendS: number, 
+/**
  * Milliseconds left on the running open-auction clock; null when none runs.
  */
-bidMsLeft: number | null, };
+bidMsLeft: number | null, 
+/**
+ * Length of the clock's current stretch (since the lot went up or a bid added time); null
+ * when none runs.
+ */
+bidMsWindow: number | null, };

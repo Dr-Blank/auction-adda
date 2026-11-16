@@ -33,12 +33,27 @@ impl ThemeId {
     }
 }
 
+/// Room settings a creator brings from their last game (their browser keeps them). A setting the
+/// server would refuse is dropped for the default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Prefs {
+    pub bid_timer_s: u16,
+    pub bid_extend_s: u16,
+    /// Genres for this theme, as in `Cast`; empty = random.
+    #[serde(default)]
+    pub genres: Vec<u8>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ClientMsg {
     Create {
         theme: String,
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        prefs: Option<Prefs>,
     },
     Join {
         room: String,
@@ -90,9 +105,11 @@ pub enum ClientMsg {
     Admin {
         seat: Seat,
     },
-    /// Admin only, in the lobby or a game: the open-auction bid timer in seconds, 0 = off.
+    /// Admin only, in the lobby or a game: the open-auction clock. `seconds` from the lot going up
+    /// (0 = no clock); after a bid, everyone still in gets at least `extend` seconds.
     Timer {
         seconds: u16,
+        extend: u16,
     },
     /// Admin only, in the lobby: the genres that play (one per suit, or empty for a random pick);
     /// `reroll` draws new names.
@@ -163,11 +180,15 @@ pub struct RoomInfo {
     pub max_players: u8,
     /// How long a seat must be disconnected before it can be skipped or released.
     pub skip_after_ms: u64,
-    /// Open auctions: seconds from the lot going up or the last bid until everyone still in is
-    /// done. 0 = off.
+    /// Open auctions: seconds from the lot going up until everyone still in is done. 0 = no clock.
     pub bid_timer_s: u16,
+    /// Open auctions: after a bid, everyone still in has at least this many seconds left.
+    pub bid_extend_s: u16,
     /// Milliseconds left on the running open-auction clock; null when none runs.
     pub bid_ms_left: Option<u64>,
+    /// Length of the clock's current stretch (since the lot went up or a bid added time); null
+    /// when none runs.
+    pub bid_ms_window: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -587,18 +587,58 @@ fn the_admin_picks_the_cast_in_the_lobby() {
 }
 
 #[test]
-fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_bid_restarts_the_timer() {
+fn a_creator_brings_their_saved_settings_and_bad_ones_fall_back_to_the_defaults() {
+    let (_, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let a = fake(&mut rooms, "10.0.0.1");
+    send(
+        &mut rooms,
+        &a,
+        json!({ "type": "create", "theme": "box-office", "name": "a",
+                "prefs": { "bidTimerS": 0, "bidExtendS": 20, "genres": [4, 0, 2, 3, 1] } }),
+    );
+    let room = state(&a).room;
+    assert_eq!((room.bid_timer_s, room.bid_extend_s), (0, 20));
+    assert_eq!(room.cast.genres, [0, 1, 2, 3, 4]);
+
+    let b = fake(&mut rooms, "10.0.0.2");
+    send(
+        &mut rooms,
+        &b,
+        json!({ "type": "create", "theme": "box-office", "name": "b",
+                "prefs": { "bidTimerS": 9999, "bidExtendS": 1, "genres": [1, 1] } }),
+    );
+    let room = state(&b).room;
+    assert_eq!((room.bid_timer_s, room.bid_extend_s), (30, 10));
+    assert_eq!(room.cast.genres, [0u8; 0]);
+}
+
+#[test]
+fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_late_bid_adds_time() {
     let (now, opts) = clock(1_000_000);
     let mut rooms = Rooms::new(opts).unwrap();
     let (clients, _) = seated(&mut rooms, 3);
     let admin = &clients[0];
-    assert_eq!(state(admin).room.bid_timer_s, 15);
-    send(&mut rooms, &clients[1], json!({ "type": "timer", "seconds": 5 }));
+    assert_eq!(
+        (state(admin).room.bid_timer_s, state(admin).room.bid_extend_s),
+        (30, 10)
+    );
+    send(
+        &mut rooms,
+        &clients[1],
+        json!({ "type": "timer", "seconds": 5, "extend": 3 }),
+    );
     assert_error(&clients[1], "Only the room admin can set the bid timer");
-    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 121 }));
-    assert_error(admin, "at most 120 seconds");
-    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 5 }));
-    assert_eq!(state(admin).room.bid_timer_s, 5);
+    send(
+        &mut rooms,
+        admin,
+        json!({ "type": "timer", "seconds": 601, "extend": 3 }),
+    );
+    assert_error(admin, "at most 600 seconds");
+    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 5, "extend": 2 }));
+    assert_error(admin, "Time after a bid is 3 to 120 seconds");
+    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 8, "extend": 3 }));
+    assert_eq!((state(admin).room.bid_timer_s, state(admin).room.bid_extend_s), (8, 3));
     send(&mut rooms, admin, json!({ "type": "start" }));
 
     // Play at random until an open auction is up; the clock does not move meanwhile.
@@ -616,9 +656,10 @@ fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_bid_restarts_the_tim
         }
     }
     assert!(is_open(admin));
-    assert_eq!(state(admin).room.bid_ms_left, Some(5_000));
+    assert_eq!(state(admin).room.bid_ms_left, Some(8_000));
+    assert_eq!(state(admin).room.bid_ms_window, Some(8_000));
 
-    advance(&now, 3_000);
+    advance(&now, 6_000);
     rooms.tick();
     assert!(is_open(admin));
     let bidder = clients
@@ -632,12 +673,14 @@ fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_bid_restarts_the_tim
         bidder,
         json!({ "type": "action", "action": { "type": "bid", "amount": high + 1, "seenHigh": high } }),
     );
-    assert_eq!(state(admin).room.bid_ms_left, Some(5_000), "a bid restarts the clock");
+    let room = state(admin).room;
+    assert_eq!(room.bid_ms_left, Some(3_000), "a late bid tops the clock up");
+    assert_eq!(room.bid_ms_window, Some(3_000));
 
-    advance(&now, 4_000);
+    advance(&now, 2_500);
     rooms.tick();
     assert!(is_open(admin));
-    advance(&now, 1_500);
+    advance(&now, 1_000);
     rooms.tick();
     let v = game(admin);
     assert!(v.auction.is_none_or(|a| a.kind != AuctionKind::Open), "time is up");
@@ -791,18 +834,20 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
     assert_eq!(dir.files(), [format!("{code}.json")]);
 
     // What the Node server's loader checked, and the exact set of keys (the Node server wrote all
-    // but bidTimerS; a file without it loads with the default).
+    // but bidTimerS and bidExtendS; a file without them loads with the defaults).
     let saved: Value = serde_json::from_slice(&fs::read(dir.0.join(format!("{code}.json"))).unwrap()).unwrap();
     assert_eq!(saved["v"], 1);
     assert_eq!(saved["code"], code.as_str());
     assert!(saved["seats"].is_array());
-    assert_eq!(saved["bidTimerS"], 15);
+    assert_eq!(saved["bidTimerS"], 30);
+    assert_eq!(saved["bidExtendS"], 10);
     let mut keys: Vec<&String> = saved.as_object().unwrap().keys().collect();
     keys.sort();
     assert_eq!(
         keys,
         [
             "admin",
+            "bidExtendS",
             "bidTimerS",
             "cast",
             "code",

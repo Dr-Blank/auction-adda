@@ -5,7 +5,7 @@ import { castGenres } from '../themes/cast.ts';
 import { getDef } from '../themes/index.ts';
 import type { Theme } from '../themes/types.ts';
 import { initials } from './derive.ts';
-import { saveName, savedName } from './net.ts';
+import { saveGenres, saveName, savedName, saveTimer } from './net.ts';
 import type { RoomState } from './net.ts';
 import { Rules } from './Rules.tsx';
 
@@ -37,32 +37,48 @@ export function ShareLink({ code }: { code: string }) {
   );
 }
 
-const TIMER_CHOICES = [0, 10, 15, 20, 30, 45, 60];
+const FIRST_CHOICES = [0, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
+const EXTEND_CHOICES = [3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120];
+const secs = (n: number) => (n === 0 ? 'No limit' : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
 
-/** The open-auction bid timer: the admin picks it, everyone else sees it. */
+/**
+ * The open-auction clock: a long first stretch when a lot goes up (so nobody misses it), then a
+ * short top-up after each bid. The admin picks both and their browser keeps them for next time.
+ */
 export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void }) {
-  const s = room.bidTimerS;
-  const label = (n: number) => (n === 0 ? 'Off' : `${n} s`);
+  const first = room.bidTimerS;
+  const extend = room.bidExtendS;
+  const set = (seconds: number, ext: number) => {
+    saveTimer(seconds, ext);
+    send({ type: 'timer', seconds, extend: ext });
+  };
+  const pick = (value: number, choices: number[], onPick: (n: number) => void) =>
+    room.admin === me ? (
+      <select value={value} onChange={(e) => onPick(Number(e.target.value))}>
+        {[...new Set([...choices, value])].sort((x, y) => x - y).map((n) => (
+          <option key={n} value={n}>
+            {secs(n)}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <b>{secs(value)}</b>
+    );
   return (
     <div className="bid-timer">
+      <h3>Open-auction clock</h3>
       <label>
-        Open-auction timer{' '}
-        {room.admin === me ? (
-          <select value={s} onChange={(e) => send({ type: 'timer', seconds: Number(e.target.value) })}>
-            {[...new Set([...TIMER_CHOICES, s])].sort((x, y) => x - y).map((n) => (
-              <option key={n} value={n}>
-                {label(n)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <b>{label(s)}</b>
-        )}
+        When a lot goes up {pick(first, FIRST_CHOICES, (n) => set(n, extend))}
       </label>
+      {first > 0 && (
+        <label>
+          After a bid, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n))}
+        </label>
+      )}
       <small className="muted">
-        {s === 0
+        {first === 0
           ? 'Open auctions wait until every bidder says done. Good for tables that call results on voice.'
-          : `When a lot goes up, and again after every bid, players still in have ${s} s to bid; then they are done.`}
+          : `Players still in have ${secs(first)} once a lot goes up. A bid with less than ${secs(extend)} left tops the clock up to ${secs(extend)}. When it runs out, they are done.`}
       </small>
     </div>
   );
@@ -80,6 +96,7 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
     const next = chosen.includes(g) ? chosen.filter((x) => x !== g) : [...chosen, g];
     if (next.length === SUITS) {
       setDraft(null);
+      saveGenres(room.theme, next);
       send({ type: 'cast', genres: next, reroll: false });
     } else if (next.length < SUITS) {
       setDraft(next);
@@ -134,6 +151,7 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
                 className="btn small"
                 onClick={() => {
                   setDraft(null);
+                  saveGenres(room.theme, []);
                   send({ type: 'cast', genres: [], reroll: true });
                 }}
               >
@@ -228,8 +246,14 @@ export function Lobby({ state, send, join, theme }: Props) {
         and can fill empty seats with bots. Playing on voice? The admin can end an auction with the result the table agreed (and undo a
         wrong call). Hand the role over any time from the Room menu.
       </p>
-      <BidTimer room={room} me={you} send={send} />
-      <CastPicker room={room} me={you} send={send} theme={theme} />
+      <details className="advanced">
+        <summary>
+          Advanced <small className="muted">clock, {theme.nouns.suit}s and names</small>
+        </summary>
+        {isAdmin && <p className="muted small">Your browser keeps what you pick here for the next room you create.</p>}
+        <BidTimer room={room} me={you} send={send} />
+        <CastPicker room={room} me={you} send={send} theme={theme} />
+      </details>
 
       {you === null ? (
         count < room.maxPlayers ? (

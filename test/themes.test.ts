@@ -40,6 +40,17 @@ describe.each(Object.values(THEMES))('theme $id', (def) => {
     expect(bad.every((g) => g < def.genres.length)).toBe(true);
   });
 
+  it('gives every genre a real colour, never a grey that reads as text', () => {
+    const saturation = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const l = (max + min) / 2;
+      return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    };
+    for (const g of def.genres) expect(saturation(g.color), `${g.names[0]} ${g.color}`).toBeGreaterThanOrEqual(0.3);
+  });
+
   it('fills every word it leaves out from the defaults', () => {
     const theme = getTheme(def.id);
     for (const t of ['open', 'once', 'sealed', 'fixed', 'double'] as const) {

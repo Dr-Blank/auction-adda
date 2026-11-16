@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, ServerMsg } from '../generated/index.ts';
+import type { ClientMsg, Prefs, ServerMsg } from '../generated/index.ts';
 
 export type RoomState = Extract<ServerMsg, { type: 'state' }> & { receivedAt: number };
 export interface NetError {
@@ -27,6 +27,26 @@ const store = {
 
 export const savedName = () => store.get('aa:name') ?? '';
 export const saveName = (name: string) => store.set('aa:name', name);
+export const savedTheme = () => store.get('aa:theme');
+export const saveTheme = (theme: string) => store.set('aa:theme', theme);
+
+/**
+ * Room settings this person last picked as admin: their next room starts with them. The timer is
+ * kept for every theme, the genres per theme (their indices mean nothing in another theme).
+ */
+export function savedPrefs(theme: string): Prefs | null {
+  try {
+    const timer = JSON.parse(store.get('aa:timer') ?? 'null') as { bidTimerS: number; bidExtendS: number } | null;
+    const genres = JSON.parse(store.get(`aa:genres:${theme}`) ?? '[]') as number[];
+    if (!timer && genres.length === 0) return null;
+    // The server swaps anything it would refuse (no saved timer: 0 s after a bid) for its default.
+    return { bidTimerS: timer?.bidTimerS ?? 0, bidExtendS: timer?.bidExtendS ?? 0, genres };
+  } catch {
+    return null;
+  }
+}
+export const saveTimer = (bidTimerS: number, bidExtendS: number) => store.set('aa:timer', JSON.stringify({ bidTimerS, bidExtendS }));
+export const saveGenres = (theme: string, genres: number[]) => store.set(`aa:genres:${theme}`, JSON.stringify(genres));
 const tokenKey = (room: string) => `aa:token:${room}`;
 
 /** One WebSocket for the page; reconnects on its own and re-attaches to the seat with the saved token. */

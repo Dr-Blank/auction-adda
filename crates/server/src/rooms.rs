@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
-use crate::protocol::{Cast, ClientMsg, ErrorCode, RoomInfo, SeatInfo, ServerMsg, ThemeId};
+use crate::protocol::{Cast, ClientMsg, ErrorCode, Prefs, RoomInfo, SeatInfo, ServerMsg, ThemeId};
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH: usize = 6;
@@ -30,14 +30,61 @@ const FILE_VERSION: u64 = 1;
 /// While the admin can still undo a call, bots wait at least this long, so their move does not
 /// take the undo away at once.
 const BOT_WAIT_AFTER_CALL_MS: u64 = 8_000;
-/// Open auctions: seconds after the lot goes up or the last bid before everyone still in is done.
-const DEFAULT_BID_TIMER_S: u16 = 15;
-const MAX_BID_TIMER_S: u16 = 120;
+/// Open auctions: seconds after the lot goes up before everyone still in is done. Long enough to
+/// notice the lot at all.
+const DEFAULT_BID_TIMER_S: u16 = 30;
+const MAX_BID_TIMER_S: u16 = 600;
+/// Open auctions: after a bid, everyone still in has at least this many seconds left.
+const DEFAULT_BID_EXTEND_S: u16 = 10;
+const MIN_BID_EXTEND_S: u16 = 3;
+const MAX_BID_EXTEND_S: u16 = 120;
 /// Upper bound on a theme's genre list; the server does not know each theme's length.
 const MAX_GENRES: u8 = 64;
 
 const fn default_bid_timer() -> u16 {
     DEFAULT_BID_TIMER_S
+}
+
+const fn default_bid_extend() -> u16 {
+    DEFAULT_BID_EXTEND_S
+}
+
+fn check_timer(seconds: u16, extend: u16) -> Result<(), Fail> {
+    if seconds > MAX_BID_TIMER_S {
+        return fail(format!("The bid timer is at most {MAX_BID_TIMER_S} seconds"));
+    }
+    if !(MIN_BID_EXTEND_S..=MAX_BID_EXTEND_S).contains(&extend) {
+        return fail(format!(
+            "Time after a bid is {MIN_BID_EXTEND_S} to {MAX_BID_EXTEND_S} seconds"
+        ));
+    }
+    Ok(())
+}
+
+/// The admin's genre pick, sorted: one per suit, or empty for a random cast.
+fn check_genres(genres: &[u8]) -> Result<Vec<u8>, Fail> {
+    let suits = usize::from(config().suits);
+    let mut sorted = genres.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    if !genres.is_empty()
+        && (sorted.len() != genres.len() || genres.len() != suits || sorted.iter().any(|&g| g >= MAX_GENRES))
+    {
+        return fail(format!("Pick {suits} different genres, or none for a random cast"));
+    }
+    Ok(sorted)
+}
+
+/// The running open-auction clock.
+#[derive(Clone, Copy)]
+struct BidClock {
+    /// Log line that put this lot up (or undid a call on it): a new one starts the clock afresh.
+    lot: usize,
+    /// Log line of the last bid (or `lot`): a new one adds time.
+    last: usize,
+    /// When the current stretch started, and when it runs out.
+    from: u64,
+    due: u64,
 }
 
 pub type ClientId = u64;
@@ -131,13 +178,14 @@ struct Room {
     game: Option<GameState>,
     created_at: u64,
     updated_at: u64,
-    /// Open-auction clock in seconds; 0 = off (tables that bid by voice).
+    /// Open-auction clock in seconds from the lot going up; 0 = off (tables that bid by voice).
     bid_timer_s: u16,
+    /// After a bid, everyone still in has at least this many seconds.
+    bid_extend_s: u16,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
-    /// Running open-auction clock: the log line that started it and when it runs out.
-    bid_clock: Option<(usize, u64)>,
+    bid_clock: Option<BidClock>,
     last_call: Option<LastCall>,
     clients: Vec<ClientId>,
     /// Per seat: when its last connection dropped (`None` while connected, and always for a bot).
@@ -155,19 +203,32 @@ impl Room {
         self.version += 1;
     }
 
-    /// Restarts the open-auction clock when a lot goes up, someone bids or a call is undone; stops
-    /// it when no open auction runs or the timer is off.
+    /// Starts the open-auction clock when a lot goes up or a call is undone, and tops it up to
+    /// `bid_extend_s` when someone bids; stops it when no open auction runs or the timer is off.
     fn sync_bid_clock(&mut self, now: u64) {
-        let start = self
+        let marks = self
             .game
             .as_ref()
             .filter(|_| self.bid_timer_s > 0)
-            .and_then(bid_clock_start);
-        self.bid_clock = match (start, self.bid_clock) {
-            (None, _) => None,
-            (Some(start), Some((since, due))) if start == since => Some((since, due)),
-            (Some(start), _) => Some((start, now + u64::from(self.bid_timer_s) * 1000)),
-        };
+            .and_then(bid_clock_marks);
+        let first = now + u64::from(self.bid_timer_s) * 1000;
+        let extend = now + u64::from(self.bid_extend_s) * 1000;
+        self.bid_clock = marks.map(|(lot, last)| match self.bid_clock {
+            Some(c) if c.lot == lot && c.last == last => c,
+            Some(c) if c.lot == lot && c.due >= extend => BidClock { last, ..c },
+            Some(c) if c.lot == lot => BidClock {
+                last,
+                from: now,
+                due: extend,
+                ..c
+            },
+            _ => BidClock {
+                lot,
+                last,
+                from: now,
+                due: first,
+            },
+        });
     }
 
     fn game(&self) -> Result<&GameState, Fail> {
@@ -191,13 +252,21 @@ impl Room {
     }
 }
 
-/// Index of the log line that last (re)started the clock of the running open auction: the lot
-/// going up, a bid, or an undone call. `None` when no open auction runs.
-fn bid_clock_start(g: &GameState) -> Option<usize> {
+/// For the running open auction: the log line that put the lot up (or undid a call on it), and
+/// the last line that moved its clock (that one or a later bid). `None` when no open auction runs.
+fn bid_clock_marks(g: &GameState) -> Option<(usize, usize)> {
     g.auction.as_ref().filter(|a| a.kind == AuctionKind::Open)?;
-    g.log
+    let lot = g
+        .log
         .iter()
-        .rposition(|e| matches!(e, LogEntry::Play { .. } | LogEntry::Bid { .. } | LogEntry::Undo { .. }))
+        .rposition(|e| matches!(e, LogEntry::Play { .. } | LogEntry::Undo { .. }))?;
+    let last = g
+        .log
+        .iter()
+        .rposition(|e| matches!(e, LogEntry::Bid { .. }))
+        .filter(|&i| i > lot)
+        .unwrap_or(lot);
+    Some((lot, last))
 }
 
 /// The open-auction clock ran out: everyone still in is done, which closes the auction.
@@ -209,7 +278,8 @@ fn time_up(game: &GameState) -> Result<GameState, RuleError> {
 }
 
 /// The save file, version 1: `{ v, code, theme, cast, seats, admin, game, createdAt, updatedAt,
-/// bidTimerS }` (`cast` or `bidTimerS` missing in older files: the default).
+/// bidTimerS, bidExtendS }` (`cast`, `bidTimerS` or `bidExtendS` missing in older files: the
+/// default).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedRef<'a> {
@@ -223,6 +293,7 @@ struct SavedRef<'a> {
     created_at: u64,
     updated_at: u64,
     bid_timer_s: u16,
+    bid_extend_s: u16,
 }
 
 #[derive(Deserialize)]
@@ -239,6 +310,8 @@ struct Saved {
     updated_at: u64,
     #[serde(default = "default_bid_timer")]
     bid_timer_s: u16,
+    #[serde(default = "default_bid_extend")]
+    bid_extend_s: u16,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -462,7 +535,7 @@ impl Rooms {
         for room in self.rooms.values_mut() {
             room.sync_bid_clock(now);
             if !room.clients.is_empty()
-                && room.bid_clock.is_some_and(|(_, due)| due <= now)
+                && room.bid_clock.is_some_and(|c| c.due <= now)
                 && let Some(game) = &room.game
             {
                 match time_up(game) {
@@ -573,7 +646,7 @@ impl Rooms {
     )]
     fn dispatch(&mut self, id: ClientId, msg: ClientMsg) -> Result<(), Fail> {
         let msg = match msg {
-            ClientMsg::Create { theme, name } => return self.create(id, &theme, &name),
+            ClientMsg::Create { theme, name, prefs } => return self.create(id, &theme, &name, prefs),
             ClientMsg::Join { room, token, name } => {
                 return self.join(id, &room, token.as_deref(), name.as_deref());
             }
@@ -810,33 +883,21 @@ impl Rooms {
                 room.last_call = None;
                 info!(room = %code, seat = me, "Seat {seat} is now admin");
             }
-            ClientMsg::Timer { seconds } => {
+            ClientMsg::Timer { seconds, extend } => {
                 room.require_admin(me, "set the bid timer")?;
-                if seconds > MAX_BID_TIMER_S {
-                    return fail(format!("The bid timer is at most {MAX_BID_TIMER_S} seconds"));
-                }
+                check_timer(seconds, extend)?;
                 room.bid_timer_s = seconds;
+                room.bid_extend_s = extend;
                 // A running clock starts again at the new length.
                 room.bid_clock = None;
-                info!(room = %code, seat = me, "Bid timer set to {seconds} s");
+                info!(room = %code, seat = me, "Bid timer set to {seconds} s, {extend} s after a bid");
             }
             ClientMsg::Cast { genres, reroll } => {
                 room.require_admin(me, "pick the cast")?;
                 if room.game.is_some() {
                     return fail("The game has started; the cast is set");
                 }
-                let suits = usize::from(config().suits);
-                let mut sorted = genres.clone();
-                sorted.sort_unstable();
-                sorted.dedup();
-                if !genres.is_empty()
-                    && (sorted.len() != genres.len()
-                        || genres.len() != suits
-                        || sorted.iter().any(|&g| g >= MAX_GENRES))
-                {
-                    return fail(format!("Pick {suits} different genres, or none for a random cast"));
-                }
-                room.cast.genres = sorted;
+                room.cast.genres = check_genres(&genres)?;
                 if reroll {
                     room.cast.seed = new_seed();
                 }
@@ -875,11 +936,17 @@ impl Rooms {
         Ok(())
     }
 
-    fn create(&mut self, id: ClientId, theme: &str, raw_name: &str) -> Result<(), Fail> {
+    fn create(&mut self, id: ClientId, theme: &str, raw_name: &str, prefs: Option<Prefs>) -> Result<(), Fail> {
         let name = clean_name(raw_name)?;
         if ThemeId::parse(theme).is_none() {
             return fail("Unknown theme");
         }
+        let prefs = prefs.unwrap_or_default();
+        let (bid_timer_s, bid_extend_s) = match check_timer(prefs.bid_timer_s, prefs.bid_extend_s) {
+            Ok(()) => (prefs.bid_timer_s, prefs.bid_extend_s),
+            Err(_) => (DEFAULT_BID_TIMER_S, DEFAULT_BID_EXTEND_S),
+        };
+        let genres = check_genres(&prefs.genres).unwrap_or_default();
         let now = (self.now)();
         let ip = self.client(id)?.ip.clone();
         let window_ms = self.create_limit.window_ms;
@@ -929,7 +996,7 @@ impl Rooms {
                 theme: theme.to_owned(),
                 cast: Cast {
                     seed: new_seed(),
-                    genres: Vec::new(),
+                    genres,
                 },
                 seats: vec![SeatData {
                     name,
@@ -940,7 +1007,8 @@ impl Rooms {
                 game: None,
                 created_at: now,
                 updated_at: now,
-                bid_timer_s: DEFAULT_BID_TIMER_S,
+                bid_timer_s,
+                bid_extend_s,
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -1151,7 +1219,9 @@ impl Rooms {
             max_players: cfg.max_players(),
             skip_after_ms: self.skip_after_ms,
             bid_timer_s: room.bid_timer_s,
-            bid_ms_left: room.bid_clock.map(|(_, due)| due.saturating_sub(now)),
+            bid_extend_s: room.bid_extend_s,
+            bid_ms_left: room.bid_clock.map(|c| c.due.saturating_sub(now)),
+            bid_ms_window: room.bid_clock.map(|c| c.due - c.from),
         }
     }
 
@@ -1236,6 +1306,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         created_at: saved.created_at,
         updated_at: saved.updated_at,
         bid_timer_s: saved.bid_timer_s.min(MAX_BID_TIMER_S),
+        bid_extend_s: saved.bid_extend_s.clamp(MIN_BID_EXTEND_S, MAX_BID_EXTEND_S),
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -1352,6 +1423,7 @@ impl Store {
             created_at: room.created_at,
             updated_at: room.updated_at,
             bid_timer_s: room.bid_timer_s,
+            bid_extend_s: room.bid_extend_s,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {
