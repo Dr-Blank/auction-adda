@@ -1017,8 +1017,42 @@ b.you { color: var(--gold); }
   font-size: 0.8em;
 }
 .by-player { margin: 6px 0 0; font-size: 0.82rem; }
+.type-key { display: none; }
 @media (max-width: 560px) {
   .ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Phone: each ledger row is a two-line card, nothing scrolls sideways.
+     film(s) ................ headline (net, or what you got)
+     icon  from/to  paid      earned / paid them
+   The auction column is its icon only; .type-key under the tables names the icons used. */
+@media (max-width: 700px) {
+  .ledger-table, .ledger-table thead, .ledger-table tbody, .ledger-table thead tr { display: block; }
+  .ledger-table thead th { display: none; }
+  .ledger-table thead th:first-child { display: block; padding: 4px 0; }
+  .ledger-table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 4px 10px;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ledger-table td { padding: 0; border: 0; text-align: left; font-size: 0.85rem; }
+  .ledger-table .c-film { grid-area: 1 / 1 / 2 / 4; font-size: 0.95rem; }
+  .ledger-table .films { min-width: 0; }
+  .ledger-table .c-head { grid-area: 1 / 4; text-align: right; font-weight: 700; font-size: 1rem; }
+  .ledger-table .c-type { grid-area: 2 / 1; }
+  .ledger-table .c-who { grid-area: 2 / 2; overflow: hidden; text-overflow: ellipsis; }
+  .ledger-table .c-a { grid-area: 2 / 3; }
+  .ledger-table .c-b { grid-area: 2 / 4; text-align: right; }
+  .ledger-table td[data-label]::before { content: attr(data-label) ' '; color: var(--muted); font-size: 0.78rem; }
+  .ledger-table .type-label { display: none; }
+  .ledger-table .type-icon { opacity: 1; }
+  .type-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 0.78rem; }
+  .whole-table th, .whole-table td { padding: 6px 4px; }
+  .whole-table .wide-only { display: none; }
+  .whole-table td:last-child { white-space: nowrap; }
+  .whole-table thead th:last-child { text-transform: capitalize; }
 }
 .earned { font-family: var(--display); font-weight: 400; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 .premiere.instant .billing, .premiere.instant .payout { animation: none; }

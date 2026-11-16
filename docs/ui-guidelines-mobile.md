@@ -153,7 +153,7 @@ Rule for new work: if you add a `title="…"` attribute, you owe a tap path to t
 
 ### Layout
 
-- The page never scrolls sideways, and no part of it does either, except a wide results table inside the results sheet.
+- The page never scrolls sideways, and no part of it does either. Wide tables reflow instead: the round results' "You bought" / "You sold" rows become two-line cards (film and net on top; auction icon, other player, paid and earned below), with a key under them naming each auction icon used.
 - Fixed and pinned elements: the chart strip (top), the hand (bottom), the action bar (bottom, only when you owe a move). Nothing else is fixed. Pinned elements have opaque backgrounds.
 - Use `dvh`, not `vh`, for full-height things: the browser's bars change the viewport height.
 - Respect `env(safe-area-inset-bottom)` under the action bar and sheets.
@@ -182,7 +182,7 @@ npm run build && PORT=8799 DATA_DIR= CREATE_LIMIT=1000 npm start &
 node scripts/screenshots.mjs ./shots/phone 120 phone
 ```
 
-It exits 1 if, on any tick: the page scrolls sideways; the chart strip is off screen or does not show five stars; any hand card is off screen, under the action bar or under the strip; the hand scrolls sideways; the lot is covered; an action-bar control is off screen or under 40 px tall; a sheet (chart, auction types from the stage, auction types from the hand, seat) fails to open on a tap, is wider than the screen, or fails to close; a seat's sheet lists a different number of films than its stacks show.
+It exits 1 if, on any tick: the page scrolls sideways; the chart strip is off screen or does not show five stars; any hand card is off screen, under the action bar or under the strip; the hand scrolls sideways; the lot is covered; an action-bar control is off screen or under 40 px tall; a sheet (chart, auction types from the stage, auction types from the hand, seat) fails to open on a tap, is wider than the screen, or fails to close; a seat's sheet lists a different number of films than its stacks show; the round results' details scroll sideways.
 
 By hand, on a real phone, because a script cannot judge these:
 

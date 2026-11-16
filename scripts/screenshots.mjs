@@ -344,8 +344,13 @@ while (Date.now() < end) {
       await click('.premiere .row .btn:last-child');
       await sleep(300);
       if (!(await evaluate(`!!document.querySelector('.premiere .your-round .ledger')`))) fail('premiere details: your-round ledger missing');
+      if (phone && (await evaluate(`[...document.querySelectorAll('.premiere, .premiere .scroll-x')].some((el) => el.scrollWidth > el.clientWidth + 1)`))) {
+        fail('premiere details: a table scrolls sideways on the phone');
+      }
       await evaluate(`document.querySelector('.premiere .your-round').scrollIntoView()`);
       (await once('premiere-details')) || (await shot(`premiere-details-${tick}`));
+      await evaluate(`document.querySelector('.premiere > .row').scrollIntoView()`);
+      (await once('premiere-table')) || (await shot(`premiere-table-${tick}`));
     }
     await click('.premiere .btn.primary');
     await sleep(350);

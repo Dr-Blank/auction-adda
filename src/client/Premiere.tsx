@@ -23,6 +23,7 @@ const STEP = 0.8; // seconds between reveals
 export function Premiere({ s, g, names, theme, onClose }: Props) {
   const [instant, setInstant] = useState(reducedMotion);
   const [details, setDetails] = useState(false);
+  const [done, setDone] = useState(false);
   const reveal = s.ranked.slice().reverse(); // Hit first, Blockbuster last
   const flops = theme.suits.map((_, i) => i).filter((i) => !s.ranked.includes(i));
   const payAt = (reveal.length + 1) * STEP;
@@ -32,6 +33,8 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
     const timers = [
       setTimeout(() => s.ranked.length && play('fanfare'), reveal.length * STEP * 1000),
       setTimeout(() => play('cash'), payAt * 1000),
+      // Last payout row in and counted up: nothing left to skip.
+      setTimeout(() => setDone(true), (payAt + s.sold.length * 0.15) * 1000 + 900),
     ];
     return () => timers.forEach(clearTimeout);
   }, [instant]);
@@ -101,7 +104,7 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
                   );
                 })}
               </span>
-              <Earned value={s.payouts[i]} delay={instant ? 0 : (payAt + i * 0.15) * 1000} money={theme.money} />
+              <Earned value={s.payouts[i]} delay={instant ? 0 : (payAt + i * 0.15) * 1000} instant={instant} money={theme.money} />
             </li>
           ))}
         </ol>
@@ -120,7 +123,7 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
               </>
             )}
           </button>
-          {!instant && (
+          {!instant && !done && (
             <button className="btn" onClick={() => setInstant(true)}>
               Skip
             </button>
@@ -134,9 +137,10 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
   );
 }
 
-function Earned({ value, delay, money }: { value: number; delay: number; money: (n: number) => string }) {
+function Earned({ value, delay, instant, money }: { value: number; delay: number; instant: boolean; money: (n: number) => string }) {
   const shown = useCountUp(value, { from: 0, delay, duration: 900 });
-  return <b className="earned">+{money(shown)}</b>;
+  // The count-up keeps its first delay; Skip must show the final sums now, not +0 until then.
+  return <b className="earned">+{money(instant ? value : shown)}</b>;
 }
 
 const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
@@ -166,15 +170,19 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
   for (const x of sold) buyers.set(x.to, (buyers.get(x.to) ?? 0) + x.price);
 
   // A double sells with its second card's auction; a double alone was taken free.
+  const typeOf = (lot: Sale) => lot.cards[lot.cards.length - 1].type;
   const how = (lot: Sale) => {
-    const t = lot.cards[lot.cards.length - 1].type;
+    const t = typeOf(lot);
     return (
       <span className="lot-type" title={theme.auctionHints[t]}>
         <span className="type-icon">{lot.cards.length > 1 ? `${theme.auctionIcons.double} ` : ''}{theme.auctionIcons[t]}</span>{' '}
-        {t === 'double' ? `${theme.auctionLabels.double}, nobody added` : theme.auctionLabels[t]}
+        <span className="type-label">{t === 'double' ? `${theme.auctionLabels.double}, nobody added` : theme.auctionLabels[t]}</span>
       </span>
     );
   };
+  // Phones show the auction column as icons only; this key spells out the ones used, in theme order.
+  const used = new Set([...bought, ...sold].flatMap((lot) => (lot.cards.length > 1 ? ['double', typeOf(lot)] : [typeOf(lot)])));
+  const types = (Object.keys(theme.auctionIcons) as (keyof typeof theme.auctionIcons)[]).filter((t) => used.has(t));
 
   const film = (lot: Sale) => (
     <span className="films">
@@ -227,12 +235,14 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
             <tbody>
               {bought.map((lot, k) => (
                 <tr key={k}>
-                  <td className="left">{film(lot)}</td>
-                  <td className="left">{how(lot)}</td>
-                  <td className="left muted">{lot.price === 0 ? 'Free' : lot.from === me ? 'Bank' : names[lot.from]}</td>
-                  <td>{theme.money(lot.price)}</td>
-                  <td>{worth(lot) ? theme.money(worth(lot)) : <span className="muted">Flop</span>}</td>
-                  <td className={tone(worth(lot) - lot.price)}>{signed(worth(lot) - lot.price)}</td>
+                  <td className="left c-film">{film(lot)}</td>
+                  <td className="left c-type">{how(lot)}</td>
+                  <td className="left muted c-who" data-label={lot.price === 0 ? undefined : 'from'}>
+                    {lot.price === 0 ? 'Free' : lot.from === me ? 'Bank' : names[lot.from]}
+                  </td>
+                  <td className="c-a" data-label="paid">{theme.money(lot.price)}</td>
+                  <td className="c-b" data-label="earned">{worth(lot) ? theme.money(worth(lot)) : <span className="muted">Flop</span>}</td>
+                  <td className={`c-head ${tone(worth(lot) - lot.price)}`}>{signed(worth(lot) - lot.price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -255,11 +265,11 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
             <tbody>
               {sold.map((lot, k) => (
                 <tr key={k}>
-                  <td className="left">{film(lot)}</td>
-                  <td className="left">{how(lot)}</td>
-                  <td className="left muted">{names[lot.to]}</td>
-                  <td className="gain">{theme.money(lot.price)}</td>
-                  <td className="muted">{worth(lot) ? theme.money(worth(lot)) : 'Flop'}</td>
+                  <td className="left c-film">{film(lot)}</td>
+                  <td className="left c-type">{how(lot)}</td>
+                  <td className="left muted c-who" data-label="to">{names[lot.to]}</td>
+                  <td className="gain c-head">{signed(lot.price)}</td>
+                  <td className="muted c-b" data-label="paid them">{worth(lot) ? theme.money(worth(lot)) : 'Flop'}</td>
                 </tr>
               ))}
             </tbody>
@@ -278,6 +288,16 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
         </div>
       )}
 
+      {types.length > 0 && (
+        <p className="type-key muted">
+          {types.map((t) => (
+            <span key={t}>
+              <span className="type-icon">{theme.auctionIcons[t]}</span> {theme.auctionLabels[t]}
+            </span>
+          ))}
+        </p>
+      )}
+
       {bought.length === 0 && sold.length === 0 && <p className="muted">You did not buy or sell anything this {theme.nouns.round}.</p>}
     </section>
   );
@@ -288,13 +308,15 @@ function Details({ s, g, names, theme }: Omit<Props, 'onClose'>) {
     <>
       {g.you !== null && s.sales && <YourRound s={s} me={g.you} names={names} theme={theme} />}
       <h3 className="details-head">Whole table</h3>
-      <table className="results">
+      <table className="results whole-table">
         <thead>
           <tr>
             <th className="left">{cap(theme.nouns.suit)}</th>
             <th>Played</th>
             <th>Result</th>
-            <th>Each {theme.nouns.card} pays</th>
+            <th>
+              <span className="wide-only">Each {theme.nouns.card} </span>pays
+            </th>
           </tr>
         </thead>
         <tbody>
