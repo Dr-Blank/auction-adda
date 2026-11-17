@@ -83,6 +83,11 @@ watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", room: code, v
 await until((s) => s.room.watchers.length > 0);
 
 shot("lobby");
+// Ben is not ready: the admin's start asks first. Then Ben says ready.
+shot("lobby-start-anyway", `document.querySelector("button.btn.primary.big")?.click()`);
+ben.send(JSON.stringify({ type: "ready", on: true }));
+await until((s) => s.room.seats[3].ready);
+shot("lobby-ready-ben", null, benKey);
 send({ type: "settings", settings: { locked: true, freeze: "anyone", rename: true } });
 await until((s) => s.room.settings.locked);
 const openAdvanced = `document.querySelector("details.advanced").open = true`;

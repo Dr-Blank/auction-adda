@@ -463,6 +463,52 @@ export function AdminAway({ state, send }: { state: RoomState; send: (m: ClientM
   );
 }
 
+/** The admin's start button. With players not ready yet, the first press asks first. */
+function StartRow({ room, canStart, send }: { room: RoomInfo; canStart: boolean; send: (m: ClientMsg) => void }) {
+  const [asking, setAsking] = useState(false);
+  const count = room.seats.length;
+  const waiting = room.seats.filter((s, i) => i !== room.admin && !s.ready).map((s) => s.name);
+  const ready = count - 1 - waiting.length;
+  if (asking && canStart && waiting.length > 0)
+    return (
+      <div className="row start-anyway" role="group" aria-label="Start anyway?">
+        <span className="grow">
+          <b>{waiting.join(", ")}</b> {waiting.length === 1 ? "is" : "are"} not ready yet.
+        </span>
+        <button
+          className="btn primary"
+          onClick={() => {
+            setAsking(false);
+            send({ type: "start" });
+          }}
+        >
+          Start anyway
+        </button>
+        <button className="btn" onClick={() => setAsking(false)}>
+          Wait
+        </button>
+      </div>
+    );
+  return (
+    <div className="row">
+      <button
+        className="btn primary big grow"
+        disabled={!canStart}
+        onClick={() => (waiting.length > 0 ? setAsking(true) : send({ type: "start" }))}
+      >
+        {!canStart
+          ? `Waiting for players (${count}/${room.minPlayers} minimum)`
+          : waiting.length > 0
+            ? `Start with ${count} players · ${ready} of ${count - 1} ready`
+            : `Start with ${count} players · all ready`}
+      </button>
+      <button className="btn" onClick={() => send({ type: "leave" })}>
+        Leave
+      </button>
+    </div>
+  );
+}
+
 export function Lobby({ state, send, join, theme }: Props) {
   const { room, you } = state;
   const [name, setName] = useState(savedName);
@@ -538,6 +584,14 @@ export function Lobby({ state, send, join, theme }: Props) {
               {s.bot && <em> · bot</em>}
               {!s.connected && <em> · disconnected</em>}
             </span>
+            {i !== room.admin &&
+              (s.ready ? (
+                <span className="ready-mark on" title="Ready to play">
+                  <CheckIcon /> ready
+                </span>
+              ) : (
+                <span className="ready-mark">not ready</span>
+              ))}
             {isAdmin && i !== you && (
               <button className="btn small" onClick={() => send({ type: "kick", seat: i })}>
                 {s.bot ? "Remove" : "Kick"}
@@ -602,18 +656,22 @@ export function Lobby({ state, send, join, theme }: Props) {
         ) : (
           <p className="muted">The room is full. You can watch once the game starts.</p>
         )
+      ) : isAdmin ? (
+        <StartRow room={room} canStart={canStart} send={send} />
       ) : (
         <div className="row">
           <button
-            className="btn primary big grow"
-            disabled={!canStart || !isAdmin}
-            onClick={() => send({ type: "start" })}
+            className={`btn big grow ${room.seats[you]?.ready ? "ready" : "primary"}`}
+            aria-pressed={room.seats[you]?.ready}
+            onClick={() => send({ type: "ready", on: !room.seats[you]?.ready })}
           >
-            {!canStart
-              ? `Waiting for players (${count}/${room.minPlayers} minimum)`
-              : isAdmin
-                ? `Start with ${count} players`
-                : `Waiting for ${adminName} to start`}
+            {room.seats[you]?.ready ? (
+              <>
+                <CheckIcon /> Ready · waiting for {adminName} to start
+              </>
+            ) : (
+              "I’m ready"
+            )}
           </button>
           <button className="btn" onClick={() => send({ type: "leave" })}>
             Leave
@@ -622,7 +680,8 @@ export function Lobby({ state, send, join, theme }: Props) {
       )}
       {you !== null && (
         <p className="muted small">
-          Only the admin can start. Seats are drawn at random when the game begins, and nobody new sits down after that.
+          {isAdmin ? "You start when everyone is ready (or before, if you must)." : "The admin starts the game."} Seats
+          are drawn at random when the game begins, and nobody new sits down after that.
         </p>
       )}
       {isAdmin && (

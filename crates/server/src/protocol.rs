@@ -130,6 +130,10 @@ pub enum ClientMsg {
     Rename {
         name: String,
     },
+    /// In the lobby: the sender is ready to play (or not any more). The admin may start anyway.
+    Ready {
+        on: bool,
+    },
     /// Admin only.
     Start,
     /// Admin only. In the lobby: seat a bot the server plays (`seat` is ignored; `release` removes
@@ -239,6 +243,7 @@ impl ClientMsg {
             Self::Claim { .. } => "claim",
             Self::Avatar { .. } => "avatar",
             Self::Rename { .. } => "rename",
+            Self::Ready { .. } => "ready",
             Self::Start => "start",
             Self::Bot { .. } => "bot",
             Self::Kick { .. } => "kick",
@@ -270,6 +275,10 @@ impl ClientMsg {
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts the client shows one by one"
+)]
 pub struct SeatInfo {
     pub name: String,
     pub connected: bool,
@@ -284,6 +293,8 @@ pub struct SeatInfo {
     /// modulo that part's choices, so any string draws). Empty = drawn from the name. The server
     /// only cleans it, and rolls one for each bot.
     pub avatar: String,
+    /// In the lobby: the player said they are ready. Bots are always ready.
+    pub ready: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

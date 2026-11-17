@@ -843,6 +843,29 @@ fn players_rename_themselves_only_while_the_admin_allows_it() {
     assert_error(&watcher, "take a seat first");
 }
 
+#[test]
+fn players_say_they_are_ready_and_the_admin_may_start_anyway() {
+    let mut rooms = Rooms::new(fixed()).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    send(&mut rooms, &clients[0], json!({ "type": "bot" }));
+    let ready = |c: &Fake| state(c).room.seats.iter().map(|s| s.ready).collect::<Vec<_>>();
+    assert_eq!(ready(&clients[0]), [false, false, false, true], "bots are always ready");
+    send(&mut rooms, &clients[1], json!({ "type": "ready", "on": true }));
+    assert_eq!(ready(&clients[2]), [false, true, false, true]);
+    send(&mut rooms, &clients[1], json!({ "type": "ready", "on": false }));
+    send(&mut rooms, &clients[2], json!({ "type": "ready", "on": true }));
+    assert_eq!(ready(&clients[0]), [false, false, true, true]);
+
+    // P1 is not ready; the admin starts anyway. Back in the lobby everyone starts unready.
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    assert!(state(&clients[0]).game.is_some());
+    send(&mut rooms, &clients[2], json!({ "type": "ready", "on": false }));
+    assert_error(&clients[2], "The game has already started");
+    send(&mut rooms, &clients[0], json!({ "type": "end" }));
+    send(&mut rooms, &clients[0], json!({ "type": "lobby" }));
+    assert_eq!(ready(&clients[0]), [false, false, false, true]);
+}
+
 /// Every client still sits under the name it joined with, and the admin role stayed with P0.
 fn names_follow_seats(clients: &[Fake]) {
     for (i, c) in clients.iter().enumerate() {

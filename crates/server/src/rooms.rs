@@ -187,6 +187,10 @@ const MAX_BANS: usize = 32;
 const BANNED: &str = "The admin took you off the seats here. They can let you back in from the watcher list";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags, each saved only when set"
+)]
 struct SeatData {
     name: String,
     /// Secret that lets a browser re-attach to this seat. `None` = released, anyone may claim it
@@ -205,6 +209,9 @@ struct SeatData {
     /// As in `SeatInfo`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     avatar: String,
+    /// In the lobby: the player said they are ready.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    ready: bool,
 }
 
 impl SeatData {
@@ -1054,6 +1061,15 @@ impl Rooms {
                     s.name = name;
                 }
             }
+            ClientMsg::Ready { on } => {
+                if room.game.is_some() {
+                    return fail("The game has already started");
+                }
+                if let Some(s) = room.seats.get_mut(usize::from(me)) {
+                    s.ready = on;
+                }
+                debug!(room = %code, seat = me, "Ready: {on}");
+            }
             ClientMsg::Start => {
                 if room.game.is_some() {
                     return fail("The game has already started");
@@ -1739,6 +1755,7 @@ impl Rooms {
         room.bot_due = None;
         for s in &mut room.seats {
             s.free = false;
+            s.ready = false;
             if s.token.is_some() && !s.left {
                 s.bot = false;
             }
@@ -1878,6 +1895,7 @@ impl Rooms {
                         open: s.open(),
                         bot: s.bot,
                         avatar: s.avatar.clone(),
+                        ready: s.ready || s.bot,
                     }
                 })
                 .collect(),

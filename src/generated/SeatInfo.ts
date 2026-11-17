@@ -19,4 +19,8 @@ bot: boolean,
  * modulo that part's choices, so any string draws). Empty = drawn from the name. The server
  * only cleans it, and rolls one for each bot.
  */
-avatar: string, };
+avatar: string, 
+/**
+ * In the lobby: the player said they are ready. Bots are always ready.
+ */
+ready: boolean, };
