@@ -14,7 +14,7 @@ function roomFromAddress(): string | null {
 export function App() {
   const [code, setCode] = useState(roomFromAddress);
   const net = useRoom(code);
-  const { error, clearError } = net;
+  const { error, clearError, notice, clearNotice } = net;
 
   useEffect(() => {
     const onHash = () => {
@@ -30,6 +30,12 @@ export function App() {
     const timer = setTimeout(clearError, 4000);
     return () => clearTimeout(timer);
   }, [error]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(clearNotice, 7000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const theme = getTheme(net.state?.room.theme ?? DEFAULT_THEME, net.state?.room.cast);
 
@@ -68,10 +74,16 @@ export function App() {
     <>
       {body}
       {!net.online && <div className="banner offline">Connection lost. Reconnecting…</div>}
-      {error && error.code !== "no-room" && (
+      {error && error.code !== "no-room" ? (
         <div className="banner toast" role="alert" onClick={clearError}>
           {error.message}
         </div>
+      ) : (
+        notice && (
+          <div className="banner toast notice" role="status" onClick={clearNotice}>
+            {notice.message}
+          </div>
+        )
       )}
     </>
   );

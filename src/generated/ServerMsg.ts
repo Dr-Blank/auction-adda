@@ -4,4 +4,4 @@ import type { MyRoom } from "./MyRoom.ts";
 import type { RoomInfo } from "./RoomInfo.ts";
 import type { View } from "./View.ts";
 
-export type ServerMsg = { "type": "joined", room: string, seat: number | null, token: string | null, } | { "type": "state", room: RoomInfo, you: number | null, game: View | null, } | { "type": "rooms", rooms: Array<MyRoom>, gone: Array<string>, } | { "type": "error", message: string, code?: ErrorCode, };
+export type ServerMsg = { "type": "joined", room: string, seat: number | null, token: string | null, } | { "type": "state", room: RoomInfo, you: number | null, game: View | null, } | { "type": "rooms", rooms: Array<MyRoom>, gone: Array<string>, } | { "type": "closed", room: string, by: string, } | { "type": "notice", message: string, } | { "type": "error", message: string, code?: ErrorCode, };

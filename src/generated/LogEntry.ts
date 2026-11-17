@@ -2,4 +2,9 @@
 import type { Card } from "./Card.ts";
 import type { SellType } from "./SellType.ts";
 
-export type LogEntry = { "t": "round", round: number, first: number, } | { "t": "play", p: number, cards: Array<Card>, kind: SellType, } | { "t": "offer", p: number, cards: Array<Card>, } | { "t": "bid", p: number, amount: number, } | { "t": "pass", p: number, } | { "t": "decline", p: number, } | { "t": "price", p: number, amount: number, } | { "t": "sealed", bids: Array<number>, } | { "t": "sold", to: number, from: number, price: number, cards: Array<Card>, by?: number, } | { "t": "free", p: number, cards: Array<Card>, by?: number, } | { "t": "shelved", p: number, cards: Array<Card>, suit: number, } | { "t": "undo", by: number, cards: Array<Card>, } | { "t": "skip", p: number, } | { "t": "score", round: number, } | { "t": "end", winners: Array<number>, };
+export type LogEntry = { "t": "round", round: number, first: number, } | { "t": "play", p: number, cards: Array<Card>, kind: SellType, } | { "t": "offer", p: number, cards: Array<Card>, } | { "t": "bid", p: number, amount: number, } | { "t": "pass", p: number, } | { "t": "decline", p: number, } | { "t": "price", p: number, amount: number, } | { "t": "sealed", bids: Array<number>, } | { "t": "sold", to: number, from: number, price: number, cards: Array<Card>, by?: number, } | { "t": "free", p: number, cards: Array<Card>, by?: number, } | { "t": "shelved", p: number, cards: Array<Card>, suit: number, } | { "t": "undo", by: number, cards: Array<Card>, } | { "t": "skip", p: number, } | { "t": "score", round: number, } | { "t": "end", winners: Array<number>, 
+/**
+ * Set when the room admin ended the game before its last round: the money as it stood,
+ * with the running round unscored.
+ */
+by?: number, };

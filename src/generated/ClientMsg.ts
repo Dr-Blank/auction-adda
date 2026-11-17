@@ -2,6 +2,7 @@
 import type { Action } from "./Action.ts";
 import type { Prefs } from "./Prefs.ts";
 import type { SeatKey } from "./SeatKey.ts";
+import type { ThemeId } from "./ThemeId.ts";
 
 export type ClientMsg = { "type": "create", theme: string, name: string, prefs?: Prefs | null, 
 /**
@@ -11,4 +12,4 @@ avatar?: string | null, } | { "type": "join", room: string, token?: string | nul
 /**
  * Used when the join takes a new seat.
  */
-avatar?: string | null, } | { "type": "claim", seat: number, name: string, avatar?: string | null, } | { "type": "avatar", avatar: string, } | { "type": "start" } | { "type": "bot", seat?: number | null, } | { "type": "kick", seat: number, } | { "type": "action", action: Action, } | { "type": "skip", seat: number, } | { "type": "release", seat: number, } | { "type": "leave" } | { "type": "part" } | { "type": "rooms", seats: Array<SeatKey>, } | { "type": "rematch" } | { "type": "rule", winner: number | null, price: number, } | { "type": "undo" } | { "type": "admin", seat: number, } | { "type": "timer", seconds: number, extend: number, } | { "type": "cast", genres: Array<number>, reroll: boolean, };
+avatar?: string | null, } | { "type": "claim", seat: number, name: string, avatar?: string | null, } | { "type": "avatar", avatar: string, } | { "type": "start" } | { "type": "bot", seat?: number | null, } | { "type": "kick", seat: number, } | { "type": "action", action: Action, } | { "type": "skip", seat: number, } | { "type": "release", seat: number, } | { "type": "leave" } | { "type": "part" } | { "type": "rooms", seats: Array<SeatKey>, } | { "type": "rematch" } | { "type": "lobby" } | { "type": "end" } | { "type": "theme", theme: ThemeId, } | { "type": "close" } | { "type": "rule", winner: number | null, price: number, } | { "type": "undo" } | { "type": "admin", seat: number, } | { "type": "timer", seconds: number, extend: number, } | { "type": "cast", genres: Array<number>, reroll: boolean, };

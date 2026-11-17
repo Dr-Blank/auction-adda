@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ROUNDS } from "../config.ts";
 import type { ClientMsg, MyRoom, ThemeId } from "../generated/index.ts";
-import { getDef, getTheme, THEME_IDS, THEMES } from "../themes/index.ts";
+import { getDef, getTheme, THEME_IDS } from "../themes/index.ts";
 import { LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { RoomCode } from "./Lobby.tsx";
+import { RoomCode, ThemePicker } from "./Lobby.tsx";
 import { savedName, savedPrefs, savedTheme, saveName, saveTheme, useSavedLook } from "./net.ts";
 
 /** "3 days", "5 h", "12 min", "now": the largest whole unit. */
@@ -119,18 +119,7 @@ export function Home({
             />
           </label>
         </div>
-        <fieldset>
-          <legend>Theme</legend>
-          {THEME_IDS.map((id) => (
-            <label key={id} className={`theme-pick ${theme === id ? "on" : ""}`}>
-              <input type="radio" name="theme" checked={theme === id} onChange={() => setTheme(id)} />
-              <span>
-                <b>{THEMES[id].title}</b>
-                <small>{THEMES[id].tagline}</small>
-              </span>
-            </label>
-          ))}
-        </fieldset>
+        <ThemePicker value={theme} onChange={setTheme} />
         <button className="btn primary big" disabled={!name.trim() || !online}>
           Create a room
         </button>

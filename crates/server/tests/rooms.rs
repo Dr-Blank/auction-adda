@@ -869,6 +869,100 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
 }
 
 #[test]
+fn the_admin_ends_early_shows_the_score_then_goes_back_to_the_lobby_with_the_same_seats() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 5);
+    let (a, b) = (&clients[0], &clients[1]);
+    send(&mut rooms, a, json!({ "type": "lobby" }));
+    assert_error(a, "End the game first");
+    send(&mut rooms, a, json!({ "type": "start" }));
+    send(&mut rooms, a, json!({ "type": "lobby" }));
+    assert_error(a, "End the game first");
+    send(&mut rooms, b, json!({ "type": "end" }));
+    assert_error(b, "Only the room admin can end the game");
+
+    // Seat 2 kicked (a bot plays on), seat 3 away with a stand-in bot, seat 4 away and freed.
+    send(&mut rooms, a, json!({ "type": "kick", "seat": 2 }));
+    rooms.disconnect(clients[3].id);
+    send(&mut rooms, a, json!({ "type": "bot", "seat": 3 }));
+    rooms.disconnect(clients[4].id);
+    advance(&now, 31_000);
+    send(&mut rooms, a, json!({ "type": "release", "seat": 4 }));
+
+    send(&mut rooms, a, json!({ "type": "end" }));
+    let g = game(b);
+    assert!(g.over);
+    assert!(g.players.iter().all(|p| p.money.is_some()), "everyone sees the score");
+    assert!(matches!(g.log.last(), Some(LogEntry::End { by: Some(0), .. })));
+    send(&mut rooms, b, json!({ "type": "lobby" }));
+    assert_error(b, "Only the room admin can change the setup");
+
+    send(&mut rooms, a, json!({ "type": "lobby" }));
+    let s = state(b);
+    assert!(s.game.is_none() && !s.room.started);
+    let seats: Vec<_> = s
+        .room
+        .seats
+        .iter()
+        .map(|x| (x.name.as_str(), x.bot, x.connected))
+        .collect();
+    assert_eq!(
+        seats,
+        [
+            ("P0", false, true),
+            ("P1", false, true),
+            ("P2", true, true),
+            ("P3", false, false)
+        ],
+        "the kicked seat stays a bot, the stand-in hands back, the freed seat goes"
+    );
+    assert_eq!(s.you, Some(1));
+
+    send(&mut rooms, b, json!({ "type": "theme", "theme": "leather-willow" }));
+    assert_error(b, "Only the room admin can change the theme");
+    send(&mut rooms, a, json!({ "type": "cast", "genres": [0, 1, 2, 3, 4] }));
+    send(&mut rooms, a, json!({ "type": "theme", "theme": "leather-willow" }));
+    let room = state(b).room;
+    assert_eq!(room.theme, "leather-willow");
+    assert!(
+        room.cast.genres.is_empty(),
+        "genre numbers mean other genres in another theme"
+    );
+    send(&mut rooms, a, json!({ "type": "theme", "theme": "nope" }));
+    assert_error(a, "Bad message");
+
+    send(&mut rooms, a, json!({ "type": "start" }));
+    assert_eq!(game(b).players.len(), 4);
+    send(&mut rooms, a, json!({ "type": "theme", "theme": "box-office" }));
+    assert_error(a, "Change the theme in the lobby");
+}
+
+#[test]
+fn the_admin_closes_the_room_and_everyone_in_it_is_told() {
+    let dir = TmpDir::new("close");
+    let (_, opts) = clock(1_000_000);
+    let mut rooms = rooms_in(&dir.0, opts);
+    let (clients, code) = seated(&mut rooms, 3);
+    let watcher = fake(&mut rooms, "10.0.0.8");
+    send(&mut rooms, &watcher, json!({ "type": "join", "room": code }));
+    send(&mut rooms, &clients[1], json!({ "type": "close" }));
+    assert_error(&clients[1], "Only the room admin can close the room");
+    send(&mut rooms, &clients[0], json!({ "type": "close" }));
+    for c in clients.iter().chain([&watcher]) {
+        let msg = serde_json::to_value(last(c)).unwrap();
+        assert_eq!(msg, json!({ "type": "closed", "room": code, "by": "P0" }));
+    }
+    assert_eq!(rooms.len(), 0);
+    rooms.flush();
+    assert!(dir.files().is_empty());
+    send(&mut rooms, &clients[1], json!({ "type": "start" }));
+    assert_error(&clients[1], "Join a room first");
+    send(&mut rooms, &watcher, json!({ "type": "join", "room": code }));
+    assert_error(&watcher, "does not exist");
+}
+
+#[test]
 fn the_admin_kicks_from_the_lobby() {
     let mut rooms = Rooms::new(Options::default()).unwrap();
     let (clients, _) = seated(&mut rooms, 3);

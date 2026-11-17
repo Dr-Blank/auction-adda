@@ -31,6 +31,15 @@ impl ThemeId {
     pub fn parse(id: &str) -> Option<Self> {
         serde_json::from_value(serde_json::Value::String(id.into())).ok()
     }
+
+    /// The id as the client and the save file spell it (`box-office`).
+    #[must_use]
+    pub fn id(self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default()
+    }
 }
 
 /// Room settings a creator brings from their last game (their browser keeps them). A setting the
@@ -112,8 +121,19 @@ pub enum ClientMsg {
     Rooms {
         seats: Vec<SeatKey>,
     },
-    /// Admin only.
+    /// Admin only: a new game at once, same players and setup.
     Rematch,
+    /// Admin only, once the game is over: back to the lobby with the same seats, to change the
+    /// setup (theme, cast, clock, players) before the next game.
+    Lobby,
+    /// Admin only: end the running game now; the money as it stands decides.
+    End,
+    /// Admin only, in the lobby: play another theme. The genre pick goes back to random.
+    Theme {
+        theme: ThemeId,
+    },
+    /// Admin only: delete the room. Everyone in it gets `closed`.
+    Close,
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
     Rule {
         winner: Option<Seat>,
@@ -164,6 +184,10 @@ impl ClientMsg {
             Self::Part => "part",
             Self::Rooms { .. } => "rooms",
             Self::Rematch => "rematch",
+            Self::Lobby => "lobby",
+            Self::End => "end",
+            Self::Theme { .. } => "theme",
+            Self::Close => "close",
             Self::Rule { .. } => "rule",
             Self::Undo => "undo",
             Self::Admin { .. } => "admin",
@@ -279,6 +303,10 @@ pub enum ServerMsg {
     /// most recently active. `gone`: codes where it does not (expired, left, or a new room that
     /// reused the code); the browser forgets those tokens.
     Rooms { rooms: Vec<MyRoom>, gone: Vec<String> },
+    /// The admin (`by`, their name) deleted the room; the browser forgets it and goes Home.
+    Closed { room: String, by: String },
+    /// Something happened to this tab that it did not ask for (removed from a seat, say).
+    Notice { message: String },
     Error {
         message: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]

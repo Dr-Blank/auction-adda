@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMsg, MyRoom, Prefs, SeatKey, ServerMsg } from "../generated/index.ts";
+import { goHome } from "./Brand.tsx";
 
 export type RoomState = Extract<ServerMsg, { type: "state" }> & { receivedAt: number };
 export interface NetError {
@@ -92,6 +93,8 @@ export function useRoom(code: string | null) {
   const [error, setError] = useState<NetError | null>(null);
   /** Rooms this browser has a seat in; null until the server has answered. */
   const [myRooms, setMyRooms] = useState<MyRoom[] | null>(null);
+  /** Something the server did to this tab unasked (room closed, removed from a seat). */
+  const [notice, setNotice] = useState<NetError | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const codeRef = useRef(code);
   codeRef.current = code;
@@ -140,6 +143,13 @@ export function useRoom(code: string | null) {
         } else if (msg.type === "rooms") {
           msg.gone.forEach(forgetRoom);
           setMyRooms(msg.rooms);
+        } else if (msg.type === "closed") {
+          forgetRoom(msg.room);
+          attached.current = null;
+          setNotice({ message: `${msg.by} closed room ${msg.room}.`, at: Date.now() });
+          if (codeRef.current === msg.room) goHome();
+        } else if (msg.type === "notice") {
+          setNotice({ message: msg.message, at: Date.now() });
         } else {
           setError({ message: msg.message, code: msg.code, at: Date.now() });
         }
@@ -169,5 +179,16 @@ export function useRoom(code: string | null) {
   }, [code, join, send]);
 
   const current = state && code && state.room.code === code ? state : null;
-  return { online, state: current, error, send, join, myRooms, listRooms, clearError: () => setError(null) };
+  return {
+    online,
+    state: current,
+    error,
+    notice,
+    send,
+    join,
+    myRooms,
+    listRooms,
+    clearError: () => setError(null),
+    clearNotice: () => setNotice(null),
+  };
 }

@@ -17,7 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { BidTimer, RoomCode, ShareLink } from "./Lobby.tsx";
+import { BidTimer, ConfirmButton, RoomCode, ShareLink } from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
@@ -297,9 +297,10 @@ export function Table({ state, send, theme }: Props) {
             g={g}
             names={names}
             theme={theme}
-            canRematch={me !== null && room.admin === me}
+            isAdmin={me !== null && room.admin === me}
             admin={me !== null ? names[room.admin] : undefined}
             onRematch={() => send({ type: "rematch" })}
+            onSetup={() => send({ type: "lobby" })}
           />
         ),
         bar: null,
@@ -693,7 +694,15 @@ export function Table({ state, send, theme }: Props) {
           ? <span className="lbl">Room</span>
         </button>
         {menu && (
-          <RoomMenu room={room} me={me} names={names} theme={theme} send={send} onClose={() => setMenu(false)} />
+          <RoomMenu
+            room={room}
+            me={me}
+            names={names}
+            theme={theme}
+            send={send}
+            over={g.over}
+            onClose={() => setMenu(false)}
+          />
         )}
       </header>
 
@@ -933,6 +942,7 @@ function RoomMenu(props: {
   theme: Theme;
   send: (m: ClientMsg) => void;
   onClose: () => void;
+  over: boolean;
 }) {
   const { room, me, names, theme, send, onClose } = props;
   // Only a connected player can take the role.
@@ -974,6 +984,27 @@ function RoomMenu(props: {
         )}
       </div>
       <BidTimer room={room} me={me} send={send} />
+      {room.admin === me && (
+        <div className="menu-danger">
+          {!props.over && (
+            <ConfirmButton
+              label="End game now"
+              ask="End the game for everyone? The money as it stands decides."
+              yes="End game"
+              onConfirm={() => {
+                send({ type: "end" });
+                onClose();
+              }}
+            />
+          )}
+          <ConfirmButton
+            label="Close room"
+            ask="Delete this room for everyone?"
+            yes="Close room"
+            onConfirm={() => send({ type: "close" })}
+          />
+        </div>
+      )}
       <Rules theme={theme} n={names.length} />
     </div>
   );
@@ -1190,15 +1221,24 @@ function GameOver(props: {
   g: View;
   names: string[];
   theme: Theme;
-  canRematch: boolean;
+  isAdmin: boolean;
   /** Name of the admin, shown to the other players while they wait for a rematch. */
   admin?: string;
   onRematch: () => void;
+  onSetup: () => void;
 }) {
   const { g, names, theme } = props;
   const order = g.players.map((p, i) => ({ i, money: p.money ?? 0 })).sort((x, y) => y.money - x.money);
+  const end = g.log.findLast((e) => e.t === "end");
+  const endedBy = end?.t === "end" ? end.by : undefined;
   return (
     <div className="gameover">
+      {endedBy != null && (
+        <p className="ended-early">
+          {names[endedBy]} ended the game during {theme.roundNames[g.round] ?? `${theme.nouns.round} ${g.round + 1}`}.
+          The money as it stood decides; that {theme.nouns.round} was not scored.
+        </p>
+      )}
       <h2>
         {g.winners.map((i) => names[i]).join(" & ")} {g.winners.length > 1 ? "share the win" : "wins"}!
       </h2>
@@ -1213,10 +1253,20 @@ function GameOver(props: {
           </li>
         ))}
       </ol>
-      {props.canRematch ? (
-        <button className="btn primary big" onClick={props.onRematch}>
-          New game, same players
-        </button>
+      {props.isAdmin ? (
+        <div className="row gameover-next">
+          <button type="button" className="btn primary big" onClick={props.onRematch}>
+            Play again
+          </button>
+          <button
+            type="button"
+            className="btn big"
+            onClick={props.onSetup}
+            title="Back to the lobby with the same players: change the theme, cast, clock or players"
+          >
+            Change setup
+          </button>
+        </div>
       ) : (
         props.admin && <p className="muted">Waiting for {props.admin} (admin) to start a new game.</p>
       )}

@@ -176,6 +176,11 @@ pub enum LogEntry {
     },
     End {
         winners: Vec<Seat>,
+        /// Set when the room admin ended the game before its last round: the money as it stood,
+        /// with the running round unscored.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        by: Option<Seat>,
     },
 }
 

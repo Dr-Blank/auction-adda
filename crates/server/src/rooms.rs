@@ -13,7 +13,7 @@ use std::{fs, io};
 
 use engine::{
     Action, AuctionKind, GameState, LogEntry, RuleError, Seat, apply_action, apply_ruling, apply_skip, config,
-    new_game, pending, undo_ruling, view_for,
+    end_early, new_game, pending, undo_ruling, view_for,
 };
 use rand::RngExt;
 use rand::seq::IndexedRandom;
@@ -805,6 +805,49 @@ impl Rooms {
                 room.cast.seed = new_seed();
                 info!(room = %code, seat = me, "Rematch with {n} players (seed {seed})");
             }
+            ClientMsg::End => {
+                let before = room.game()?;
+                room.require_admin(me, "end the game")?;
+                let game = end_early(before, me)?;
+                room.set_game(game);
+                room.last_call = None;
+                info!(room = %code, seat = me, "Admin ended the game early");
+            }
+            ClientMsg::Lobby => {
+                if !room.game.as_ref().is_some_and(|g| g.over) {
+                    return fail("End the game first");
+                }
+                room.require_admin(me, "change the setup")?;
+                self.back_to_lobby(&code);
+                info!(room = %code, seat = me, "Back to the lobby");
+            }
+            ClientMsg::Theme { theme } => {
+                room.require_admin(me, "change the theme")?;
+                if room.game.is_some() {
+                    return fail("Change the theme in the lobby");
+                }
+                let id = theme.id();
+                if room.theme != id {
+                    room.theme = id;
+                    // A genre's number means another genre in another theme.
+                    room.cast = Cast {
+                        seed: new_seed(),
+                        genres: Vec::new(),
+                    };
+                    info!(room = %code, seat = me, "Theme set to {}", room.theme);
+                }
+            }
+            ClientMsg::Close => {
+                room.require_admin(me, "close the room")?;
+                let by = room
+                    .seats
+                    .get(usize::from(me))
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
+                info!(room = %code, seat = me, "Admin closed the room");
+                self.close(&code, &by);
+                return Ok(());
+            }
             ClientMsg::Bot { seat } => {
                 room.require_admin(me, "add a bot")?;
                 if room.game.is_some() {
@@ -1222,6 +1265,55 @@ impl Rooms {
                     seat: None,
                     token: None,
                 };
+                if !(c.sink)(&msg) {
+                    self.dropped.push(cid);
+                }
+            }
+        }
+    }
+
+    /// After a game: the same seats in the lobby. Stand-in bots hand their seats back (the player
+    /// shows as away until they return); seats freed mid-game and never claimed go.
+    fn back_to_lobby(&mut self, code: &str) {
+        let Some(room) = self.rooms.get_mut(code) else {
+            return;
+        };
+        room.game = None;
+        room.version += 1;
+        room.last_call = None;
+        room.bid_clock = None;
+        room.bot_due = None;
+        for s in &mut room.seats {
+            if s.token.is_some() {
+                s.bot = false;
+            }
+        }
+        let open: Vec<Seat> = (0..room.seats.len())
+            .rev()
+            .filter(|&i| room.seats.get(i).is_some_and(SeatData::open))
+            .filter_map(|i| u8::try_from(i).ok())
+            .collect();
+        for seat in open {
+            self.remove_lobby_seat(code, seat);
+        }
+    }
+
+    /// Deletes the room; everyone in it is told and goes Home.
+    fn close(&mut self, code: &str, by: &str) {
+        let Some(room) = self.rooms.remove(code) else {
+            return;
+        };
+        if let Some(store) = &self.store {
+            store.remove(code);
+        }
+        let msg = ServerMsg::Closed {
+            room: code.to_owned(),
+            by: by.to_owned(),
+        };
+        for cid in room.clients {
+            if let Some(c) = self.clients.get_mut(&cid) {
+                c.room = None;
+                c.seat = None;
                 if !(c.sink)(&msg) {
                     self.dropped.push(cid);
                 }

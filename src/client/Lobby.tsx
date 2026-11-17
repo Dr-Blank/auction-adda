@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { SUITS } from "../config.ts";
-import type { ClientMsg, RoomInfo } from "../generated/index.ts";
+import type { ClientMsg, RoomInfo, ThemeId } from "../generated/index.ts";
 import { castGenres } from "../themes/cast.ts";
-import { getDef } from "../themes/index.ts";
+import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
 import { CheckIcon, CopyIcon } from "./Icons.tsx";
 import type { RoomState } from "./net.ts";
-import { savedName, saveGenres, saveName, saveTimer, useSavedLook } from "./net.ts";
+import { savedName, saveGenres, saveName, saveTheme, saveTimer, useSavedLook } from "./net.ts";
 import { Rules } from "./Rules.tsx";
 
 interface Props {
@@ -16,6 +16,60 @@ interface Props {
   send: (m: ClientMsg) => void;
   join: (room: string, name?: string) => void;
   theme: Theme;
+}
+
+/** The themes as radio cards. */
+export function ThemePicker({ value, onChange }: { value: string; onChange: (id: ThemeId) => void }) {
+  return (
+    <fieldset>
+      <legend>Theme</legend>
+      {THEME_IDS.map((id) => (
+        <label key={id} className={`theme-pick ${value === id ? "on" : ""}`}>
+          <input type="radio" name="theme" checked={value === id} onChange={() => onChange(id)} />
+          <span>
+            <b>{THEMES[id].title}</b>
+            <small>{THEMES[id].tagline}</small>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** A button for something that cannot be taken back: the first press asks, the second does it. */
+export function ConfirmButton(props: {
+  label: string;
+  /** What happens, as a question ("End the game for everyone?"). */
+  ask: string;
+  yes: string;
+  onConfirm: () => void;
+  className?: string;
+}) {
+  const [asking, setAsking] = useState(false);
+  if (!asking)
+    return (
+      <button type="button" className={`btn small ${props.className ?? ""}`} onClick={() => setAsking(true)}>
+        {props.label}
+      </button>
+    );
+  return (
+    <span className="confirm" role="group" aria-label={props.ask}>
+      <span>{props.ask}</span>
+      <button
+        type="button"
+        className="btn small danger"
+        onClick={() => {
+          setAsking(false);
+          props.onConfirm();
+        }}
+      >
+        {props.yes}
+      </button>
+      <button type="button" className="btn small" onClick={() => setAsking(false)}>
+        Cancel
+      </button>
+    </span>
+  );
 }
 
 /** Copies `text`; `copied` is true for a moment afterwards. */
@@ -240,6 +294,16 @@ export function Lobby({ state, send, join, theme }: Props) {
       <p>Paste this link in Discord. Everyone who opens it lands in this room.</p>
       <ShareLink code={room.code} />
 
+      {isAdmin && (
+        <ThemePicker
+          value={room.theme}
+          onChange={(id) => {
+            saveTheme(id);
+            send({ type: "theme", theme: id });
+          }}
+        />
+      )}
+
       <h2>
         Players{" "}
         <small>
@@ -360,6 +424,16 @@ export function Lobby({ state, send, join, theme }: Props) {
         </div>
       )}
       {you !== null && <p className="muted small">Only the admin can start. Seats are locked once the game begins.</p>}
+      {isAdmin && (
+        <div className="row room-danger">
+          <ConfirmButton
+            label="Close room"
+            ask="Delete this room for everyone?"
+            yes="Close room"
+            onConfirm={() => send({ type: "close" })}
+          />
+        </div>
+      )}
 
       <Rules theme={theme} />
     </main>

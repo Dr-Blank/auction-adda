@@ -802,3 +802,23 @@ fn the_config_parses() {
     assert_eq!((cfg.min_players(), cfg.max_players()), (3, 5));
     assert_eq!(cfg.card_table.len(), usize::from(cfg.suits));
 }
+
+#[test]
+fn the_admin_can_end_a_game_early_and_the_money_as_it_stands_decides() {
+    let s = table(&[&[c(0, Open, 0), f(0)], &[f(1)], &[f(2)]], Some(&[50, 70, 70]));
+    let s = run(s, &[(0, play(c(0, Open, 0)))]);
+    assert!(s.auction.is_some());
+    let end = engine::end_early(&s, 0).unwrap();
+    assert!(end.over && end.auction.is_none());
+    assert_eq!(end.winners, [1, 2]);
+    assert_eq!(money(&end), [50, 70, 70], "the running round is not scored");
+    assert_eq!(
+        end.log.last(),
+        Some(&LogEntry::End {
+            winners: vec![1, 2],
+            by: Some(0)
+        })
+    );
+    assert!(view_for(&end, Some(2)).players.iter().all(|p| p.money.is_some()));
+    assert!(engine::end_early(&end, 0).is_err());
+}

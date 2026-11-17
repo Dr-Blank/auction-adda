@@ -221,6 +221,43 @@ kbd {
 .btn.ghost {
   background: transparent;
 }
+.btn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #2a0503;
+}
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.confirm > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.menu-danger {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.gameover-next {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.ended-early {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 6px;
+}
+.room-danger {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
 .icon-btn {
   appearance: none;
   background: transparent;
@@ -466,6 +503,10 @@ legend {
   background: var(--danger);
   color: #2a0503;
   cursor: pointer;
+}
+.banner.toast.notice {
+  background: var(--gold);
+  color: var(--gold-ink);
 }
 
 /* ---- table layout: seats, stage and hand on the felt; the chart beside them ---- */

@@ -172,6 +172,36 @@ pub fn apply_ruling(prev: &GameState, by: Seat, winner: Option<Seat>, price: Mon
     Ok(s)
 }
 
+/// The game is over: the richest win (ties share), and every player's money shows.
+fn finish(s: &mut GameState, by: Option<Seat>) {
+    let best = s.players.iter().map(|p| p.money).max().unwrap_or(0);
+    s.winners = (0..s.n)
+        .zip(&s.players)
+        .filter(|(_, p)| p.money == best)
+        .map(|(i, _)| i)
+        .collect();
+    s.over = true;
+    s.log.push(LogEntry::End {
+        winners: s.winners.clone(),
+        by,
+    });
+}
+
+/// The room admin ends the game before its last round: the running lot is called off and the
+/// round is not scored, so the money as it stands decides.
+///
+/// # Errors
+/// When the game is already over.
+pub fn end_early(prev: &GameState, by: Seat) -> Result<GameState, RuleError> {
+    if prev.over {
+        return fail("The game is over");
+    }
+    let mut s = prev.clone();
+    s.auction = None;
+    finish(&mut s, Some(by));
+    Ok(s)
+}
+
 /// Takes back a result the admin called: returns `before` (the state the ruling was applied to)
 /// with an `undo` line added to the log. The caller checks that nothing else happened since.
 ///
@@ -674,16 +704,7 @@ fn end_round(s: &mut GameState, ender: Seat) -> Step {
     s.round += 1;
 
     if s.round >= cfg.rounds {
-        let best = s.players.iter().map(|p| p.money).max().unwrap_or(0);
-        s.winners = (0..s.n)
-            .zip(&s.players)
-            .filter(|(_, p)| p.money == best)
-            .map(|(i, _)| i)
-            .collect();
-        s.over = true;
-        s.log.push(LogEntry::End {
-            winners: s.winners.clone(),
-        });
+        finish(s, None);
         return Ok(());
     }
     deal(s)?;
