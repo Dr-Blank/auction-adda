@@ -124,11 +124,22 @@ export function ShareLink({ code }: { code: string }) {
         <QrIcon />
       </button>
       {qr && (
-        <Sheet title={`Room ${code}`} onClose={() => setQr(false)}>
+        <Sheet
+          title={
+            <>
+              Room <RoomCode code={code} />
+            </>
+          }
+          label={`Room ${code}`}
+          onClose={() => setQr(false)}
+        >
           <div className="qr-box">
             <Qr text={link} label={`QR code for ${link}`} />
             <p className="muted">Point a phone camera here to open the room.</p>
-            <code>{link}</code>
+            <p className="qr-link">
+              <code>{link}</code>
+              <CopyButton text={link} what="room link" />
+            </p>
           </div>
         </Sheet>
       )}
@@ -136,24 +147,31 @@ export function ShareLink({ code }: { code: string }) {
   );
 }
 
+/** A small button that copies `text` (`what` names it: "room code"). */
+function CopyButton({ text, what }: { text: string; what: string }) {
+  const [copied, copy] = useCopy(text);
+  return (
+    <button
+      type="button"
+      className={`copy-code ${copied ? "done" : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        copy();
+      }}
+      title={copied ? "Copied" : `Copy ${what}`}
+      aria-label={copied ? `${what} copied` : `Copy ${what}`}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
 /** A room code with a small button that copies just the code. */
 export function RoomCode({ code }: { code: string }) {
-  const [copied, copy] = useCopy(code);
   return (
     <span className="room-code">
       <b className="code">{code}</b>
-      <button
-        type="button"
-        className={`copy-code ${copied ? "done" : ""}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          copy();
-        }}
-        title={copied ? "Copied" : "Copy room code"}
-        aria-label={copied ? "Room code copied" : "Copy room code"}
-      >
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </button>
+      <CopyButton text={code} what="room code" />
     </span>
   );
 }
