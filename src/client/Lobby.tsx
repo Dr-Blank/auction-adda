@@ -218,6 +218,48 @@ export function RoomSettingsPanel({
   );
 }
 
+/**
+ * People watching, and people the admin kicked or removed (greyed when they are not here). The
+ * admin can send a watcher out or let a kicked or removed person back in.
+ */
+export function WatcherList({ room, me, send }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void }) {
+  if (room.watchers.length === 0) return null;
+  const admin = room.admin === me;
+  const here = room.watchers.filter((w) => w.id !== null).length;
+  return (
+    <section className="watchers">
+      <h3>
+        Watching <small className="muted">({here})</small>
+      </h3>
+      <ul>
+        {room.watchers.map((w, i) => (
+          <li key={w.id ?? `ban${w.ban}`} className={w.id === null ? "offline" : ""}>
+            <span className="grow">
+              {w.name || "Guest"}
+              {w.ban !== null && <em> · kicked, no seat</em>}
+              {w.id === null && <em> · not here</em>}
+            </span>
+            {admin && w.ban !== null && (
+              <button type="button" className="btn small" onClick={() => send({ type: "unban", ban: w.ban! })}>
+                Let back in
+              </button>
+            )}
+            {admin && w.ban === null && w.id !== null && (
+              <ConfirmButton
+                key={i}
+                label="Remove"
+                ask={`Send ${w.name || "this guest"} out of the room?`}
+                yes="Remove"
+                onConfirm={() => send({ type: "remove", watcher: w.id! })}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** This game's suits; the admin picks which genres play and can draw new names. */
 export function CastPicker({
   room,
@@ -426,6 +468,7 @@ export function Lobby({ state, send, join, theme }: Props) {
           </li>
         ))}
       </ol>
+      <WatcherList room={room} me={you} send={send} />
       <p className="admin-note">
         <span className="admin-mark">★</span> <b>{isAdmin ? "You are" : `${adminName} is`} the room admin.</b> The admin
         starts the game and can fill empty seats with bots. Playing on voice? The admin can end an auction with the

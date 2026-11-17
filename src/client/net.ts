@@ -115,7 +115,14 @@ export function useRoom(code: string | null) {
 
   const join = useCallback(
     (room: string, name?: string) =>
-      send({ type: "join", room, token: store.get(tokenKey(room)), name, avatar: savedAvatar() }),
+      send({
+        type: "join",
+        room,
+        token: store.get(tokenKey(room)),
+        name,
+        avatar: savedAvatar(),
+        viewer: savedName() || null,
+      }),
     [send],
   );
 
@@ -154,6 +161,12 @@ export function useRoom(code: string | null) {
           forgetRoom(msg.room);
           attached.current = null;
           setNotice({ message: `${msg.by} closed room ${msg.room}.`, at: Date.now() });
+          if (codeRef.current === msg.room) goHome();
+        } else if (msg.type === "removed") {
+          // The token is the ban: keep it, so coming back is refused until the admin lifts it.
+          store.set(tokenKey(msg.room), msg.token);
+          attached.current = null;
+          setNotice({ message: msg.message, at: Date.now() });
           if (codeRef.current === msg.room) goHome();
         } else if (msg.type === "notice") {
           setNotice({ message: msg.message, at: Date.now() });

@@ -2,6 +2,7 @@
 import type { Cast } from "./Cast.ts";
 import type { RoomSettings } from "./RoomSettings.ts";
 import type { SeatInfo } from "./SeatInfo.ts";
+import type { Watcher } from "./Watcher.ts";
 
 export type RoomInfo = { code: string, theme: string, cast: Cast, started: boolean, seats: Array<SeatInfo>, 
 /**
@@ -32,4 +33,8 @@ bidMsLeft: number | null,
  * Length of the clock's current stretch (since the lot went up or a bid added time); null
  * when none runs.
  */
-bidMsWindow: number | null, settings: RoomSettings, };
+bidMsWindow: number | null, settings: RoomSettings, 
+/**
+ * People here without a seat, then kicked or removed people who are not here.
+ */
+watchers: Array<Watcher>, };

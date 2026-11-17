@@ -63,6 +63,11 @@ const shot = (name, then, viewer = false) => {
 const click = (text) =>
   `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(text)})?.click()`;
 
+// Someone watching, for the watcher list.
+const watcher = new WebSocket(`ws://localhost:${port}/ws`);
+watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", room: code, viewer: "Wanda" }));
+await until((s) => s.room.watchers.length > 0);
+
 shot("lobby");
 send({ type: "settings", settings: { locked: true } });
 await until((s) => s.room.settings.locked);
@@ -80,4 +85,5 @@ shot("over");
 send({ type: "lobby" });
 await until((s) => !s.game);
 shot("lobby-after", click("Close room"));
+watcher.close();
 sock.close();

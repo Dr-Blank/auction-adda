@@ -1059,6 +1059,76 @@ fn the_admin_kicks_from_the_lobby() {
 }
 
 #[test]
+fn a_kick_sticks_until_the_admin_lets_them_back_in_watchers_are_listed_and_can_be_removed() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let (admin, kicked) = (&clients[0], &clients[1]);
+    let token = joined(kicked).2.unwrap();
+    send(&mut rooms, admin, json!({ "type": "kick", "seat": 1 }));
+    let watchers = state(admin).room.watchers;
+    assert_eq!(watchers.len(), 1);
+    assert_eq!(
+        (watchers[0].id, watchers[0].name.as_str(), watchers[0].ban),
+        (Some(kicked.id), "P1", Some(0))
+    );
+
+    // Still watching, but no seat; the browser keeps the token and Home does not call it gone.
+    let take_seat = json!({ "type": "join", "room": code, "token": token, "name": "P1" });
+    send(&mut rooms, kicked, take_seat.clone());
+    assert_error(kicked, "The admin took you off the seats here");
+    assert_eq!(state(kicked).you, None);
+    let home = fake(&mut rooms, "10.0.0.7");
+    let (list, gone) = my_rooms(&mut rooms, &home, json!([{ "room": code, "token": token }]));
+    assert_eq!((list.len(), gone.len()), (0, 0));
+
+    // Gone from the room, the ban is still listed (offline); only the admin lifts it.
+    rooms.disconnect(kicked.id);
+    let watchers = state(admin).room.watchers;
+    assert_eq!((watchers[0].id, watchers[0].ban), (None, Some(0)));
+    send(&mut rooms, &clients[2], json!({ "type": "unban", "ban": 0 }));
+    assert_error(&clients[2], "Only the room admin can let someone back in");
+    send(&mut rooms, admin, json!({ "type": "unban", "ban": 0 }));
+    assert_eq!(state(admin).room.watchers, []);
+    let back = fake(&mut rooms, "10.0.0.2");
+    send(&mut rooms, &back, take_seat);
+    assert_eq!(joined(&back).1, Some(2));
+
+    // A watcher shows by their saved name; removed, they are sent out and cannot come back.
+    let w = fake(&mut rooms, "10.0.0.9");
+    let watch = json!({ "type": "join", "room": code, "viewer": "Wanda" });
+    send(&mut rooms, &w, watch);
+    let watchers = state(admin).room.watchers;
+    assert_eq!(
+        (watchers[0].id, watchers[0].name.as_str(), watchers[0].ban),
+        (Some(w.id), "Wanda", None)
+    );
+    send(&mut rooms, &back, json!({ "type": "remove", "watcher": w.id }));
+    assert_error(&back, "Only the room admin can remove a watcher");
+    send(&mut rooms, admin, json!({ "type": "remove", "watcher": admin.id }));
+    assert_error(admin, "not watching");
+    send(&mut rooms, admin, json!({ "type": "remove", "watcher": w.id }));
+    let ServerMsg::Removed { room, token, message } = last(&w) else {
+        panic!("expected removed, got {:?}", last(&w));
+    };
+    assert_eq!(
+        (room.as_str(), message),
+        (code.as_str(), format!("P0 removed you from room {code}."))
+    );
+    let watchers = state(admin).room.watchers;
+    assert_eq!(
+        (watchers[0].id, watchers[0].name.as_str(), watchers[0].ban),
+        (None, "Wanda", Some(0))
+    );
+    let again = json!({ "type": "join", "room": code, "token": token, "viewer": "Wanda" });
+    send(&mut rooms, &w, again.clone());
+    assert!(matches!(last(&w), ServerMsg::Removed { .. }));
+    send(&mut rooms, admin, json!({ "type": "unban", "ban": 0 }));
+    send(&mut rooms, &w, again);
+    assert_eq!(joined(&w), (code.clone(), None, None));
+    assert_eq!(state(admin).room.watchers.len(), 1);
+}
+
+#[test]
 fn players_bring_and_change_their_look_bots_get_one() {
     let mut rooms = Rooms::new(Options::default()).unwrap();
     let a = fake(&mut rooms, "10.0.0.1");

@@ -17,7 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink } from "./Lobby.tsx";
+import { BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink, WatcherList } from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
@@ -983,6 +983,7 @@ function RoomMenu(props: {
           </div>
         )}
       </div>
+      <WatcherList room={room} me={me} send={send} />
       <RoomSettingsPanel room={room} me={me} send={send} />
       <BidTimer room={room} me={me} send={send} />
       {room.admin === me && (

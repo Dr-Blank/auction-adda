@@ -94,6 +94,10 @@ pub enum ClientMsg {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         avatar: Option<String>,
+        /// The name shown in the watcher list while this tab watches (the browser's saved name).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        viewer: Option<String>,
     },
     Claim {
         seat: Seat,
@@ -177,6 +181,15 @@ pub enum ClientMsg {
     Settings {
         settings: RoomSettings,
     },
+    /// Admin only: send a watcher (`Watcher::id`) out of the room; they cannot come back to watch
+    /// or take a seat until let back in.
+    Remove {
+        watcher: u64,
+    },
+    /// Admin only: let a removed or kicked person (`Watcher::ban`) back in.
+    Unban {
+        ban: u8,
+    },
     /// Any other `type`: answered with "Unknown message".
     #[serde(other)]
     #[ts(skip)]
@@ -212,6 +225,8 @@ impl ClientMsg {
             Self::Timer { .. } => "timer",
             Self::Cast { .. } => "cast",
             Self::Settings { .. } => "settings",
+            Self::Remove { .. } => "remove",
+            Self::Unban { .. } => "unban",
             Self::Unknown => "unknown",
         }
     }
@@ -261,6 +276,19 @@ pub struct RoomInfo {
     /// when none runs.
     pub bid_ms_window: Option<u64>,
     pub settings: RoomSettings,
+    /// People here without a seat, then kicked or removed people who are not here.
+    pub watchers: Vec<Watcher>,
+}
+
+/// Someone watching the room, or someone the admin kicked or removed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Watcher {
+    /// The connection, for `remove`; null when they are not here.
+    pub id: Option<u64>,
+    /// Their saved name; empty when the browser has none.
+    pub name: String,
+    /// Kicked or removed: the index for `unban`; null when they may take a seat.
+    pub ban: Option<u8>,
 }
 
 /// A room code and the seat token this browser keeps for it.
@@ -325,6 +353,12 @@ pub enum ServerMsg {
     Rooms { rooms: Vec<MyRoom>, gone: Vec<String> },
     /// The admin (`by`, their name) deleted the room; the browser forgets it and goes Home.
     Closed { room: String, by: String },
+    /// The admin sent this tab out of the room; the browser keeps `token` (its ban) and goes Home.
+    Removed {
+        room: String,
+        token: String,
+        message: String,
+    },
     /// Something happened to this tab that it did not ask for (removed from a seat, say).
     Notice { message: String },
     Error {

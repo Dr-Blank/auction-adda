@@ -23,3 +23,4 @@ export type * from './SellType.ts';
 export type * from './ServerMsg.ts';
 export type * from './ThemeId.ts';
 export type * from './View.ts';
+export type * from './Watcher.ts';

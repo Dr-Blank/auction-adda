@@ -22,7 +22,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
 use crate::protocol::{
-    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey, ServerMsg, ThemeId,
+    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey, ServerMsg,
+    ThemeId, Watcher,
 };
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -148,7 +149,27 @@ struct Client {
     sink: Sink,
     room: Option<String>,
     seat: Option<Seat>,
+    /// The seat token this tab showed when it joined (or was given), for bans.
+    token: Option<String>,
+    /// Name shown in the watcher list while it watches.
+    viewer: String,
 }
+
+/// Someone the admin kicked from a seat or removed from watching, known by the seat token their
+/// browser keeps.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Ban {
+    name: String,
+    token: String,
+    /// Removed from watching too, not only from the seats.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    out: bool,
+}
+
+/// Bans kept per room; the oldest goes first.
+const MAX_BANS: usize = 32;
+
+const BANNED: &str = "The admin took you off the seats here. They can let you back in from the watcher list";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SeatData {
@@ -192,6 +213,7 @@ struct Room {
     /// After a bid, everyone still in has at least this many seconds.
     bid_extend_s: u16,
     settings: RoomSettings,
+    banned: Vec<Ban>,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
@@ -213,6 +235,25 @@ const MAX_MISSED: usize = 16;
 impl Room {
     fn name(&self, seat: Seat) -> String {
         self.seats.get(usize::from(seat)).map_or_default(|s| s.name.clone())
+    }
+
+    fn ban_of(&self, token: Option<&str>) -> Option<usize> {
+        let token = token.filter(|t| !t.is_empty())?;
+        self.banned.iter().position(|b| b.token == token)
+    }
+
+    /// Bans `token`; `out` also from watching. An existing ban only gets stricter.
+    fn ban(&mut self, name: String, token: String, out: bool) {
+        if let Some(i) = self.ban_of(Some(&token)) {
+            if let Some(b) = self.banned.get_mut(i) {
+                b.out |= out;
+            }
+            return;
+        }
+        if self.banned.len() >= MAX_BANS {
+            self.banned.remove(0);
+        }
+        self.banned.push(Ban { name, token, out });
     }
 
     fn tell_later(&mut self, token: String, message: String) {
@@ -323,6 +364,8 @@ struct SavedRef<'a> {
     bid_timer_s: u16,
     bid_extend_s: u16,
     settings: &'a RoomSettings,
+    #[serde(skip_serializing_if = "<[Ban]>::is_empty")]
+    banned: &'a [Ban],
 }
 
 #[derive(Deserialize)]
@@ -343,6 +386,8 @@ struct Saved {
     bid_extend_s: u16,
     #[serde(default)]
     settings: RoomSettings,
+    #[serde(default)]
+    banned: Vec<Ban>,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -494,6 +539,8 @@ impl Rooms {
                 sink,
                 room: None,
                 seat: None,
+                token: None,
+                viewer: String::new(),
             },
         );
         id
@@ -706,7 +753,11 @@ impl Rooms {
                 token,
                 name,
                 avatar,
+                viewer,
             } => {
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.viewer = viewer.as_deref().and_then(|v| clean_name(v).ok()).unwrap_or_default();
+                }
                 return self.join(
                     id,
                     &room,
@@ -734,6 +785,7 @@ impl Rooms {
         let msg = match msg {
             ClientMsg::Claim { seat, name, avatar } => {
                 let has_seat = self.client(id)?.seat.is_some();
+                let shown = self.client(id)?.token.clone();
                 let room = self.room_mut(&code)?;
                 let open = room.game.is_some() && room.seats.get(usize::from(seat)).is_some_and(SeatData::open);
                 if !open {
@@ -741,6 +793,9 @@ impl Rooms {
                 }
                 if has_seat {
                     return fail("You already have a seat");
+                }
+                if room.ban_of(shown.as_deref()).is_some() {
+                    return fail(BANNED);
                 }
                 let name = clean_name(&name)?;
                 info!(client = id, room = %code, seat, "{name} claimed a released seat");
@@ -751,6 +806,9 @@ impl Rooms {
                     s.avatar = clean_avatar(avatar.as_deref());
                 }
                 self.attach(id, &code, Some(seat));
+                if let Some(c) = self.clients.get_mut(&id) {
+                    c.token = Some(token.clone());
+                }
                 self.send(
                     id,
                     &ServerMsg::Joined {
@@ -914,6 +972,10 @@ impl Rooms {
                     return fail("You cannot kick yourself");
                 }
                 let by = room.name(me);
+                // The kicked player keeps their token; it is their ban until the admin lifts it.
+                if let Some(token) = room.seats.get(usize::from(seat)).and_then(|s| s.token.clone()) {
+                    room.ban(room.name(seat), token, false);
+                }
                 if room.game.is_none() {
                     info!(room = %code, seat = me, "Kicked seat {seat} from the lobby");
                     let why = format!("{by} removed you from the lobby. You can still watch.");
@@ -1033,6 +1095,46 @@ impl Rooms {
                 info!(room = %code, seat = me, "Settings: {settings:?}");
                 room.settings = settings;
             }
+            ClientMsg::Remove { watcher } => {
+                room.require_admin(me, "remove a watcher")?;
+                let by = room.name(me);
+                let Some(c) = self
+                    .clients
+                    .get(&watcher)
+                    .filter(|c| c.room.as_deref() == Some(code.as_str()) && c.seat.is_none())
+                else {
+                    return fail("That person is not watching");
+                };
+                let token = c.token.clone().unwrap_or_else(new_token);
+                let name = if c.viewer.is_empty() {
+                    "Someone".to_owned()
+                } else {
+                    c.viewer.clone()
+                };
+                info!(room = %code, seat = me, "Removed watcher {watcher}");
+                self.room_mut(&code)?.ban(name, token.clone(), true);
+                self.detach(watcher);
+                if let Some(c) = self.clients.get_mut(&watcher) {
+                    c.token = None;
+                }
+                let message = format!("{by} removed you from room {code}.");
+                self.send(
+                    watcher,
+                    &ServerMsg::Removed {
+                        room: code.clone(),
+                        token,
+                        message,
+                    },
+                );
+            }
+            ClientMsg::Unban { ban } => {
+                room.require_admin(me, "let someone back in")?;
+                if usize::from(ban) >= room.banned.len() {
+                    return fail("No such person");
+                }
+                let b = room.banned.remove(usize::from(ban));
+                info!(room = %code, seat = me, "Let {} back in", b.name);
+            }
             ClientMsg::Release { seat } => {
                 if !room.has_seat(seat) {
                     return fail("No such seat");
@@ -1148,6 +1250,7 @@ impl Rooms {
                 bid_timer_s,
                 bid_extend_s,
                 settings: prefs.settings.unwrap_or_default(),
+                banned: Vec::new(),
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -1186,6 +1289,22 @@ impl Rooms {
                 code: Some(ErrorCode::NoRoom),
             });
         };
+        let ban = room.ban_of(token);
+        let out = ban
+            .and_then(|i| room.banned.get(i))
+            .filter(|b| b.out)
+            .map(|b| b.token.clone());
+        if let Some(token) = out {
+            let msg = ServerMsg::Removed {
+                room: code.clone(),
+                token,
+                message: format!("The admin removed you from room {code}."),
+            };
+            info!(client = id, room = %code, "Removed person tried to come back");
+            self.detach(id);
+            self.send(id, &msg);
+            return Ok(());
+        }
         let known = token
             .filter(|t| !t.is_empty())
             .and_then(|t| room.seats.iter().position(|s| s.token.as_deref() == Some(t)));
@@ -1213,6 +1332,9 @@ impl Rooms {
             if room.settings.locked {
                 return fail("The admin locked this room; you can watch");
             }
+            if ban.is_some() {
+                return fail(BANNED);
+            }
             info!(client = id, room = %code, seat = room.seats.len(), "{name} joined the lobby");
             let token = new_token();
             room.seats.push(SeatData {
@@ -1229,6 +1351,9 @@ impl Rooms {
             debug!(client = id, room = %code, "Watching");
         }
         self.attach(id, &code, seat);
+        if let Some(c) = self.clients.get_mut(&id) {
+            c.token = seat_token.clone().or_else(|| token.map(str::to_owned));
+        }
         self.send(
             id,
             &ServerMsg::Joined {
@@ -1305,6 +1430,7 @@ impl Rooms {
                 && c.seat == Some(seat)
             {
                 c.seat = None;
+                c.token.clone_from(&token);
                 told = true;
                 let joined = ServerMsg::Joined {
                     room: code.to_owned(),
@@ -1449,8 +1575,14 @@ impl Rooms {
                     expires_in_ms: self.room_ttl_ms.saturating_sub(idle_ms),
                 })
             });
+            // A kicked person's token is their ban: the browser must keep it.
+            let banned = self
+                .rooms
+                .get(&code)
+                .is_some_and(|room| room.ban_of(Some(&key.token)).is_some());
             match found {
                 Some(r) => rooms.push(r),
+                None if banned => {}
                 None => gone.push(key.room.clone()),
             }
         }
@@ -1492,7 +1624,45 @@ impl Rooms {
             bid_ms_left: room.bid_clock.map(|c| c.due.saturating_sub(now)),
             bid_ms_window: room.bid_clock.map(|c| c.due - c.from),
             settings: room.settings.clone(),
+            watchers: self.watchers(room),
         }
+    }
+
+    /// Tabs here without a seat, then the banned people who are not here.
+    fn watchers(&self, room: &Room) -> Vec<Watcher> {
+        let mut here = vec![false; room.banned.len()];
+        let mut list: Vec<Watcher> = room
+            .clients
+            .iter()
+            .filter_map(|cid| {
+                let c = self.clients.get(cid).filter(|c| c.seat.is_none())?;
+                let ban = room.ban_of(c.token.as_deref());
+                let mut name = c.viewer.clone();
+                if let Some(i) = ban {
+                    if let Some(h) = here.get_mut(i) {
+                        *h = true;
+                    }
+                    if name.is_empty() {
+                        name = room.banned.get(i).map_or_default(|b| b.name.clone());
+                    }
+                }
+                Some(Watcher {
+                    id: Some(*cid),
+                    name,
+                    ban: ban.and_then(|i| u8::try_from(i).ok()),
+                })
+            })
+            .collect();
+        for (i, b) in room.banned.iter().enumerate() {
+            if !here.get(i).copied().unwrap_or(true) {
+                list.push(Watcher {
+                    id: None,
+                    name: b.name.clone(),
+                    ban: u8::try_from(i).ok(),
+                });
+            }
+        }
+        list
     }
 
     fn broadcast(&mut self, code: &str) {
@@ -1578,6 +1748,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         bid_timer_s: saved.bid_timer_s.min(MAX_BID_TIMER_S),
         bid_extend_s: saved.bid_extend_s.clamp(MIN_BID_EXTEND_S, MAX_BID_EXTEND_S),
         settings: saved.settings,
+        banned: saved.banned,
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -1697,6 +1868,7 @@ impl Store {
             bid_timer_s: room.bid_timer_s,
             bid_extend_s: room.bid_extend_s,
             settings: &room.settings,
+            banned: &room.banned,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {
