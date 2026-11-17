@@ -1014,6 +1014,16 @@ impl Rooms {
                 }
                 debug!(room = %code, seat = me, "New look");
             }
+            ClientMsg::Rename { name } => {
+                if !room.settings.rename {
+                    return fail("The admin has not turned on renaming");
+                }
+                let name = clean_name(&name)?;
+                info!(room = %code, seat = me, "Renamed to {name}");
+                if let Some(s) = room.seats.get_mut(usize::from(me)) {
+                    s.name = name;
+                }
+            }
             ClientMsg::Start => {
                 if room.game.is_some() {
                     return fail("The game has already started");

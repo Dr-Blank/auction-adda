@@ -83,12 +83,13 @@ watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", room: code, v
 await until((s) => s.room.watchers.length > 0);
 
 shot("lobby");
-send({ type: "settings", settings: { locked: true, freeze: "anyone" } });
+send({ type: "settings", settings: { locked: true, freeze: "anyone", rename: true } });
 await until((s) => s.room.settings.locked);
 const openAdvanced = `document.querySelector("details.advanced").open = true`;
 shot("lobby-settings", openAdvanced);
 shot("lobby-locked-viewer", openAdvanced, null);
-send({ type: "settings", settings: { locked: false, freeze: "anyone" } });
+shot("lobby-rename", `document.querySelector(".rename-btn")?.click()`);
+send({ type: "settings", settings: { locked: false, freeze: "anyone", rename: true } });
 send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);

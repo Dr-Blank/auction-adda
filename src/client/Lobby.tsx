@@ -6,7 +6,7 @@ import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { CheckIcon, CopyIcon, LockIcon } from "./Icons.tsx";
+import { CheckIcon, CopyIcon, LockIcon, PencilIcon } from "./Icons.tsx";
 import type { RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
 import { Rules } from "./Rules.tsx";
@@ -120,6 +120,55 @@ export function RoomCode({ code }: { code: string }) {
   );
 }
 
+/** A pencil that turns into a name field, while the admin lets players rename themselves. */
+export function Rename({ name, send }: { name: string; send: (m: ClientMsg) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null)
+    return (
+      <button
+        type="button"
+        className="icon-btn rename-btn"
+        onClick={() => setDraft(name)}
+        title="Change your name"
+        aria-label="Change your name"
+      >
+        <PencilIcon />
+      </button>
+    );
+  const save = () => {
+    const next = draft.trim();
+    if (next && next !== name) {
+      saveName(next);
+      send({ type: "rename", name: next });
+    }
+    setDraft(null);
+  };
+  return (
+    <form
+      className="rename"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
+        maxLength={20}
+        aria-label="Your name"
+        autoFocus
+      />
+      <button className="btn small primary" disabled={!draft.trim()}>
+        Save
+      </button>
+      <button type="button" className="btn small" onClick={() => setDraft(null)}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
 const FIRST_CHOICES = [0, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
 const EXTEND_CHOICES = [3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120];
 const secs = (n: number) => (n === 0 ? "No limit" : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
@@ -220,6 +269,13 @@ export function RoomSettingsPanel({
         on={room.settings.freeze === "anyone"}
         admin={admin}
         onChange={(on) => set({ freeze: on ? "anyone" : "admin" })}
+      />
+      <Toggle
+        label="Players may rename"
+        hint="Everyone with a seat can change their name, in the lobby and during the game."
+        on={room.settings.rename}
+        admin={admin}
+        onChange={(rename) => set({ rename })}
       />
     </div>
   );
@@ -471,6 +527,7 @@ export function Lobby({ state, send, join, theme }: Props) {
                 </span>
               )}
               {i === you && <em> (you)</em>}
+              {i === you && room.settings.rename && <Rename name={s.name} send={send} />}
               {s.bot && <em> · bot</em>}
               {!s.connected && <em> · disconnected</em>}
             </span>

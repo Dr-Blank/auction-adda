@@ -68,6 +68,8 @@ pub struct RoomSettings {
     pub locked: bool,
     /// Who may freeze a running game (`freeze`).
     pub freeze: FreezeBy,
+    /// Players may change their name (`rename`) in the lobby and in a game.
+    pub rename: bool,
 }
 
 /// Who may freeze a running game. Whoever froze it, and the admin, may unfreeze it.
@@ -121,6 +123,10 @@ pub enum ClientMsg {
     /// The sender's new look, in the lobby or a game.
     Avatar {
         avatar: String,
+    },
+    /// The sender's new name, in the lobby or a game, while `RoomSettings::rename` is on.
+    Rename {
+        name: String,
     },
     /// Admin only.
     Start,
@@ -230,6 +236,7 @@ impl ClientMsg {
             Self::Join { .. } => "join",
             Self::Claim { .. } => "claim",
             Self::Avatar { .. } => "avatar",
+            Self::Rename { .. } => "rename",
             Self::Start => "start",
             Self::Bot { .. } => "bot",
             Self::Kick { .. } => "kick",

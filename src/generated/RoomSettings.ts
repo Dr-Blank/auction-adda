@@ -15,4 +15,8 @@ locked: boolean,
 /**
  * Who may freeze a running game (`freeze`).
  */
-freeze: FreezeBy, };
+freeze: FreezeBy, 
+/**
+ * Players may change their name (`rename`) in the lobby and in a game.
+ */
+rename: boolean, };

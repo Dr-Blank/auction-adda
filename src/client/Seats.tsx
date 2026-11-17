@@ -6,6 +6,7 @@ import type { Theme } from "../themes/types.ts";
 import { Avatar } from "./Avatar.tsx";
 import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from "./derive.ts";
 import { COMPACT, TOUCH } from "./hooks.ts";
+import { Rename } from "./Lobby.tsx";
 import { Sheet } from "./Sheet.tsx";
 
 export interface Bubble {
@@ -253,6 +254,11 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
           label={`About ${name === "You" ? "your seat" : name}`}
           onClose={() => setInfo(false)}
         >
+          {i === me && room.settings.rename && (
+            <p className="rename-row">
+              Your name: <b>{seat.name}</b> <Rename name={seat.name} send={send} />
+            </p>
+          )}
           <ul className="seat-facts">
             {facts.map((f) => (
               <li key={f}>{f}</li>

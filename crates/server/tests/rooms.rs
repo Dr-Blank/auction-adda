@@ -804,6 +804,38 @@ fn only_the_admin_changes_settings_a_locked_room_takes_no_new_seats_but_watchers
 }
 
 #[test]
+fn players_rename_themselves_only_while_the_admin_allows_it() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    let rename = json!({ "type": "rename", "name": "  Neo\u{1} " });
+    send(&mut rooms, &clients[1], rename.clone());
+    assert_error(&clients[1], "The admin has not turned on renaming");
+    send(
+        &mut rooms,
+        &clients[0],
+        json!({ "type": "settings", "settings": { "rename": true } }),
+    );
+    send(&mut rooms, &clients[1], rename.clone());
+    assert_eq!(state(&clients[0]).room.seats[1].name, "Neo");
+    send(&mut rooms, &clients[1], json!({ "type": "rename", "name": "  " }));
+    assert_error(&clients[1], "Enter a name");
+
+    // In a game too.
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    send(&mut rooms, &clients[2], json!({ "type": "rename", "name": "Trinity" }));
+    let seats = state(&clients[0]).room.seats;
+    assert!(seats.iter().any(|s| s.name == "Trinity"));
+    let watcher = fake(&mut rooms, "10.0.0.9");
+    send(
+        &mut rooms,
+        &watcher,
+        json!({ "type": "join", "room": joined(&clients[0]).0 }),
+    );
+    send(&mut rooms, &watcher, rename);
+    assert_error(&watcher, "take a seat first");
+}
+
+#[test]
 fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_late_bid_adds_time() {
     let (now, opts) = clock(1_000_000);
     let mut rooms = Rooms::new(opts).unwrap();

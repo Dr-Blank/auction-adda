@@ -41,6 +41,14 @@ export const ResumeIcon = () => (
   </svg>
 );
 
+/** Edit a name. */
+export const PencilIcon = () => (
+  <svg {...base} className="icon">
+    <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" />
+    <path d="M13.5 6.5l4 4" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

@@ -18,7 +18,16 @@ import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
 import { FreezeIcon, ResumeIcon } from "./Icons.tsx";
-import { AdminAway, BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink, WatcherList } from "./Lobby.tsx";
+import {
+  AdminAway,
+  BidTimer,
+  ConfirmButton,
+  Rename,
+  RoomCode,
+  RoomSettingsPanel,
+  ShareLink,
+  WatcherList,
+} from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
@@ -996,6 +1005,11 @@ function RoomMenu(props: {
         </button>
       </div>
       <ShareLink code={room.code} />
+      {me !== null && room.settings.rename && (
+        <p className="rename-row">
+          Your name: <b>{names[me]}</b> <Rename name={names[me]} send={send} />
+        </p>
+      )}
       <div className="menu-admin">
         <p>
           <span className="admin-mark">★</span> Admin: <b>{room.admin === me ? "you" : names[room.admin]}</b>
