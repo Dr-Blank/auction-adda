@@ -1,5 +1,6 @@
 // Screenshots of the room-management screens, as the admin: the lobby (theme picker, room
-// settings, Close room), the room menu in a game, and the game over after "End game now".
+// settings, Close room), the room menu in a game, a freed bot seat (and the same game as the
+// player who left it, and as a watcher), and the game over after "End game now".
 // Each step drives the room over the WebSocket, then takes one shot with page-shot.mjs.
 //
 //   npm run build && PORT=8799 DATA_DIR= CREATE_LIMIT=1000 npm start &
@@ -48,13 +49,25 @@ const joined = new Promise((resolve) => {
 send({ type: "create", theme, name: "Ana" });
 const { room: code, token } = await joined;
 console.log("room", code);
-for (let i = 0; i < 3; i++) send({ type: "bot" });
+for (let i = 0; i < 2; i++) send({ type: "bot" });
+await until((s) => s.room.seats.length === 3);
+
+// A second player, who leaves mid-game.
+const ben = new WebSocket(`ws://localhost:${port}/ws`);
+const benToken = new Promise((resolve) => {
+  ben.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "joined" && m.token) resolve(m.token);
+  };
+});
+ben.onopen = () => ben.send(JSON.stringify({ type: "join", room: code, name: "Ben" }));
+const benKey = await benToken;
 await until((s) => s.room.seats.length === 4);
 
-/** One shot of the room page as the admin's browser (`viewer`: a browser without a seat). */
-const shot = (name, then, viewer = false) => {
+/** One shot of the room page as the admin's browser (`as`: another seat token, or null for a browser without one). */
+const shot = (name, then, as = token) => {
   const file = path.join(out, `${name}.png`);
-  const setup = viewer ? "localStorage.clear()" : `localStorage.setItem("aa:token:${code}", ${JSON.stringify(token)})`;
+  const setup = as ? `localStorage.setItem("aa:token:${code}", ${JSON.stringify(as)})` : "localStorage.clear()";
   const cmd = ["scripts/page-shot.mjs", file, `${BASE}/#${code}`, "--setup", setup, "--full"];
   if (then) cmd.push("--then", then);
   if (phone) cmd.push("--phone");
@@ -73,12 +86,20 @@ send({ type: "settings", settings: { locked: true } });
 await until((s) => s.room.settings.locked);
 const openAdvanced = `document.querySelector("details.advanced").open = true`;
 shot("lobby-settings", openAdvanced);
-shot("lobby-locked-viewer", openAdvanced, true);
+shot("lobby-locked-viewer", openAdvanced, null);
 send({ type: "settings", settings: { locked: false } });
 send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
+// Ben leaves to a bot; the admin frees bot seat 1 for whoever opens the link.
+ben.send(JSON.stringify({ type: "leave" }));
+await until((s) => s.room.seats[3].bot);
+send({ type: "release", seat: 1 });
+await until((s) => s.room.seats[1].open);
+shot("game-freed", `document.querySelector("[data-seat='1'] .avatar-btn")?.click()`);
+shot("game-left", null, benKey);
+shot("game-viewer", null, null);
 send({ type: "end" });
 await until((s) => s.game?.over);
 shot("over");
@@ -86,4 +107,5 @@ send({ type: "lobby" });
 await until((s) => !s.game);
 shot("lobby-after", click("Close room"));
 watcher.close();
+ben.close();
 sock.close();

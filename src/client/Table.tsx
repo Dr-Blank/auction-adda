@@ -706,7 +706,7 @@ export function Table({ state, send, theme }: Props) {
         )}
       </header>
 
-      {me === null && <Spectator openSeats={openSeats} names={names} send={send} />}
+      {me === null && <Spectator openSeats={openSeats} left={state.left} names={names} send={send} />}
       {me !== null && openSeats.length > 0 && (
         <div className="notice">
           <span>A seat is free. Send this link to whoever takes over:</span>
@@ -986,6 +986,19 @@ function RoomMenu(props: {
       <WatcherList room={room} me={me} send={send} />
       <RoomSettingsPanel room={room} me={me} send={send} />
       <BidTimer room={room} me={me} send={send} />
+      {me !== null && !props.over && (
+        <div className="menu-danger">
+          <ConfirmButton
+            label="Leave my seat"
+            ask="Leave the game? A bot plays your seat; you can take it back from this browser."
+            yes="Leave"
+            onConfirm={() => {
+              send({ type: "leave" });
+              onClose();
+            }}
+          />
+        </div>
+      )}
       {room.admin === me && (
         <div className="menu-danger">
           {!props.over && (
@@ -1276,8 +1289,28 @@ function GameOver(props: {
   );
 }
 
-function Spectator({ openSeats, names, send }: { openSeats: number[]; names: string[]; send: (m: ClientMsg) => void }) {
+function Spectator({
+  openSeats,
+  left,
+  names,
+  send,
+}: {
+  openSeats: number[];
+  /** The seat this browser left to a bot. */
+  left: number | null;
+  names: string[];
+  send: (m: ClientMsg) => void;
+}) {
   const [name, setName] = useState(savedName);
+  if (left !== null)
+    return (
+      <div className="notice">
+        <span>You left your seat ({names[left]}); a bot is playing it.</span>
+        <button className="btn primary small" onClick={() => send({ type: "back" })}>
+          Take my seat back
+        </button>
+      </div>
+    );
   if (openSeats.length === 0)
     return <div className="notice">You are watching this game. Hands and money stay hidden.</div>;
   return (

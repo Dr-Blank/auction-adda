@@ -58,6 +58,16 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
   const standIn = seat.bot && !seat.connected;
   const canBot = isAdmin && !g.over && !seat.connected && !seat.bot;
   const canKick = isAdmin && !g.over && !(seat.bot && seat.connected);
+  // A bot seat the admin may open for someone with the link (the bot plays until they take it), or close again.
+  const canFree = isAdmin && !g.over && seat.bot && !seat.open;
+  const canKeep = isAdmin && !g.over && seat.bot && seat.open;
+  const status = seat.bot
+    ? seat.open
+      ? "Bot playing · seat open"
+      : "Bot playing"
+    : seat.open
+      ? "Seat open"
+      : `Away ${clock(away ?? 0)}`;
   const [kicking, setKicking] = useState(false);
   const owing = g.pending.includes(i);
   const now = doing(g, i);
@@ -111,15 +121,17 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         : `Money stays hidden until the game ends.`,
   );
   facts.push(
-    standIn
-      ? `🤖 A bot plays this seat at random until ${name} comes back.`
-      : seat.bot
-        ? "🤖 A bot: the server plays this seat at random."
-        : seat.connected
-          ? "Connected."
-          : seat.open
-            ? "Seat open: anyone with the room link can take it over."
-            : `Away for ${clock(away ?? 0)}.`,
+    seat.bot && seat.open
+      ? "🤖 A bot plays this seat until someone takes it over from the room link."
+      : standIn
+        ? `🤖 A bot plays this seat at random until ${name} comes back.`
+        : seat.bot
+          ? "🤖 A bot: the server plays this seat at random."
+          : seat.connected
+            ? "Connected."
+            : seat.open
+              ? "Seat open: anyone with the room link can take it over."
+              : `Away for ${clock(away ?? 0)}.`,
   );
 
   return (
@@ -200,11 +212,9 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
           </div>
         )}
         <Owned g={g} seat={i} name={name} names={names} theme={theme} />
-        {!seat.connected && (
+        {(!seat.connected || seat.open) && (
           <div className="away-row">
-            <span className="muted small">
-              {standIn ? "Bot playing" : seat.open ? "Seat open" : `Away ${clock(away ?? 0)}`}
-            </span>
+            <span className="muted small">{status}</span>
             {canBot && (
               <button
                 className="btn small"
@@ -271,11 +281,21 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
               )}
             </div>
           )}
-          {(canBot || canKick) && (
+          {(canBot || canKick || canFree || canKeep) && (
             <div className="row">
               {canBot && (
                 <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
                   Let a bot play until they come back
+                </button>
+              )}
+              {canFree && (
+                <button className="btn" onClick={() => send({ type: "release", seat: i })}>
+                  Free seat: the bot plays until someone takes it from the room link
+                </button>
+              )}
+              {canKeep && (
+                <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
+                  Keep the bot (close the seat)
                 </button>
               )}
               {canKick &&

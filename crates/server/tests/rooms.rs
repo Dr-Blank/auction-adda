@@ -44,6 +44,7 @@ fn send(rooms: &mut Rooms, c: &Fake, msg: Value) {
 struct State {
     room: RoomInfo,
     you: Option<u8>,
+    left: Option<u8>,
     game: Option<View>,
 }
 
@@ -52,9 +53,10 @@ fn state(c: &Fake) -> State {
     got.iter()
         .rev()
         .find_map(|m| match m {
-            ServerMsg::State { room, you, game } => Some(State {
+            ServerMsg::State { room, you, left, game } => Some(State {
                 room: room.clone(),
                 you: *you,
+                left: *left,
                 game: game.clone(),
             }),
             _ => None,
@@ -883,8 +885,6 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
     let seat = state(a).room.seats[1].clone();
     assert!(seat.bot && !seat.connected && !seat.open);
     advance(&now, 31_000);
-    send(&mut rooms, a, json!({ "type": "release", "seat": 1 }));
-    assert_error(a, "A bot is playing that seat");
     send(&mut rooms, a, json!({ "type": "skip", "seat": 1 }));
     assert_error(a, "A bot is playing that seat");
 
@@ -946,6 +946,81 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
         json!({ "type": "join", "room": code, "token": c_token }),
     );
     assert_eq!(joined(&again).1, None);
+}
+
+#[test]
+fn a_player_leaves_mid_game_to_a_bot_and_takes_the_seat_back_only_when_asked() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let (a, b, c) = (&clients[0], &clients[1], &clients[2]);
+    send(&mut rooms, a, json!({ "type": "start" }));
+    let token = joined(b).2.unwrap();
+
+    send(&mut rooms, b, json!({ "type": "back" }));
+    assert_error(b, "You already have a seat");
+    send(&mut rooms, b, json!({ "type": "leave" }));
+    assert_eq!(state(b).you, None);
+    assert_eq!(state(b).left, Some(1));
+    assert_eq!(state(c).left, None);
+    let seat = state(a).room.seats[1].clone();
+    assert!(seat.bot && !seat.connected && !seat.open);
+
+    // A reconnect with the token watches; only `back` seats them again.
+    rooms.disconnect(b.id);
+    let b = fake(&mut rooms, "10.0.0.2");
+    send(&mut rooms, &b, json!({ "type": "join", "room": code, "token": token }));
+    assert_eq!(joined(&b).1, None);
+    assert_eq!(state(&b).left, Some(1));
+    let w = fake(&mut rooms, "10.0.0.9");
+    send(&mut rooms, &w, json!({ "type": "join", "room": code }));
+    send(&mut rooms, &w, json!({ "type": "back" }));
+    assert_error(&w, "no longer yours");
+    send(&mut rooms, &b, json!({ "type": "back" }));
+    assert_eq!(joined(&b), (code.clone(), Some(1), Some(token)));
+    assert_eq!(state(&b).left, None);
+    assert!(!state(a).room.seats[1].bot && state(a).room.seats[1].connected);
+
+    // The admin leaving hands the role to the first player still here.
+    send(&mut rooms, a, json!({ "type": "leave" }));
+    assert_eq!(state(&b).room.admin, 1);
+}
+
+#[test]
+fn the_admin_frees_a_bot_seat_the_bot_plays_until_someone_claims_it() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let (a, b, c) = (&clients[0], &clients[1], &clients[2]);
+    send(&mut rooms, a, json!({ "type": "bot" }));
+    send(&mut rooms, a, json!({ "type": "start" }));
+    let w = fake(&mut rooms, "10.0.0.9");
+    send(&mut rooms, &w, json!({ "type": "join", "room": code }));
+
+    send(&mut rooms, b, json!({ "type": "release", "seat": 3 }));
+    assert_error(b, "Only the room admin can free a seat");
+    send(&mut rooms, a, json!({ "type": "release", "seat": 3 }));
+    let seat = state(a).room.seats[3].clone();
+    assert!(seat.bot && seat.open);
+    send(&mut rooms, a, json!({ "type": "release", "seat": 3 }));
+    assert_error(a, "already free");
+    // `bot` withdraws the offer, `release` makes it again.
+    send(&mut rooms, a, json!({ "type": "bot", "seat": 3 }));
+    assert!(!state(a).room.seats[3].open);
+    send(&mut rooms, a, json!({ "type": "release", "seat": 3 }));
+
+    send(&mut rooms, &w, json!({ "type": "claim", "seat": 3, "name": "Wanda" }));
+    assert_eq!(joined(&w).1, Some(3));
+    let seat = state(a).room.seats[3].clone();
+    assert!(!seat.bot && !seat.open && seat.name == "Wanda");
+
+    // A seat its player left: they watch, hear that it went, and cannot take it back.
+    send(&mut rooms, c, json!({ "type": "leave" }));
+    send(&mut rooms, a, json!({ "type": "release", "seat": 2 }));
+    assert_eq!(
+        notices(c),
+        ["P0 freed your seat for someone else; a bot plays it until they take it. You can watch."]
+    );
+    assert_eq!(state(c).left, None);
+    assert!(state(a).room.seats[2].open);
 }
 
 #[test]

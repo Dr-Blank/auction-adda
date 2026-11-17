@@ -171,15 +171,22 @@ const MAX_BANS: usize = 32;
 
 const BANNED: &str = "The admin took you off the seats here. They can let you back in from the watcher list";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct SeatData {
     name: String,
     /// Secret that lets a browser re-attach to this seat. `None` = released, anyone may claim it
-    /// (unless it is a bot).
+    /// (unless it is a bot that is not `free`).
     token: Option<String>,
-    /// Played by the server; never has a token.
+    /// Played by the server. With a token it stands in for a player who may come back.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     bot: bool,
+    /// Its player left the game (`leave`): a bot plays, and the token takes the seat back only with
+    /// `back`, so a reconnect does not seat them again unasked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    left: bool,
+    /// A bot seat the admin freed in a game: the bot plays on until someone claims it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    free: bool,
     /// As in `SeatInfo`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     avatar: String,
@@ -187,7 +194,7 @@ struct SeatData {
 
 impl SeatData {
     fn open(&self) -> bool {
-        self.token.is_none() && !self.bot
+        self.token.is_none() && (!self.bot || self.free)
     }
 }
 
@@ -240,6 +247,16 @@ impl Room {
     fn ban_of(&self, token: Option<&str>) -> Option<usize> {
         let token = token.filter(|t| !t.is_empty())?;
         self.banned.iter().position(|b| b.token == token)
+    }
+
+    /// The seat `token`'s holder left to a bot in this game, which `back` returns to them.
+    fn left_by(&self, token: Option<&str>) -> Option<Seat> {
+        let token = token.filter(|t| !t.is_empty())?;
+        let i = self
+            .seats
+            .iter()
+            .position(|s| s.left && s.token.as_deref() == Some(token))?;
+        u8::try_from(i).ok()
     }
 
     /// Bans `token`; `out` also from watching. An existing ban only gets stricter.
@@ -804,6 +821,9 @@ impl Rooms {
                     s.name = name;
                     s.token = Some(token.clone());
                     s.avatar = clean_avatar(avatar.as_deref());
+                    s.bot = false;
+                    s.free = false;
+                    s.left = false;
                 }
                 self.attach(id, &code, Some(seat));
                 if let Some(c) = self.clients.get_mut(&id) {
@@ -823,10 +843,55 @@ impl Rooms {
             ClientMsg::Leave => {
                 let seat = self.seat_of(id)?;
                 if self.room_mut(&code)?.game.is_some() {
-                    return fail("The game has started; you cannot leave your seat");
+                    info!(client = id, room = %code, seat, "Left the game; a bot plays the seat");
+                    self.unseat(&code, seat, None);
+                    let now = (self.now)();
+                    let room = self.room_mut(&code)?;
+                    if let Some(s) = room.seats.get_mut(usize::from(seat)) {
+                        s.bot = true;
+                        s.left = true;
+                    }
+                    if let Some(away) = room.away.get_mut(usize::from(seat)) {
+                        *away = Some(now);
+                    }
+                    // The role goes to the first player still here, if any.
+                    if room.admin == seat
+                        && let Some(p) = (0..room.seats.len())
+                            .find(|&i| room.seats.get(i).is_some_and(|s| !s.bot) && room.away.get(i) == Some(&None))
+                            .and_then(|p| u8::try_from(p).ok())
+                    {
+                        room.admin = p;
+                    }
+                } else {
+                    info!(client = id, room = %code, seat, "Left the lobby");
+                    self.remove_lobby_seat(&code, seat, None);
                 }
-                info!(client = id, room = %code, seat, "Left the lobby");
-                self.remove_lobby_seat(&code, seat, None);
+                self.changed(&code);
+                return Ok(());
+            }
+            ClientMsg::Back => {
+                if self.client(id)?.seat.is_some() {
+                    return fail("You already have a seat");
+                }
+                let token = self.client(id)?.token.clone();
+                let room = self.room_mut(&code)?;
+                let Some(seat) = room.left_by(token.as_deref()) else {
+                    return fail("That seat is no longer yours");
+                };
+                if let Some(s) = room.seats.get_mut(usize::from(seat)) {
+                    s.bot = false;
+                    s.left = false;
+                }
+                info!(client = id, room = %code, seat, "Took back the seat they left");
+                self.attach(id, &code, Some(seat));
+                self.send(
+                    id,
+                    &ServerMsg::Joined {
+                        room: code.clone(),
+                        seat: Some(seat),
+                        token,
+                    },
+                );
                 self.changed(&code);
                 return Ok(());
             }
@@ -933,6 +998,13 @@ impl Rooms {
                     if !room.has_seat(seat) {
                         return fail("No such seat");
                     }
+                    if let Some(s) = room.seats.get_mut(usize::from(seat)).filter(|s| s.free) {
+                        // Taking back a freed bot seat: nobody may claim it now.
+                        s.free = false;
+                        info!(room = %code, seat = me, "Kept the bot in seat {seat}");
+                        self.changed(&code);
+                        return Ok(());
+                    }
                     if room.is_bot(seat) {
                         return fail("A bot is already playing that seat");
                     }
@@ -957,9 +1029,9 @@ impl Rooms {
                 info!(room = %code, seat = me, "Added {name} in seat {}", room.seats.len());
                 room.seats.push(SeatData {
                     name,
-                    token: None,
                     bot: true,
                     avatar: random_avatar(),
+                    ..SeatData::default()
                 });
                 room.away.push(None);
             }
@@ -989,6 +1061,7 @@ impl Rooms {
                     if let Some(s) = room.seats.get_mut(usize::from(seat)) {
                         s.token = None;
                         s.bot = true;
+                        s.left = false;
                     }
                     if let Some(away) = room.away.get_mut(usize::from(seat)) {
                         *away = None;
@@ -1143,7 +1216,25 @@ impl Rooms {
                     return fail("You cannot release your own seat");
                 }
                 let by = room.name(me);
-                if room.game.is_some() {
+                if room.game.is_some() && room.is_bot(seat) {
+                    room.require_admin(me, "free a seat")?;
+                    let Some(s) = room.seats.get(usize::from(seat)).filter(|s| !s.free) else {
+                        return fail("That seat is already free");
+                    };
+                    // A player the bot stands in for (away, or left) loses the seat.
+                    let why = s.token.is_some().then(|| {
+                        format!(
+                            "{by} freed your seat for someone else; a bot plays it until they take it. You can watch."
+                        )
+                    });
+                    info!(room = %code, seat = me, "Freed bot seat {seat}; the bot plays until someone claims it");
+                    self.unseat(&code, seat, why);
+                    if let Some(s) = self.room_mut(&code)?.seats.get_mut(usize::from(seat)) {
+                        s.token = None;
+                        s.free = true;
+                        s.left = false;
+                    }
+                } else if room.game.is_some() {
                     room.require_admin(me, "free a seat")?;
                     require_away(room, seat)?;
                     info!(room = %code, seat = me, "Released away seat {seat}");
@@ -1240,8 +1331,8 @@ impl Rooms {
                 seats: vec![SeatData {
                     name,
                     token: Some(token.clone()),
-                    bot: false,
                     avatar,
+                    ..SeatData::default()
                 }],
                 admin: 0,
                 game: None,
@@ -1305,9 +1396,10 @@ impl Rooms {
             self.send(id, &msg);
             return Ok(());
         }
+        // A seat its player left to a bot comes back only with `back`; until then they watch.
         let known = token
             .filter(|t| !t.is_empty())
-            .and_then(|t| room.seats.iter().position(|s| s.token.as_deref() == Some(t)));
+            .and_then(|t| room.seats.iter().position(|s| s.token.as_deref() == Some(t) && !s.left));
         let mut seat = None;
         let mut seat_token = None;
         let mut took_back = false;
@@ -1340,8 +1432,8 @@ impl Rooms {
             room.seats.push(SeatData {
                 name,
                 token: Some(token.clone()),
-                bot: false,
                 avatar,
+                ..SeatData::default()
             });
             room.away.push(Some(now));
             seat = u8::try_from(room.seats.len() - 1).ok();
@@ -1418,7 +1510,8 @@ impl Rooms {
     }
 
     /// Clients on `seat` become watchers, and are told so, with `why` when someone else took the
-    /// seat away. A player who is not here hears `why` when they come back with the seat's token.
+    /// seat away (as is a watcher holding the seat's token, who left it to a bot). A player who is
+    /// not here hears `why` when they come back with the seat's token.
     fn unseat(&mut self, code: &str, seat: Seat, why: Option<String>) {
         let Some(room) = self.rooms.get_mut(code) else {
             return;
@@ -1426,9 +1519,18 @@ impl Rooms {
         let token = room.seats.get(usize::from(seat)).and_then(|s| s.token.clone());
         let mut told = false;
         for &cid in &room.clients {
-            if let Some(c) = self.clients.get_mut(&cid)
-                && c.seat == Some(seat)
-            {
+            let Some(c) = self.clients.get_mut(&cid) else {
+                continue;
+            };
+            if c.seat.is_none() && token.is_some() && c.token == token {
+                // Watching already, after leaving the seat to a bot.
+                told = true;
+                if let Some(message) = why.clone()
+                    && !(c.sink)(&ServerMsg::Notice { message })
+                {
+                    self.dropped.push(cid);
+                }
+            } else if c.seat == Some(seat) {
                 c.seat = None;
                 c.token.clone_from(&token);
                 told = true;
@@ -1461,7 +1563,8 @@ impl Rooms {
     }
 
     /// After a game: the same seats in the lobby. Stand-in bots hand their seats back (the player
-    /// shows as away until they return); seats freed mid-game and never claimed go.
+    /// shows as away until they return); freed bot seats stay bots; seats freed mid-game and never
+    /// claimed go, as do seats their players left.
     fn back_to_lobby(&mut self, code: &str) {
         let Some(room) = self.rooms.get_mut(code) else {
             return;
@@ -1472,13 +1575,14 @@ impl Rooms {
         room.bid_clock = None;
         room.bot_due = None;
         for s in &mut room.seats {
-            if s.token.is_some() {
+            s.free = false;
+            if s.token.is_some() && !s.left {
                 s.bot = false;
             }
         }
         let open: Vec<Seat> = (0..room.seats.len())
             .rev()
-            .filter(|&i| room.seats.get(i).is_some_and(SeatData::open))
+            .filter(|&i| room.seats.get(i).is_some_and(|s| s.open() || s.left))
             .filter_map(|i| u8::try_from(i).ok())
             .collect();
         for seat in open {
@@ -1677,6 +1781,7 @@ impl Rooms {
             let msg = ServerMsg::State {
                 room: info.clone(),
                 you: c.seat,
+                left: c.seat.is_none().then(|| room.left_by(c.token.as_deref())).flatten(),
                 game: room.game.as_ref().map(|g| view_for(g, c.seat)),
             };
             if !(c.sink)(&msg) {

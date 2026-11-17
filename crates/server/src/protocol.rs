@@ -129,10 +129,16 @@ pub enum ClientMsg {
     Skip {
         seat: Seat,
     },
+    /// Admin only. In a game: an away player's seat opens for anyone with the link; a bot seat
+    /// opens too, and its bot plays on until someone claims it (`bot` keeps it a bot). In the
+    /// lobby: removes a bot or an away player.
     Release {
         seat: Seat,
     },
+    /// In the lobby: give up the seat. In a game: a bot plays it; `back` takes it again.
     Leave,
+    /// Take back the seat this tab left in the running game (`State::left`).
+    Back,
     /// This tab left the room screen: it stops watching, and its seat counts as disconnected.
     Part,
     /// The rooms this browser has a seat in, by their saved seat tokens. Answered with `rooms`.
@@ -212,6 +218,7 @@ impl ClientMsg {
             Self::Skip { .. } => "skip",
             Self::Release { .. } => "release",
             Self::Leave => "leave",
+            Self::Back => "back",
             Self::Part => "part",
             Self::Rooms { .. } => "rooms",
             Self::Rematch => "rematch",
@@ -345,6 +352,8 @@ pub enum ServerMsg {
     State {
         room: RoomInfo,
         you: Option<Seat>,
+        /// The seat this tab left to a bot in the running game; `back` takes it again.
+        left: Option<Seat>,
         game: Option<View>,
     },
     /// Answer to `rooms`: the rooms where a token still holds a seat, admin rooms first, then the
