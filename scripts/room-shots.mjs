@@ -101,6 +101,8 @@ send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
+// The round label opens the seasons overview.
+shot("seasons", `document.querySelector(".round-btn")?.click()`);
 // A reaction rises over the admin's own seat; the picker stays open.
 shot(
   "game-react",

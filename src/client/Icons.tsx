@@ -78,6 +78,14 @@ export const QrIcon = () => (
   </svg>
 );
 
+/** Cards dealt. */
+export const CardsIcon = () => (
+  <svg {...base} className="icon">
+    <rect x="9" y="4.5" width="10" height="14" rx="2" transform="rotate(10 14 11.5)" />
+    <rect x="5" y="5.5" width="10" height="14" rx="2" transform="rotate(-8 10 12.5)" fill="var(--panel)" />
+  </svg>
+);
+
 /** Games won in the room. */
 export const TrophyIcon = () => (
   <svg {...base} className="icon">

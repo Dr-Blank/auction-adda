@@ -34,6 +34,7 @@ import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
 import { AuctionTypes, Rules } from "./Rules.tsx";
 import { Ruling } from "./Ruling.tsx";
+import { Seasons } from "./Seasons.tsx";
 import type { Bubble } from "./Seats.tsx";
 import { Seat, Seats } from "./Seats.tsx";
 import { Sheet } from "./Sheet.tsx";
@@ -279,6 +280,7 @@ export function Table({ state, send, theme, reactions }: Props) {
 
   // ---- chrome ----
   const [menu, setMenu] = useState(false);
+  const [seasons, setSeasons] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [muted, setMutedState] = useState(isMuted);
   const [inspect, setInspect] = useState<Card | null>(null);
@@ -686,7 +688,13 @@ export function Table({ state, send, theme, reactions }: Props) {
     <div ref={tableEl} className={`table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}>
       <header className="topbar">
         <Brand />
-        <span className="round">
+        <button
+          type="button"
+          className="round round-btn"
+          onClick={() => setSeasons(true)}
+          title={`All ${theme.nouns.round}s: the deal, the scoring and where the game is`}
+          aria-haspopup="dialog"
+        >
           <RoundRing done={g.over ? ROUNDS : g.round} />
           {g.over ? (
             "Final result"
@@ -695,7 +703,8 @@ export function Table({ state, send, theme, reactions }: Props) {
               <b>{theme.roundNames[g.round]}</b> · {theme.nouns.round} {g.round + 1} of {ROUNDS}
             </>
           )}
-        </span>
+        </button>
+        {seasons && <Seasons g={g} theme={theme} onClose={() => setSeasons(false)} />}
         <span className="grow" />
         {g.summaries.length > 0 && (
           <button
