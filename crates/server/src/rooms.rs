@@ -261,6 +261,21 @@ impl Room {
         u8::try_from(i).ok()
     }
 
+    /// The admin away `ADMIN_AUTO_MS`: the first connected player takes the role. Returns the new
+    /// admin and the old one's name.
+    fn replace_away_admin(&mut self, now: u64) -> Option<(Seat, String)> {
+        let since = self.away.get(usize::from(self.admin)).copied().flatten()?;
+        if now.saturating_sub(since) < ADMIN_AUTO_MS {
+            return None;
+        }
+        let p = self.first_here()?;
+        info!(room = %self.code, "The admin was away; seat {p} is admin now");
+        let was = self.name(self.admin);
+        self.admin = p;
+        self.last_call = None;
+        Some((p, was))
+    }
+
     /// The seat `token`'s holder left to a bot in this game, which `back` returns to them.
     fn left_by(&self, token: Option<&str>) -> Option<Seat> {
         let token = token.filter(|t| !t.is_empty())?;
@@ -659,18 +674,8 @@ impl Rooms {
         let mut moved = Vec::new();
         let mut promoted = Vec::new();
         for room in self.rooms.values_mut() {
-            if room
-                .away
-                .get(usize::from(room.admin))
-                .copied()
-                .flatten()
-                .is_some_and(|since| now.saturating_sub(since) >= ADMIN_AUTO_MS)
-                && let Some(p) = room.first_here()
-            {
-                info!(room = %room.code, "The admin was away; seat {p} is admin now");
-                promoted.push((room.code.clone(), p, room.name(room.admin)));
-                room.admin = p;
-                room.last_call = None;
+            if let Some((p, was)) = room.replace_away_admin(now) {
+                promoted.push((room.code.clone(), p, was));
             }
             room.sync_bid_clock(now);
             if !room.clients.is_empty()
