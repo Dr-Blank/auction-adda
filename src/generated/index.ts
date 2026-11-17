@@ -13,6 +13,7 @@ export type * from './MyRoom.ts';
 export type * from './PlayerView.ts';
 export type * from './Prefs.ts';
 export type * from './RoomInfo.ts';
+export type * from './RoomSettings.ts';
 export type * from './RoomStage.ts';
 export type * from './RoundSummary.ts';
 export type * from './Sale.ts';

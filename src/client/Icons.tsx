@@ -19,6 +19,13 @@ export const CopyIcon = () => (
   </svg>
 );
 
+export const LockIcon = () => (
+  <svg {...base} className="icon">
+    <rect x="5" y="11" width="14" height="9.5" rx="2.5" />
+    <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { SUITS } from "../config.ts";
-import type { ClientMsg, RoomInfo, ThemeId } from "../generated/index.ts";
+import type { ClientMsg, RoomInfo, RoomSettings, ThemeId } from "../generated/index.ts";
 import { castGenres } from "../themes/cast.ts";
 import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { CheckIcon, CopyIcon } from "./Icons.tsx";
+import { CheckIcon, CopyIcon, LockIcon } from "./Icons.tsx";
 import type { RoomState } from "./net.ts";
-import { savedName, saveGenres, saveName, saveTheme, saveTimer, useSavedLook } from "./net.ts";
+import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
 import { Rules } from "./Rules.tsx";
 
 interface Props {
@@ -163,6 +163,61 @@ export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null
   );
 }
 
+/** An on/off setting: a switch for the admin, the state for everyone else. */
+function Toggle(props: { label: string; hint: string; on: boolean; admin: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className={`toggle ${props.on ? "on" : ""}`}>
+      <input
+        type="checkbox"
+        role="switch"
+        checked={props.on}
+        disabled={!props.admin}
+        onChange={(e) => props.onChange(e.target.checked)}
+      />
+      <span>
+        <span>
+          <b>{props.label}</b>
+          {!props.admin && <em>: {props.on ? "on" : "off"}</em>}
+        </span>
+        <small className="muted">{props.hint}</small>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * The admin's switches for how the room plays, in the lobby and the Room menu. Everyone sees them;
+ * the admin's browser keeps them for the next room they create.
+ */
+export function RoomSettingsPanel({
+  room,
+  me,
+  send,
+}: {
+  room: RoomInfo;
+  me: number | null;
+  send: (m: ClientMsg) => void;
+}) {
+  const admin = room.admin === me;
+  const set = (patch: Partial<RoomSettings>) => {
+    const settings = { ...room.settings, ...patch };
+    saveSettings(settings);
+    send({ type: "settings", settings });
+  };
+  return (
+    <div className="room-settings">
+      <h3>Room settings</h3>
+      <Toggle
+        label="Lock room"
+        hint="Nobody new takes a seat. People with the link can still watch."
+        on={room.settings.locked}
+        admin={admin}
+        onChange={(locked) => set({ locked })}
+      />
+    </div>
+  );
+}
+
 /** This game's suits; the admin picks which genres play and can draw new names. */
 export function CastPicker({
   room,
@@ -309,6 +364,11 @@ export function Lobby({ state, send, join, theme }: Props) {
         <small>
           ({room.minPlayers}–{room.maxPlayers})
         </small>
+        {room.settings.locked && (
+          <span className="locked-mark" title="The admin locked the room: no new seats">
+            <LockIcon /> locked
+          </span>
+        )}
       </h2>
       <ol className="lobby-seats">
         {room.seats.map((s, i) => (
@@ -373,15 +433,20 @@ export function Lobby({ state, send, join, theme }: Props) {
       </p>
       <details className="advanced">
         <summary>
-          Advanced <small className="muted">clock, {theme.nouns.suit}s and names</small>
+          Advanced <small className="muted">room settings, clock, {theme.nouns.suit}s and names</small>
         </summary>
         {isAdmin && <p className="muted small">Your browser keeps what you pick here for the next room you create.</p>}
+        <RoomSettingsPanel room={room} me={you} send={send} />
         <BidTimer room={room} me={you} send={send} />
         <CastPicker room={room} me={you} send={send} theme={theme} />
       </details>
 
       {you === null ? (
-        count < room.maxPlayers ? (
+        room.settings.locked ? (
+          <p className="muted">
+            {adminName} locked this room, so no new seats. You can watch here and once the game starts.
+          </p>
+        ) : count < room.maxPlayers ? (
           <form
             className="join-row"
             onSubmit={(e) => {

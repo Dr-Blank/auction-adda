@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientMsg, MyRoom, Prefs, SeatKey, ServerMsg } from "../generated/index.ts";
+import type { ClientMsg, MyRoom, Prefs, RoomSettings, SeatKey, ServerMsg } from "../generated/index.ts";
 import { goHome } from "./Brand.tsx";
 
 export type RoomState = Extract<ServerMsg, { type: "state" }> & { receivedAt: number };
@@ -66,13 +66,20 @@ export function savedPrefs(theme: string): Prefs | null {
   try {
     const timer = JSON.parse(store.get("aa:timer") ?? "null") as { bidTimerS: number; bidExtendS: number } | null;
     const genres = JSON.parse(store.get(`aa:genres:${theme}`) ?? "[]") as number[];
-    if (!timer && genres.length === 0) return null;
+    const settings = JSON.parse(store.get("aa:settings") ?? "null") as RoomSettings | null;
+    if (!timer && genres.length === 0 && !settings) return null;
     // The server swaps anything it would refuse (no saved timer: 0 s after a bid) for its default.
-    return { bidTimerS: timer?.bidTimerS ?? 0, bidExtendS: timer?.bidExtendS ?? 0, genres };
+    return {
+      bidTimerS: timer?.bidTimerS ?? 0,
+      bidExtendS: timer?.bidExtendS ?? 0,
+      genres,
+      settings: settings ?? undefined,
+    };
   } catch {
     return null;
   }
 }
+export const saveSettings = (settings: RoomSettings) => store.set("aa:settings", JSON.stringify(settings));
 export const saveTimer = (bidTimerS: number, bidExtendS: number) =>
   store.set("aa:timer", JSON.stringify({ bidTimerS, bidExtendS }));
 export const saveGenres = (theme: string, genres: number[]) => store.set(`aa:genres:${theme}`, JSON.stringify(genres));

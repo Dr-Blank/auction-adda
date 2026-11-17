@@ -697,6 +697,54 @@ fn a_creator_brings_their_saved_settings_and_bad_ones_fall_back_to_the_defaults(
     let room = state(&b).room;
     assert_eq!((room.bid_timer_s, room.bid_extend_s), (30, 10));
     assert_eq!(room.cast.genres, [0u8; 0]);
+    assert!(!room.settings.locked);
+
+    let c = fake(&mut rooms, "10.0.0.3");
+    send(
+        &mut rooms,
+        &c,
+        json!({ "type": "create", "theme": "box-office", "name": "c",
+                "prefs": { "bidTimerS": 30, "bidExtendS": 10, "settings": { "locked": true, "later": 1 } } }),
+    );
+    assert!(state(&c).room.settings.locked);
+}
+
+#[test]
+fn only_the_admin_changes_settings_a_locked_room_takes_no_new_seats_but_watchers() {
+    let (_, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, code) = seated(&mut rooms, 2);
+    let lock = json!({ "type": "settings", "settings": { "locked": true } });
+    send(&mut rooms, &clients[1], lock.clone());
+    assert_error(&clients[1], "Only the room admin can change the room settings");
+    send(&mut rooms, &clients[0], lock);
+    assert!(state(&clients[1]).room.settings.locked);
+
+    let late = fake(&mut rooms, "10.0.0.9");
+    send(&mut rooms, &late, json!({ "type": "join", "room": code }));
+    assert_eq!(joined(&late).1, None);
+    send(
+        &mut rooms,
+        &late,
+        json!({ "type": "join", "room": code, "name": "Late" }),
+    );
+    assert_error(&late, "The admin locked this room");
+    assert_eq!(state(&clients[0]).room.seats.len(), 2);
+    // The admin can still fill seats with bots.
+    send(&mut rooms, &clients[0], json!({ "type": "bot" }));
+    assert_eq!(state(&clients[0]).room.seats.len(), 3);
+
+    send(
+        &mut rooms,
+        &clients[0],
+        json!({ "type": "settings", "settings": { "locked": false } }),
+    );
+    send(
+        &mut rooms,
+        &late,
+        json!({ "type": "join", "room": code, "name": "Late" }),
+    );
+    assert_eq!(joined(&late).1, Some(3));
 }
 
 #[test]
@@ -1044,6 +1092,11 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
     let mut rooms = rooms_in(&dir.0, opts);
     let (clients, code) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    send(
+        &mut rooms,
+        &clients[0],
+        json!({ "type": "settings", "settings": { "locked": true } }),
+    );
     let token = joined(&clients[2]).2.unwrap();
     let before = game(&clients[2]);
     rooms.flush();
@@ -1070,6 +1123,7 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
             "createdAt",
             "game",
             "seats",
+            "settings",
             "theme",
             "updatedAt",
             "v"
@@ -1086,6 +1140,7 @@ fn rooms_survive_a_restart_and_expire_after_the_ttl() {
     );
     assert_eq!(joined(&back).1, Some(2));
     assert_eq!(game(&back), before);
+    assert!(state(&back).room.settings.locked);
     rooms.disconnect(back.id);
     drop(rooms);
 

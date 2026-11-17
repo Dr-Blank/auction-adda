@@ -52,6 +52,20 @@ pub struct Prefs {
     /// Genres for this theme, as in `Cast`; empty = random.
     #[serde(default)]
     pub genres: Vec<u8>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub settings: Option<RoomSettings>,
+}
+
+/// The admin's switches for how the room plays. Saved with the room, sent to everyone, changed
+/// with `settings` in the lobby or a game; the admin's browser keeps them for their next room. A
+/// field missing (older files and clients) takes its default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RoomSettings {
+    /// Nobody new takes a seat in the lobby; people opening the link can only watch. Seats the
+    /// admin frees in a game can still be claimed.
+    pub locked: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -159,6 +173,10 @@ pub enum ClientMsg {
         #[serde(default)]
         reroll: bool,
     },
+    /// Admin only, in the lobby or a game: replaces the room's settings.
+    Settings {
+        settings: RoomSettings,
+    },
     /// Any other `type`: answered with "Unknown message".
     #[serde(other)]
     #[ts(skip)]
@@ -193,6 +211,7 @@ impl ClientMsg {
             Self::Admin { .. } => "admin",
             Self::Timer { .. } => "timer",
             Self::Cast { .. } => "cast",
+            Self::Settings { .. } => "settings",
             Self::Unknown => "unknown",
         }
     }
@@ -241,6 +260,7 @@ pub struct RoomInfo {
     /// Length of the clock's current stretch (since the lot went up or a bid added time); null
     /// when none runs.
     pub bid_ms_window: Option<u64>,
+    pub settings: RoomSettings,
 }
 
 /// A room code and the seat token this browser keeps for it.

@@ -51,10 +51,10 @@ console.log("room", code);
 for (let i = 0; i < 3; i++) send({ type: "bot" });
 await until((s) => s.room.seats.length === 4);
 
-/** One shot of the room page as the admin's browser. */
-const shot = (name, then) => {
+/** One shot of the room page as the admin's browser (`viewer`: a browser without a seat). */
+const shot = (name, then, viewer = false) => {
   const file = path.join(out, `${name}.png`);
-  const setup = `localStorage.setItem("aa:token:${code}", ${JSON.stringify(token)})`;
+  const setup = viewer ? "localStorage.clear()" : `localStorage.setItem("aa:token:${code}", ${JSON.stringify(token)})`;
   const cmd = ["scripts/page-shot.mjs", file, `${BASE}/#${code}`, "--setup", setup, "--full"];
   if (then) cmd.push("--then", then);
   if (phone) cmd.push("--phone");
@@ -64,6 +64,12 @@ const click = (text) =>
   `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(text)})?.click()`;
 
 shot("lobby");
+send({ type: "settings", settings: { locked: true } });
+await until((s) => s.room.settings.locked);
+const openAdvanced = `document.querySelector("details.advanced").open = true`;
+shot("lobby-settings", openAdvanced);
+shot("lobby-locked-viewer", openAdvanced, true);
+send({ type: "settings", settings: { locked: false } });
 send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);

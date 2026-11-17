@@ -22,7 +22,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
 use crate::protocol::{
-    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomStage, SeatInfo, SeatKey, ServerMsg, ThemeId,
+    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey, ServerMsg, ThemeId,
 };
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -191,6 +191,7 @@ struct Room {
     bid_timer_s: u16,
     /// After a bid, everyone still in has at least this many seconds.
     bid_extend_s: u16,
+    settings: RoomSettings,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
@@ -303,6 +304,7 @@ struct SavedRef<'a> {
     updated_at: u64,
     bid_timer_s: u16,
     bid_extend_s: u16,
+    settings: &'a RoomSettings,
 }
 
 #[derive(Deserialize)]
@@ -321,6 +323,8 @@ struct Saved {
     bid_timer_s: u16,
     #[serde(default = "default_bid_extend")]
     bid_extend_s: u16,
+    #[serde(default)]
+    settings: RoomSettings,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -1002,6 +1006,11 @@ impl Rooms {
                 }
                 info!(room = %code, seat = me, "Cast set: genres {:?}, seed {}", room.cast.genres, room.cast.seed);
             }
+            ClientMsg::Settings { settings } => {
+                room.require_admin(me, "change the room settings")?;
+                info!(room = %code, seat = me, "Settings: {settings:?}");
+                room.settings = settings;
+            }
             ClientMsg::Release { seat } => {
                 if !room.has_seat(seat) {
                     return fail("No such seat");
@@ -1112,6 +1121,7 @@ impl Rooms {
                 updated_at: now,
                 bid_timer_s,
                 bid_extend_s,
+                settings: prefs.settings.unwrap_or_default(),
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -1172,6 +1182,9 @@ impl Rooms {
             let name = clean_name(raw_name)?;
             if room.seats.len() >= usize::from(config().max_players()) {
                 return fail("The room is full");
+            }
+            if room.settings.locked {
+                return fail("The admin locked this room; you can watch");
             }
             info!(client = id, room = %code, seat = room.seats.len(), "{name} joined the lobby");
             let token = new_token();
@@ -1425,6 +1438,7 @@ impl Rooms {
             bid_extend_s: room.bid_extend_s,
             bid_ms_left: room.bid_clock.map(|c| c.due.saturating_sub(now)),
             bid_ms_window: room.bid_clock.map(|c| c.due - c.from),
+            settings: room.settings.clone(),
         }
     }
 
@@ -1510,6 +1524,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         updated_at: saved.updated_at,
         bid_timer_s: saved.bid_timer_s.min(MAX_BID_TIMER_S),
         bid_extend_s: saved.bid_extend_s.clamp(MIN_BID_EXTEND_S, MAX_BID_EXTEND_S),
+        settings: saved.settings,
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -1627,6 +1642,7 @@ impl Store {
             updated_at: room.updated_at,
             bid_timer_s: room.bid_timer_s,
             bid_extend_s: room.bid_extend_s,
+            settings: &room.settings,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {

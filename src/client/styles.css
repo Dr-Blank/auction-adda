@@ -1885,12 +1885,17 @@ button.owned.open .mini-card + .mini-card {
   height: 4px;
   border-radius: 0;
 }
-.bid-timer {
+.bid-timer,
+.room-settings {
   display: grid;
   gap: 6px;
   font-size: 0.9rem;
 }
-.bid-timer h3 {
+.room-settings {
+  margin-bottom: 12px;
+}
+.bid-timer h3,
+.room-settings h3 {
   margin: 0;
   font-size: 0.72rem;
   color: var(--muted);
@@ -1900,6 +1905,82 @@ button.owned.open .mini-card + .mini-card {
 }
 .bid-timer select {
   margin-left: 6px;
+}
+/* An on/off room setting: a small switch, the name, and what it does. */
+.toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.toggle > span {
+  display: grid;
+  gap: 1px;
+}
+.toggle em {
+  font-style: normal;
+  color: var(--muted);
+}
+.toggle.on em {
+  color: var(--gold);
+}
+.toggle input {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 1px 0 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  cursor: inherit;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+.toggle input:checked {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.toggle input:checked::after {
+  transform: translateX(14px);
+  background: var(--gold-ink);
+}
+.toggle input:disabled {
+  display: none;
+}
+.toggle:has(input:disabled) {
+  cursor: default;
+}
+.toggle input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.locked-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  vertical-align: middle;
 }
 /* A suit's name in its own colour (the glyph keeps it apart without colour). */
 .suit-chip {
