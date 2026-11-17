@@ -122,9 +122,25 @@ export function Table({ state, send, theme, reactions }: Props) {
   // ---- "your move" cue ----
   const owing = me !== null && g.pending.includes(me);
   useEffect(() => {
-    document.title = owing ? "● Your move — Auction Adda" : "Auction Adda";
+    const yours = "● Your move — Auction Adda";
     if (owing) play("turn");
+    // In another tab the title flashes, so the tab strip shows it; back here it holds still.
+    let flash = 0;
+    const show = () => {
+      clearInterval(flash);
+      document.title = owing ? yours : "Auction Adda";
+      if (!owing || !document.hidden) return;
+      let on = true;
+      flash = window.setInterval(() => {
+        on = !on;
+        document.title = on ? yours : "○ YOUR MOVE";
+      }, 1000);
+    };
+    show();
+    document.addEventListener("visibilitychange", show);
     return () => {
+      clearInterval(flash);
+      document.removeEventListener("visibilitychange", show);
       document.title = "Auction Adda";
     };
   }, [owing]);
