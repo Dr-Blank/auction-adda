@@ -8,4 +8,4 @@ export type ServerMsg = { "type": "joined", room: string, seat: number | null, t
 /**
  * The seat this tab left to a bot in the running game; `back` takes it again.
  */
-left: number | null, game: View | null, } | { "type": "rooms", rooms: Array<MyRoom>, gone: Array<string>, } | { "type": "closed", room: string, by: string, } | { "type": "removed", room: string, token: string, message: string, } | { "type": "notice", message: string, } | { "type": "error", message: string, code?: ErrorCode, };
+left: number | null, game: View | null, } | { "type": "rooms", rooms: Array<MyRoom>, gone: Array<string>, } | { "type": "closed", room: string, by: string, } | { "type": "removed", room: string, token: string, message: string, } | { "type": "notice", message: string, } | { "type": "reaction", seat: number, emoji: string, } | { "type": "error", message: string, code?: ErrorCode, };

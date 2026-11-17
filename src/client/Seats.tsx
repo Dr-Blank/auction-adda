@@ -7,6 +7,8 @@ import { Avatar } from "./Avatar.tsx";
 import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from "./derive.ts";
 import { COMPACT, TOUCH } from "./hooks.ts";
 import { Rename } from "./Lobby.tsx";
+import type { Reaction } from "./net.ts";
+import { Floats } from "./Reactions.tsx";
 import { Sheet } from "./Sheet.tsx";
 
 export interface Bubble {
@@ -19,6 +21,7 @@ interface SeatProps {
   room: RoomInfo;
   theme: Theme;
   bubbles: (Bubble | null)[];
+  reactions: Reaction[];
   awayFor: (seat: number) => number | null;
   send: (m: ClientMsg) => void;
 }
@@ -45,7 +48,17 @@ export function Seats(props: SeatProps) {
 }
 
 /** One player: who is up, who sells, how many cards they hold and the films they have bought. */
-export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: SeatProps & { i: number; arc?: number }) {
+export function Seat({
+  g,
+  room,
+  theme,
+  bubbles,
+  reactions,
+  awayFor,
+  send,
+  i,
+  arc = 1,
+}: SeatProps & { i: number; arc?: number }) {
   const me = g.you;
   const a = g.auction;
   const words = lastWords(g);
@@ -176,6 +189,7 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
             {bubbles[i]!.text}
           </span>
         )}
+        <Floats reactions={reactions} seat={i} />
       </div>
       <div className="seat-body">
         <div className="seat-name">

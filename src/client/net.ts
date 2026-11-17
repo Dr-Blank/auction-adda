@@ -3,6 +3,14 @@ import type { ClientMsg, MyRoom, Prefs, RoomSettings, SeatKey, ServerMsg } from 
 import { goHome } from "./Brand.tsx";
 
 export type RoomState = Extract<ServerMsg, { type: "state" }> & { receivedAt: number };
+/** A reaction someone sent, shown over their seat for a moment. */
+export interface Reaction {
+  seat: number;
+  emoji: string;
+  key: number;
+}
+/** How long a reaction floats over its seat. */
+export const REACTION_MS = 2600;
 export interface NetError {
   message: string;
   code?: string;
@@ -102,6 +110,9 @@ export function useRoom(code: string | null) {
   const [myRooms, setMyRooms] = useState<MyRoom[] | null>(null);
   /** Something the server did to this tab unasked (room closed, removed from a seat). */
   const [notice, setNotice] = useState<NetError | null>(null);
+  /** Reactions still floating, oldest first. */
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const reactionKey = useRef(0);
   const ws = useRef<WebSocket | null>(null);
   const codeRef = useRef(code);
   codeRef.current = code;
@@ -170,6 +181,10 @@ export function useRoom(code: string | null) {
           if (codeRef.current === msg.room) goHome();
         } else if (msg.type === "notice") {
           setNotice({ message: msg.message, at: Date.now() });
+        } else if (msg.type === "reaction") {
+          const r = { seat: msg.seat, emoji: msg.emoji, key: ++reactionKey.current };
+          setReactions((old) => [...old.slice(-11), r]);
+          setTimeout(() => setReactions((old) => old.filter((x) => x !== r)), REACTION_MS);
         } else {
           setError({ message: msg.message, code: msg.code, at: Date.now() });
         }
@@ -204,6 +219,7 @@ export function useRoom(code: string | null) {
     state: current,
     error,
     notice,
+    reactions,
     send,
     join,
     myRooms,

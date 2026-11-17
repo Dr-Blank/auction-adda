@@ -60,7 +60,7 @@ pub struct Prefs {
 /// The admin's switches for how the room plays. Saved with the room, sent to everyone, changed
 /// with `settings` in the lobby or a game; the admin's browser keeps them for their next room. A
 /// field missing (older files and clients) takes its default.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RoomSettings {
     /// Nobody new takes a seat in the lobby; people opening the link can only watch. Seats the
@@ -72,6 +72,41 @@ pub struct RoomSettings {
     pub rename: bool,
     /// The seats are drawn again at the start of every round, not only when a game starts.
     pub shuffle_each_round: bool,
+    /// Emoji players can send over their seat (`react`), at most `MAX_REACTIONS`; empty = off.
+    pub reactions: Vec<String>,
+}
+
+/// The reactions a new room offers.
+pub const DEFAULT_REACTIONS: [&str; 6] = ["👏", "😂", "😮", "🔥", "😬", "🙏"];
+/// At most this many reactions in a room's set.
+pub const MAX_REACTIONS: usize = 8;
+
+impl Default for RoomSettings {
+    fn default() -> Self {
+        Self {
+            locked: false,
+            freeze: FreezeBy::default(),
+            rename: false,
+            shuffle_each_round: false,
+            reactions: DEFAULT_REACTIONS.map(str::to_owned).to_vec(),
+        }
+    }
+}
+
+impl RoomSettings {
+    /// A reaction is one short, visible symbol (an emoji with its modifiers, or a few letters).
+    #[must_use]
+    pub fn reactions_ok(&self) -> bool {
+        let mut seen = self.reactions.clone();
+        seen.sort();
+        seen.dedup();
+        self.reactions.len() <= MAX_REACTIONS
+            && seen.len() == self.reactions.len()
+            && self
+                .reactions
+                .iter()
+                .all(|r| !r.is_empty() && r.len() <= 16 && r.chars().all(|c| !c.is_control() && !c.is_whitespace()))
+    }
 }
 
 /// Who may freeze a running game. Whoever froze it, and the admin, may unfreeze it.
@@ -133,6 +168,11 @@ pub enum ClientMsg {
     /// In the lobby: the sender is ready to play (or not any more). The admin may start anyway.
     Ready {
         on: bool,
+    },
+    /// One of the room's reactions over the sender's seat, sent on to everyone as `reaction`. A
+    /// few per seconds at most; never saved.
+    React {
+        emoji: String,
     },
     /// Admin only.
     Start,
@@ -244,6 +284,7 @@ impl ClientMsg {
             Self::Avatar { .. } => "avatar",
             Self::Rename { .. } => "rename",
             Self::Ready { .. } => "ready",
+            Self::React { .. } => "react",
             Self::Start => "start",
             Self::Bot { .. } => "bot",
             Self::Kick { .. } => "kick",
@@ -416,6 +457,8 @@ pub enum ServerMsg {
     },
     /// Something happened to this tab that it did not ask for (removed from a seat, say).
     Notice { message: String },
+    /// `seat` sent a reaction.
+    Reaction { seat: Seat, emoji: String },
     Error {
         message: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]

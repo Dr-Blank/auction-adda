@@ -866,6 +866,62 @@ fn players_say_they_are_ready_and_the_admin_may_start_anyway() {
     assert_eq!(ready(&clients[0]), [false, false, false, true]);
 }
 
+/// Every `reaction` this client got, oldest first.
+fn reactions(c: &Fake) -> Vec<(u8, String)> {
+    let got = c.got.lock().unwrap();
+    got.iter()
+        .filter_map(|m| match m {
+            ServerMsg::Reaction { seat, emoji } => Some((*seat, emoji.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn reactions_from_the_admins_set_reach_everyone_a_few_at_a_time() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let watcher = fake(&mut rooms, "10.0.0.9");
+    send(&mut rooms, &watcher, json!({ "type": "join", "room": code }));
+    assert_eq!(state(&clients[0]).room.settings.reactions.len(), 6, "a default set");
+
+    let react = |e: &str| json!({ "type": "react", "emoji": e });
+    send(&mut rooms, &clients[1], react("👏"));
+    assert_eq!(reactions(&watcher), [(1, "👏".to_owned())]);
+    assert_eq!(reactions(&clients[2]), [(1, "👏".to_owned())]);
+    send(&mut rooms, &clients[1], react("🦄"));
+    assert_error(&clients[1], "That reaction is not on in this room");
+    send(&mut rooms, &watcher, react("👏"));
+    assert_error(&watcher, "take a seat first");
+    for _ in 0..3 {
+        send(&mut rooms, &clients[1], react("🔥"));
+    }
+    send(&mut rooms, &clients[1], react("🔥"));
+    assert_error(&clients[1], "Easy on the reactions");
+    advance(&now, 4_000);
+    send(&mut rooms, &clients[1], react("🔥"));
+    assert_eq!(reactions(&watcher).len(), 5);
+
+    // The admin picks the set, also mid-game; an empty set turns reactions off.
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    let set = |r: Value| json!({ "type": "settings", "settings": { "reactions": r } });
+    send(&mut rooms, &clients[0], set(json!(["🦄", "🦄"])));
+    assert_error(&clients[0], "Pick up to 8 different reactions");
+    send(
+        &mut rooms,
+        &clients[0],
+        set(json!(["a", "b", "c", "d", "e", "f", "g", "h", "i"])),
+    );
+    assert_error(&clients[0], "Pick up to 8 different reactions");
+    send(&mut rooms, &clients[0], set(json!(["🦄"])));
+    send(&mut rooms, &clients[2], react("🦄"));
+    assert_eq!(reactions(&watcher).last(), Some(&(2, "🦄".to_owned())));
+    send(&mut rooms, &clients[0], set(json!([])));
+    send(&mut rooms, &clients[2], react("🦄"));
+    assert_error(&clients[2], "That reaction is not on in this room");
+}
+
 /// Every client still sits under the name it joined with, and the admin role stayed with P0.
 fn names_follow_seats(clients: &[Fake]) {
     for (i, c) in clients.iter().enumerate() {

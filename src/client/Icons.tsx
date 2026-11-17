@@ -49,6 +49,15 @@ export const PencilIcon = () => (
   </svg>
 );
 
+/** React with an emoji. */
+export const SmileIcon = () => (
+  <svg {...base} className="icon">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M8.5 14a4.2 4.2 0 0 0 7 0" />
+    <path d="M9.5 9.8h0M14.5 9.8h0" strokeWidth="2.6" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

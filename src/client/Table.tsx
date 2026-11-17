@@ -28,9 +28,10 @@ import {
   ShareLink,
   WatcherList,
 } from "./Lobby.tsx";
-import type { RoomState } from "./net.ts";
+import type { Reaction, RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
+import { ReactBar } from "./Reactions.tsx";
 import { AuctionTypes, Rules } from "./Rules.tsx";
 import { Ruling } from "./Ruling.tsx";
 import type { Bubble } from "./Seats.tsx";
@@ -43,6 +44,7 @@ interface Props {
   state: RoomState;
   send: (m: ClientMsg) => void;
   theme: Theme;
+  reactions: Reaction[];
 }
 
 const canPair = (double: Card, second: Card) =>
@@ -82,7 +84,7 @@ interface Moment {
   bids: number[] | null;
 }
 
-export function Table({ state, send, theme }: Props) {
+export function Table({ state, send, theme, reactions }: Props) {
   const g = state.game!;
   const me = g.you;
   const { room } = state;
@@ -698,6 +700,7 @@ export function Table({ state, send, theme }: Props) {
             <FreezeIcon /> <span className="lbl">Freeze</span>
           </button>
         )}
+        {me !== null && <ReactBar room={room} send={send} />}
         <button className="icon-btn" onClick={() => setLogOpen(true)} title="Auction log" aria-label="Auction log">
           ☰ <span className="lbl">Log</span>
         </button>
@@ -759,7 +762,7 @@ export function Table({ state, send, theme }: Props) {
         )}
       </div>
 
-      <Seats g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} />
+      <Seats g={g} room={room} theme={theme} bubbles={bubbles} reactions={reactions} awayFor={awayFor} send={send} />
 
       <section className={`stage ${owing ? "owing" : ""} ${a ? `stage-${a.kind}` : ""}`}>
         {body}
@@ -786,7 +789,16 @@ export function Table({ state, send, theme }: Props) {
       {me !== null && (
         <section className={`hand-panel ${myPlay || myOffer ? "owing" : ""}`}>
           <div className="hand-head">
-            <Seat g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} i={me} />
+            <Seat
+              g={g}
+              room={room}
+              theme={theme}
+              bubbles={bubbles}
+              reactions={reactions}
+              awayFor={awayFor}
+              send={send}
+              i={me}
+            />
             <h2>
               Your hand <small>{hand.length}</small>
             </h2>

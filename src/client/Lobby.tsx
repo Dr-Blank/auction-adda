@@ -7,8 +7,9 @@ import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
 import { CheckIcon, CopyIcon, LockIcon, PencilIcon } from "./Icons.tsx";
-import type { RoomState } from "./net.ts";
+import type { Reaction, RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
+import { Floats, ReactBar, ReactionPicker } from "./Reactions.tsx";
 import { Rules } from "./Rules.tsx";
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   send: (m: ClientMsg) => void;
   join: (room: string, name?: string) => void;
   theme: Theme;
+  reactions: Reaction[];
 }
 
 /** The themes as radio cards. */
@@ -284,6 +286,7 @@ export function RoomSettingsPanel({
         admin={admin}
         onChange={(shuffleEachRound) => set({ shuffleEachRound })}
       />
+      <ReactionPicker room={room} admin={admin} set={set} />
     </div>
   );
 }
@@ -509,7 +512,7 @@ function StartRow({ room, canStart, send }: { room: RoomInfo; canStart: boolean;
   );
 }
 
-export function Lobby({ state, send, join, theme }: Props) {
+export function Lobby({ state, send, join, theme, reactions }: Props) {
   const { room, you } = state;
   const [name, setName] = useState(savedName);
   const [look, setLook] = useSavedLook();
@@ -554,6 +557,7 @@ export function Lobby({ state, send, join, theme }: Props) {
       <ol className="lobby-seats">
         {room.seats.map((s, i) => (
           <li key={i} className={`${s.connected ? "" : "away"} ${i === you ? "me" : ""}`}>
+            <Floats reactions={reactions} seat={i} />
             {i === you ? (
               <LookButton
                 code={s.avatar}
@@ -611,6 +615,7 @@ export function Lobby({ state, send, join, theme }: Props) {
           </li>
         ))}
       </ol>
+      {you !== null && <ReactBar room={room} send={send} />}
       <WatcherList room={room} me={you} send={send} />
       <p className="admin-note">
         <span className="admin-mark">★</span> <b>{isAdmin ? "You are" : `${adminName} is`} the room admin.</b> The admin

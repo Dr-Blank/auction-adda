@@ -1116,6 +1116,101 @@ legend {
     transform: translateY(-6px);
   }
 }
+/* Reactions: emoji that rise from a seat's avatar and fade. */
+.reaction {
+  position: absolute;
+  left: calc(4px + var(--k, 0) * 12px);
+  bottom: 40%;
+  z-index: 8;
+  font-size: 1.7rem;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 50%));
+  animation: rise 2.6s ease-out forwards;
+}
+@keyframes rise {
+  0% {
+    transform: translateY(8px) scale(0.4);
+    opacity: 0;
+  }
+  12% {
+    transform: translateY(-6px) scale(1.15);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-56px) scale(1);
+    opacity: 0;
+  }
+}
+.lobby-seats li {
+  position: relative;
+}
+.react-bar {
+  position: relative;
+}
+.lobby .react-bar {
+  justify-self: start;
+}
+.react-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 50%);
+}
+.lobby .react-pop {
+  left: 0;
+  right: auto;
+}
+.react-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.react-btn:hover,
+.react-btn:focus-visible {
+  background: rgb(255 255 255 / 10%);
+}
+.react-btn:active {
+  transform: scale(0.9);
+}
+.reaction-set {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+}
+.reaction-set em {
+  font-style: normal;
+  color: var(--muted);
+}
+.reaction-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.reaction-choices .chip-btn {
+  font-size: 1.1rem;
+  padding: 2px 8px;
+}
+.reaction-choices .chip-btn.on {
+  border-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 18%);
+}
 .seat-body {
   display: grid;
   gap: 3px;

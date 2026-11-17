@@ -23,4 +23,8 @@ rename: boolean,
 /**
  * The seats are drawn again at the start of every round, not only when a game starts.
  */
-shuffleEachRound: boolean, };
+shuffleEachRound: boolean, 
+/**
+ * Emoji players can send over their seat (`react`), at most `MAX_REACTIONS`; empty = off.
+ */
+reactions: Array<string>, };

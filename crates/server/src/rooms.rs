@@ -22,8 +22,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
 use crate::protocol::{
-    Cast, ClientMsg, ErrorCode, FreezeBy, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey,
-    ServerMsg, ThemeId, Watcher,
+    Cast, ClientMsg, ErrorCode, FreezeBy, MAX_REACTIONS, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo,
+    SeatKey, ServerMsg, ThemeId, Watcher,
 };
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -168,7 +168,13 @@ struct Client {
     token: Option<String>,
     /// Name shown in the watcher list while it watches.
     viewer: String,
+    /// When it sent its latest reactions, for the rate limit.
+    reacted: Vec<u64>,
 }
+
+/// At most this many reactions per seat in `REACT_WINDOW_MS`.
+const REACT_LIMIT: usize = 4;
+const REACT_WINDOW_MS: u64 = 4_000;
 
 /// Someone the admin kicked from a seat or removed from watching, known by the seat token their
 /// browser keeps.
@@ -658,6 +664,7 @@ impl Rooms {
                 seat: None,
                 token: None,
                 viewer: String::new(),
+                reacted: Vec::new(),
             },
         );
         id
@@ -1043,6 +1050,9 @@ impl Rooms {
             }
             Ok(())
         };
+        if let ClientMsg::React { emoji } = &msg {
+            return self.react(id, &code, me, emoji, now);
+        }
         let room = self.room_mut(&code)?;
         match msg {
             ClientMsg::Avatar { avatar } => {
@@ -1318,6 +1328,9 @@ impl Rooms {
             }
             ClientMsg::Settings { settings } => {
                 room.require_admin(me, "change the room settings")?;
+                if !settings.reactions_ok() {
+                    return fail(format!("Pick up to {MAX_REACTIONS} different reactions"));
+                }
                 info!(room = %code, seat = me, "Settings: {settings:?}");
                 room.settings = settings;
             }
@@ -1440,6 +1453,32 @@ impl Rooms {
         Ok(())
     }
 
+    /// Passes a reaction from `seat` to everyone in the room, within the rate limit.
+    fn react(&mut self, id: ClientId, code: &str, seat: Seat, emoji: &str, now: u64) -> Result<(), Fail> {
+        let room = self.rooms.get(code).ok_or_else(|| Fail::new("Join a room first"))?;
+        if !room.settings.reactions.iter().any(|r| r == emoji) {
+            return fail("That reaction is not on in this room");
+        }
+        let here = room.clients.clone();
+        let c = self
+            .clients
+            .get_mut(&id)
+            .ok_or_else(|| Fail::new("Join a room first"))?;
+        c.reacted.retain(|&t| now.saturating_sub(t) < REACT_WINDOW_MS);
+        if c.reacted.len() >= REACT_LIMIT {
+            return fail("Easy on the reactions; wait a moment");
+        }
+        c.reacted.push(now);
+        let msg = ServerMsg::Reaction {
+            seat,
+            emoji: emoji.to_owned(),
+        };
+        for cid in here {
+            self.send(cid, &msg);
+        }
+        Ok(())
+    }
+
     fn create(
         &mut self,
         id: ClientId,
@@ -1458,6 +1497,10 @@ impl Rooms {
             Err(_) => (DEFAULT_BID_TIMER_S, DEFAULT_BID_EXTEND_S),
         };
         let genres = check_genres(&prefs.genres).unwrap_or_default();
+        let mut settings = prefs.settings.unwrap_or_default();
+        if !settings.reactions_ok() {
+            settings.reactions = RoomSettings::default().reactions;
+        }
         let now = (self.now)();
         let ip = self.client(id)?.ip.clone();
         let window_ms = self.create_limit.window_ms;
@@ -1517,7 +1560,7 @@ impl Rooms {
                 updated_at: now,
                 bid_timer_s,
                 bid_extend_s,
-                settings: prefs.settings.unwrap_or_default(),
+                settings,
                 banned: Vec::new(),
                 frozen: None,
                 version: 0,

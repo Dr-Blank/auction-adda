@@ -65,9 +65,9 @@ export function App() {
   } else if (!net.state) {
     body = <main className="center-card">Connecting…</main>;
   } else if (!net.state.game) {
-    body = <Lobby state={net.state} send={net.send} join={net.join} theme={theme} />;
+    body = <Lobby state={net.state} send={net.send} join={net.join} theme={theme} reactions={net.reactions} />;
   } else {
-    body = <Table state={net.state} send={net.send} theme={theme} />;
+    body = <Table state={net.state} send={net.send} theme={theme} reactions={net.reactions} />;
   }
 
   return (

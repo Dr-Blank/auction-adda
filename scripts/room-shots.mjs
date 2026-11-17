@@ -99,6 +99,15 @@ send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
+// A reaction rises over the admin's own seat; the picker stays open.
+shot(
+  "game-react",
+  `(async () => {
+    document.querySelector("[aria-label='React']")?.click();
+    await new Promise((r) => setTimeout(r, 100));
+    document.querySelector(".react-btn")?.click();
+  })()`,
+);
 // Seats are drawn when the game starts: find people by name.
 const seatOf = (s, name) => s.room.seats.findIndex((x) => x.name === name);
 // Ben freezes the game: the admin and Ben may unfreeze it.
