@@ -58,6 +58,26 @@ export const SmileIcon = () => (
   </svg>
 );
 
+/** Send with another app (the phone's share sheet). */
+export const ShareIcon = () => (
+  <svg {...base} className="icon">
+    <circle cx="17.5" cy="5.5" r="2.5" />
+    <circle cx="6.5" cy="12" r="2.5" />
+    <circle cx="17.5" cy="18.5" r="2.5" />
+    <path d="M8.7 10.7l6.6-3.9M8.7 13.3l6.6 3.9" />
+  </svg>
+);
+
+/** Show as a QR code. */
+export const QrIcon = () => (
+  <svg {...base} className="icon">
+    <rect x="4" y="4" width="6" height="6" rx="1" />
+    <rect x="14" y="4" width="6" height="6" rx="1" />
+    <rect x="4" y="14" width="6" height="6" rx="1" />
+    <path d="M14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 20h1M20 14v1" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

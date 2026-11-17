@@ -83,6 +83,7 @@ watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", room: code, v
 await until((s) => s.room.watchers.length > 0);
 
 shot("lobby");
+shot("lobby-qr", `document.querySelector("[aria-label='Show the room link as a QR code']")?.click()`);
 // Ben is not ready: the admin's start asks first. Then Ben says ready.
 shot("lobby-start-anyway", `document.querySelector("button.btn.primary.big")?.click()`);
 ben.send(JSON.stringify({ type: "ready", on: true }));

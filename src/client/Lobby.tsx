@@ -6,11 +6,13 @@ import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { CheckIcon, CopyIcon, LockIcon, PencilIcon } from "./Icons.tsx";
+import { CheckIcon, CopyIcon, LockIcon, PencilIcon, QrIcon, ShareIcon } from "./Icons.tsx";
 import type { Reaction, RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
+import { Qr } from "./Qr.tsx";
 import { Floats, ReactBar, ReactionPicker } from "./Reactions.tsx";
 import { Rules } from "./Rules.tsx";
+import { Sheet } from "./Sheet.tsx";
 
 interface Props {
   state: RoomState;
@@ -87,15 +89,49 @@ function useCopy(text: string): [boolean, () => void] {
   ];
 }
 
+/** The room link: copy it, hand it to the phone's share sheet, or show it as a QR code. */
 export function ShareLink({ code }: { code: string }) {
   const link = `${location.origin}/#${code}`;
   const [copied, copy] = useCopy(link);
+  const [qr, setQr] = useState(false);
+  const canShare = typeof navigator.share === "function";
   return (
     <div className="share">
       <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Room link" />
       <button className="btn" onClick={copy}>
         {copied ? "Copied" : "Copy link"}
       </button>
+      {canShare && (
+        <button
+          className="btn share-btn"
+          onClick={() =>
+            navigator
+              .share({ title: "Auction Adda", text: `Join my Auction Adda room ${code}`, url: link })
+              .catch(() => {})
+          }
+          title="Send the link with another app"
+          aria-label="Share the room link"
+        >
+          <ShareIcon />
+        </button>
+      )}
+      <button
+        className="btn share-btn"
+        onClick={() => setQr(true)}
+        title="Show the link as a QR code"
+        aria-label="Show the room link as a QR code"
+      >
+        <QrIcon />
+      </button>
+      {qr && (
+        <Sheet title={`Room ${code}`} onClose={() => setQr(false)}>
+          <div className="qr-box">
+            <Qr text={link} label={`QR code for ${link}`} />
+            <p className="muted">Point a phone camera here to open the room.</p>
+            <code>{link}</code>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
