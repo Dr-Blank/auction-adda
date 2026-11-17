@@ -5,14 +5,22 @@
   border-radius: 0.5em;
   overflow: hidden;
   flex: none;
-  box-shadow: 0 0.15em 0.5em rgb(0 0 0 / 45%), inset 0 0 0 1px rgb(255 255 255 / 14%);
-  font-family: Georgia, 'Times New Roman', serif;
+  box-shadow:
+    0 0.15em 0.5em rgb(0 0 0 / 45%),
+    inset 0 0 0 1px rgb(255 255 255 / 14%);
+  font-family: Georgia, "Times New Roman", serif;
   line-height: 1.1;
   user-select: none;
 }
-.poster-sm { font-size: 7px; }
-.poster-md { font-size: 13px; }
-.poster-lg { font-size: 19px; }
+.poster-sm {
+  font-size: 7px;
+}
+.poster-md {
+  font-size: 13px;
+}
+.poster-lg {
+  font-size: 19px;
+}
 
 .poster-art {
   position: absolute;
@@ -37,7 +45,10 @@
   white-space: nowrap;
   box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
 }
-.poster-type b { font-size: 1.25em; line-height: 1; }
+.poster-type b {
+  font-size: 1.25em;
+  line-height: 1;
+}
 
 .poster-foot {
   position: absolute;
@@ -67,13 +78,25 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.poster-star i { font-style: normal; opacity: 0.7; }
+.poster-star i {
+  font-style: normal;
+  opacity: 0.7;
+}
 
 /* Small posters: keep only what is readable — auction icon and star initials. */
-.poster-sm .poster-type { font-size: 1.5em; padding: 0.05em 0.3em; top: 0.25em; left: 0.25em; }
+.poster-sm .poster-type {
+  font-size: 1.5em;
+  padding: 0.05em 0.3em;
+  top: 0.25em;
+  left: 0.25em;
+}
 .poster-sm .poster-type span,
-.poster-sm .poster-foot { display: none; }
-.poster-code { display: none; }
+.poster-sm .poster-foot {
+  display: none;
+}
+.poster-code {
+  display: none;
+}
 .poster-sm .poster-code {
   display: block;
   position: absolute;
@@ -95,8 +118,7 @@
   border-radius: 0.32em;
   color: var(--t);
   background:
-    radial-gradient(130% 70% at 50% 14%, color-mix(in srgb, var(--h) 34%, var(--g)) 0%, var(--g) 72%),
-    var(--g);
+    radial-gradient(130% 70% at 50% 14%, color-mix(in srgb, var(--h) 34%, var(--g)) 0%, var(--g) 72%), var(--g);
   box-shadow:
     0 0.06em 0.12em rgb(0 0 0 / 40%),
     0 0.5em 1.1em -0.35em rgb(0 0 0 / 60%),
@@ -105,7 +127,7 @@
 /* Print grain, then a foil sheen that waits off the left edge. */
 .poster.bo::after,
 .poster.bo::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -117,7 +139,15 @@
   opacity: 0.35;
 }
 .poster.bo::before {
-  background: linear-gradient(112deg, transparent 38%, rgb(255 255 255 / 0%) 42%, rgb(255 250 235 / 22%) 50%, rgb(255 255 255 / 0%) 58%, transparent 62%) no-repeat;
+  background: linear-gradient(
+      112deg,
+      transparent 38%,
+      rgb(255 255 255 / 0%) 42%,
+      rgb(255 250 235 / 22%) 50%,
+      rgb(255 255 255 / 0%) 58%,
+      transparent 62%
+    )
+    no-repeat;
   background-size: 260% 100%;
   background-position: 100% 0;
 }
@@ -144,7 +174,10 @@
   text-transform: uppercase;
   box-shadow: none;
 }
-.bo .poster-type b { font-size: 1.3em; letter-spacing: 0; }
+.bo .poster-type b {
+  font-size: 1.3em;
+  letter-spacing: 0;
+}
 
 .bo .poster-foot {
   z-index: 1;
@@ -186,14 +219,22 @@
 }
 
 /* Small posters: icon top left, initials in serif on a ground fade. */
-.poster-sm.bo .poster-type { top: 0.3em; left: 0.3em; padding: 0.05em 0.28em; font-size: 1.5em; letter-spacing: 0; }
-.poster-sm.bo .bo-frame text { display: none; }
+.poster-sm.bo .poster-type {
+  top: 0.3em;
+  left: 0.3em;
+  padding: 0.05em 0.28em;
+  font-size: 1.5em;
+  letter-spacing: 0;
+}
+.poster-sm.bo .bo-frame text {
+  display: none;
+}
 .poster-sm.bo .poster-code {
   z-index: 1;
   bottom: 0;
   padding: 1.6em 0 0.35em;
   background: linear-gradient(to top, var(--g) 45%, transparent);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-weight: 400;
   letter-spacing: 0.08em;
   color: var(--t);
@@ -208,19 +249,42 @@
   background-position: 0 0;
   transition: background-position 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.lot-posters .poster.bo { animation: bo-house-lights 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.lot-posters .poster.bo::before { animation: bo-sheen 1s cubic-bezier(0.3, 0.6, 0.2, 1) 0.45s both; }
+.lot-posters .poster.bo {
+  animation: bo-house-lights 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.lot-posters .poster.bo::before {
+  animation: bo-sheen 1s cubic-bezier(0.3, 0.6, 0.2, 1) 0.45s both;
+}
 .lot-posters > :nth-child(2) .poster.bo,
-.lot-posters > .poster.bo:nth-child(2) { animation-delay: 0.12s; }
+.lot-posters > .poster.bo:nth-child(2) {
+  animation-delay: 0.12s;
+}
 @keyframes bo-house-lights {
-  from { opacity: 0; transform: translateY(0.4em) scale(0.97); filter: brightness(0.25) saturate(0.3); }
-  55% { opacity: 1; filter: brightness(1.18) saturate(1.05); }
-  to { transform: none; filter: none; }
+  from {
+    opacity: 0;
+    transform: translateY(0.4em) scale(0.97);
+    filter: brightness(0.25) saturate(0.3);
+  }
+  55% {
+    opacity: 1;
+    filter: brightness(1.18) saturate(1.05);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
 }
 @keyframes bo-sheen {
-  from { background-position: 100% 0; }
-  to { background-position: 0 0; }
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 @media (hover: none) {
-  .hand-card:hover .poster.bo::before { background-position: 100% 0; transition: none; }
+  .hand-card:hover .poster.bo::before {
+    background-position: 100% 0;
+    transition: none;
+  }
 }

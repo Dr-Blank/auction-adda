@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { Theme } from '../themes/types.ts';
-import { TOUCH } from './hooks.ts';
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { Theme } from "../themes/types.ts";
+import { TOUCH } from "./hooks.ts";
 
 interface Props {
   min: number;
@@ -29,7 +29,7 @@ export function BidClock({ deadline, total }: { deadline: number; total: number 
   const left = Math.max(0, deadline - Date.now());
   const secs = Math.ceil(left / 1000);
   return (
-    <span className={`bid-clock ${secs <= 5 ? 'urgent' : ''}`} title="When this runs out, everyone still in is done">
+    <span className={`bid-clock ${secs <= 5 ? "urgent" : ""}`} title="When this runs out, everyone still in is done">
       <span className="secs">{secs}s</span>
       <span className="drain" aria-hidden="true">
         <span key={deadline} style={{ animationDuration: `${total}ms`, animationDelay: `${left - total}ms` }} />
@@ -42,13 +42,13 @@ export function BidClock({ deadline, total }: { deadline: number; total: number 
 export function BidBox({ min, max, start, label, theme, onBid, secondary, children }: Props) {
   const [text, setText] = useState(String(start ?? min));
   const n = Number(text);
-  const valid = text.trim() !== '' && Number.isInteger(n);
+  const valid = text.trim() !== "" && Number.isInteger(n);
   const ok = valid && n >= min && n <= max;
   const base = valid ? n : min;
   const clamp = (x: number) => Math.min(max, Math.max(min, x));
   const bump = (by: number) => setText(String(clamp(base + by)));
   // Currency around the number, taken from the theme ("₹0 cr" → "₹" and " cr").
-  const [pre, post = ''] = theme.money(0).split('0');
+  const [pre, post = ""] = theme.money(0).split("0");
 
   return (
     <form
@@ -58,7 +58,7 @@ export function BidBox({ min, max, start, label, theme, onBid, secondary, childr
         if (ok) onBid(n);
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape' && secondary) {
+        if (e.key === "Escape" && secondary) {
           e.preventDefault();
           secondary.onClick();
         }
@@ -77,11 +77,11 @@ export function BidBox({ min, max, start, label, theme, onBid, secondary, childr
             inputMode="numeric"
             pattern="[0-9]*"
             value={text}
-            onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ''))}
+            onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ""))}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              if (e.key === "ArrowUp" || e.key === "ArrowDown") {
                 e.preventDefault();
-                bump(e.key === 'ArrowUp' ? 1 : -1);
+                bump(e.key === "ArrowUp" ? 1 : -1);
               }
             }}
             aria-label={`${label} amount`}
@@ -113,10 +113,10 @@ export function BidBox({ min, max, start, label, theme, onBid, secondary, childr
       <div className="act-row">
         <button className="btn primary big" disabled={!ok}>
           {label}
-          {ok ? ` ${theme.money(n)}` : ''} <kbd>Enter</kbd>
+          {ok ? ` ${theme.money(n)}` : ""} <kbd>Enter</kbd>
         </button>
         {secondary && (
-          <button type="button" className={`btn big ${secondary.clock ? 'timed' : ''}`} onClick={secondary.onClick}>
+          <button type="button" className={`btn big ${secondary.clock ? "timed" : ""}`} onClick={secondary.onClick}>
             {secondary.label} <kbd>Esc</kbd>
             {secondary.clock}
           </button>

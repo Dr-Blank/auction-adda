@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Sheet } from './Sheet.tsx';
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Sheet } from "./Sheet.tsx";
 
 /**
  * A seat's look: one base-36 digit per part, in the order of `PARTS`. Each digit is taken modulo
@@ -8,70 +8,97 @@ import { Sheet } from './Sheet.tsx';
  * knowing the parts). New parts go at the end, so old looks keep their meaning.
  */
 
-const SKIN = ['#ffe0c7', '#f6cfa9', '#eab98c', '#d9a066', '#c18450', '#9c6640', '#7a4b2c', '#583420'];
-const HAIR = ['#1e1a1a', '#3b2618', '#62402a', '#8b3e22', '#c46a32', '#dcb565', '#ece0c4', '#9c9a9a', '#4d6fd0', '#c95f98'];
-const CLOTH = ['#e45d50', '#f0a33a', '#e8d06a', '#5fb27a', '#3f9c9a', '#4f7ad8', '#7a5fd0', '#c45d9e', '#3a3f4b', '#ecebe6'];
+const SKIN = ["#ffe0c7", "#f6cfa9", "#eab98c", "#d9a066", "#c18450", "#9c6640", "#7a4b2c", "#583420"];
+const HAIR = [
+  "#1e1a1a",
+  "#3b2618",
+  "#62402a",
+  "#8b3e22",
+  "#c46a32",
+  "#dcb565",
+  "#ece0c4",
+  "#9c9a9a",
+  "#4d6fd0",
+  "#c95f98",
+];
+const CLOTH = [
+  "#e45d50",
+  "#f0a33a",
+  "#e8d06a",
+  "#5fb27a",
+  "#3f9c9a",
+  "#4f7ad8",
+  "#7a5fd0",
+  "#c45d9e",
+  "#3a3f4b",
+  "#ecebe6",
+];
 /** Two close tones per background: a subtle top-to-bottom gradient. */
 const BG: [string, string][] = [
-  ['#f6e7d3', '#e6caa6'],
-  ['#e3ecf7', '#c4d4ec'],
-  ['#e6f2e3', '#c3ddbf'],
-  ['#f4e1ea', '#e3bfd0'],
-  ['#ece6f7', '#d0c3ec'],
-  ['#fdf1cf', '#f0d993'],
-  ['#dff1f0', '#b9dcda'],
-  ['#f7e2d9', '#e9bda9'],
-  ['#e7e7ea', '#cbccd3'],
-  ['#3a3657', '#25223b'],
-  ['#31514a', '#1f3631'],
-  ['#5a3d37', '#3a2723'],
+  ["#f6e7d3", "#e6caa6"],
+  ["#e3ecf7", "#c4d4ec"],
+  ["#e6f2e3", "#c3ddbf"],
+  ["#f4e1ea", "#e3bfd0"],
+  ["#ece6f7", "#d0c3ec"],
+  ["#fdf1cf", "#f0d993"],
+  ["#dff1f0", "#b9dcda"],
+  ["#f7e2d9", "#e9bda9"],
+  ["#e7e7ea", "#cbccd3"],
+  ["#3a3657", "#25223b"],
+  ["#31514a", "#1f3631"],
+  ["#5a3d37", "#3a2723"],
 ];
-const INK = '#2b211d';
-const MOUTH = '#5a1f22';
-const FRAME = '#25222b';
-const GOLD = '#d4a94a';
+const INK = "#2b211d";
+const MOUTH = "#5a1f22";
+const FRAME = "#25222b";
+const GOLD = "#d4a94a";
 
 const FACES = [
-  'M28,47 A22,25 0 1 0 72,47 A22,25 0 1 0 28,47 Z',
-  'M30.5,47 A19.5,27 0 1 0 69.5,47 A19.5,27 0 1 0 30.5,47 Z',
-  'M28,32 Q28,21 40,21 L60,21 Q72,21 72,32 L72,56 Q72,72 50,73 Q28,72 28,56 Z',
-  'M28,40 Q28,21 50,21 Q72,21 72,40 Q72,58 50,74 Q28,58 28,40 Z',
-  'M27,42 Q27,21 50,21 Q73,21 73,42 Q73,66 50,72 Q27,66 27,42 Z',
+  "M28,47 A22,25 0 1 0 72,47 A22,25 0 1 0 28,47 Z",
+  "M30.5,47 A19.5,27 0 1 0 69.5,47 A19.5,27 0 1 0 30.5,47 Z",
+  "M28,32 Q28,21 40,21 L60,21 Q72,21 72,32 L72,56 Q72,72 50,73 Q28,72 28,56 Z",
+  "M28,40 Q28,21 50,21 Q72,21 72,40 Q72,58 50,74 Q28,58 28,40 Z",
+  "M27,42 Q27,21 50,21 Q73,21 73,42 Q73,66 50,72 Q27,66 27,42 Z",
 ];
 /** Where each face's ears sit (x of the left ear). */
 const EAR_X = [28.5, 31, 28.5, 28.5, 27.5];
 
 export const PARTS = [
-  { key: 'bg', label: 'Background', count: BG.length, swatch: (i: number) => `linear-gradient(170deg, ${BG[i][0]}, ${BG[i][1]})` },
-  { key: 'skin', label: 'Skin', count: SKIN.length, swatch: (i: number) => SKIN[i] },
-  { key: 'face', label: 'Face', count: FACES.length, zoom: true },
-  { key: 'hair', label: 'Hair', count: 16 },
-  { key: 'hairColor', label: 'Hair colour', count: HAIR.length, swatch: (i: number) => HAIR[i] },
-  { key: 'eyes', label: 'Eyes', count: 8, zoom: true },
-  { key: 'brows', label: 'Eyebrows', count: 6, zoom: true },
-  { key: 'mouth', label: 'Mouth', count: 8, zoom: true },
-  { key: 'glasses', label: 'Glasses', count: 7, zoom: true },
-  { key: 'beard', label: 'Facial hair', count: 6, zoom: true },
-  { key: 'outfit', label: 'Clothes', count: 8 },
-  { key: 'outfitColor', label: 'Clothes colour', count: CLOTH.length, swatch: (i: number) => CLOTH[i] },
-  { key: 'extra', label: 'Extras', count: 8 },
+  {
+    key: "bg",
+    label: "Background",
+    count: BG.length,
+    swatch: (i: number) => `linear-gradient(170deg, ${BG[i][0]}, ${BG[i][1]})`,
+  },
+  { key: "skin", label: "Skin", count: SKIN.length, swatch: (i: number) => SKIN[i] },
+  { key: "face", label: "Face", count: FACES.length, zoom: true },
+  { key: "hair", label: "Hair", count: 16 },
+  { key: "hairColor", label: "Hair colour", count: HAIR.length, swatch: (i: number) => HAIR[i] },
+  { key: "eyes", label: "Eyes", count: 8, zoom: true },
+  { key: "brows", label: "Eyebrows", count: 6, zoom: true },
+  { key: "mouth", label: "Mouth", count: 8, zoom: true },
+  { key: "glasses", label: "Glasses", count: 7, zoom: true },
+  { key: "beard", label: "Facial hair", count: 6, zoom: true },
+  { key: "outfit", label: "Clothes", count: 8 },
+  { key: "outfitColor", label: "Clothes colour", count: CLOTH.length, swatch: (i: number) => CLOTH[i] },
+  { key: "extra", label: "Extras", count: 8 },
 ] as const;
 
-export type PartKey = (typeof PARTS)[number]['key'];
+export type PartKey = (typeof PARTS)[number]["key"];
 export type Look = Record<PartKey, number>;
 /** Parts where "none" (choice 0) is common enough that a random look picks it half the time. */
-const OFTEN_NONE = new Set<PartKey>(['glasses', 'beard', 'extra']);
+const OFTEN_NONE = new Set<PartKey>(["glasses", "beard", "extra"]);
 
 export function decode(code: string): Look {
   const look = {} as Look;
   PARTS.forEach((p, i) => {
-    const d = parseInt(code[i] ?? '0', 36);
+    const d = parseInt(code[i] ?? "0", 36);
     look[p.key] = (Number.isNaN(d) ? 0 : d) % p.count;
   });
   return look;
 }
 
-export const encode = (look: Look) => PARTS.map((p) => look[p.key].toString(36)).join('');
+export const encode = (look: Look) => PARTS.map((p) => look[p.key].toString(36)).join("");
 
 export function randomChoice(key: PartKey, not?: number, rand = Math.random): number {
   const { count } = PARTS.find((p) => p.key === key)!;
@@ -115,10 +142,19 @@ const pair = (el: ReactNode) => (
   </>
 );
 
-const curls = (list: number[][], fill: string) => list.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill={fill} />);
-const CURLY_TOP = [[30, 32, 7], [33, 23, 8], [42, 17, 9], [52, 15, 9], [62, 18, 9], [69, 25, 8], [71, 34, 6]];
-const SLICK = 'M28,40 Q27,16 50,16 Q73,16 72,40 Q68,25 50,24 Q32,25 28,40 Z';
-const BUZZ = 'M28,40 Q27,18 50,18 Q73,18 72,40 Q70,28 50,27 Q30,28 28,40 Z';
+const curls = (list: number[][], fill: string) =>
+  list.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill={fill} />);
+const CURLY_TOP = [
+  [30, 32, 7],
+  [33, 23, 8],
+  [42, 17, 9],
+  [52, 15, 9],
+  [62, 18, 9],
+  [69, 25, 8],
+  [71, 34, 6],
+];
+const SLICK = "M28,40 Q27,16 50,16 Q73,16 72,40 Q68,25 50,24 Q32,25 28,40 Z";
+const BUZZ = "M28,40 Q27,18 50,18 Q73,18 72,40 Q70,28 50,27 Q30,28 28,40 Z";
 
 /** Per hair style: what goes behind the head, and what goes over it. */
 function hair(style: number, h: string, l: Look): { back?: ReactNode; front?: ReactNode } {
@@ -152,12 +188,22 @@ function hair(style: number, h: string, l: Look): { back?: ReactNode; front?: Re
       };
     case 6:
       return {
-        back: <path d="M22,42 Q20,11 50,11 Q80,11 78,42 L80,88 L60,88 L62,56 L38,56 L40,88 L20,88 Z" fill={shade(h, 0.12)} />,
+        back: (
+          <path
+            d="M22,42 Q20,11 50,11 Q80,11 78,42 L80,88 L60,88 L62,56 L38,56 L40,88 L20,88 Z"
+            fill={shade(h, 0.12)}
+          />
+        ),
         front: <path d="M27,44 Q25,13 50,13 Q75,13 73,44 Q71,27 58,24 Q47,32 30,33 Q28,38 27,44 Z" fill={h} />,
       };
     case 7:
       return {
-        back: <path d="M21,34 Q21,9 50,9 Q79,9 79,34 L79,64 Q72,68 66,64 L66,42 L34,42 L34,64 Q28,68 21,64 Z" fill={shade(h, 0.12)} />,
+        back: (
+          <path
+            d="M21,34 Q21,9 50,9 Q79,9 79,34 L79,64 Q72,68 66,64 L66,42 L34,42 L34,64 Q28,68 21,64 Z"
+            fill={shade(h, 0.12)}
+          />
+        ),
         front: <path d="M27,40 Q25,12 50,12 Q75,12 73,40 L72,31 Q61,34 50,32 Q39,34 28,31 Z" fill={h} />,
       };
     case 8:
@@ -190,7 +236,13 @@ function hair(style: number, h: string, l: Look): { back?: ReactNode; front?: Re
       return { front: <path d="M25,44 Q21,11 52,11 Q79,12 75,38 Q61,24 42,31 Q33,36 25,44 Z" fill={h} /> };
     case 13:
       return {
-        back: curls([[24, 30, 9], [76, 30, 9]], shade(h, 0.08)),
+        back: curls(
+          [
+            [24, 30, 9],
+            [76, 30, 9],
+          ],
+          shade(h, 0.08),
+        ),
         front: <path d="M27,40 Q26,14 50,15 Q74,14 73,40 Q67,23 51,20 L49,20 Q33,23 27,40 Z" fill={h} />,
       };
     case 14: {
@@ -209,7 +261,17 @@ function hair(style: number, h: string, l: Look): { back?: ReactNode; front?: Re
     case 15:
       return {
         back: curls(
-          [[24, 40, 10], [22, 56, 10], [26, 70, 10], [76, 40, 10], [78, 56, 10], [74, 70, 10], [50, 14, 16], [32, 20, 11], [68, 20, 11]],
+          [
+            [24, 40, 10],
+            [22, 56, 10],
+            [26, 70, 10],
+            [76, 40, 10],
+            [78, 56, 10],
+            [74, 70, 10],
+            [50, 14, 16],
+            [32, 20, 11],
+            [68, 20, 11],
+          ],
           shade(h, 0.12),
         ),
         front: curls(CURLY_TOP, h),
@@ -220,7 +282,9 @@ function hair(style: number, h: string, l: Look): { back?: ReactNode; front?: Re
 }
 
 const dot = (x: number, r = 2.6) => <circle cx={x} cy={47} r={r} fill={INK} />;
-const arc = (x: number) => <path d={`M${x - 3.5},48 Q${x},44 ${x + 3.5},48`} stroke={INK} strokeWidth={2} fill="none" strokeLinecap="round" />;
+const arc = (x: number) => (
+  <path d={`M${x - 3.5},48 Q${x},44 ${x + 3.5},48`} stroke={INK} strokeWidth={2} fill="none" strokeLinecap="round" />
+);
 const eyeball = (r: number, pupil: number) => (
   <>
     <ellipse cx={41} cy={47} rx={r} ry={r * 0.92} fill="#fff" />
@@ -271,7 +335,9 @@ function eyes(style: number): ReactNode {
 }
 
 function brows(style: number, c: string): ReactNode {
-  const d = ['', 'M37,41 L45,41', 'M37,42 Q41,38 45,41', 'M37,39 L45,42', 'M37,42 L45,39', 'M37,41 Q41,39.5 45,41'][style];
+  const d = ["", "M37,41 L45,41", "M37,42 Q41,38 45,41", "M37,39 L45,42", "M37,42 L45,39", "M37,41 Q41,39.5 45,41"][
+    style
+  ];
   if (!d) return null;
   return pair(<path d={d} stroke={c} strokeWidth={style === 5 ? 3.6 : 2.2} fill="none" strokeLinecap="round" />);
 }
@@ -287,11 +353,11 @@ function mouth(style: number): ReactNode {
         </>
       );
     case 2:
-      return line('M45,61.5 L55,61.5');
+      return line("M45,61.5 L55,61.5");
     case 3:
       return <ellipse cx={50} cy={62} rx={2.6} ry={3.2} fill={MOUTH} />;
     case 4:
-      return line('M44.5,61.5 Q51,63.5 56,59');
+      return line("M44.5,61.5 Q51,63.5 56,59");
     case 5:
       return (
         <>
@@ -308,24 +374,33 @@ function mouth(style: number): ReactNode {
         </>
       );
     case 7:
-      return line('M45.5,63 Q50,59.5 54.5,63');
+      return line("M45.5,63 Q50,59.5 54.5,63");
     default:
-      return line('M44,60 Q50,65.5 56,60');
+      return line("M44,60 Q50,65.5 56,60");
   }
 }
 
-const MUSTACHE = 'M42,58.5 Q46,55 50,57 Q54,55 58,58.5 Q54,59.5 50,58.6 Q46,59.5 42,58.5 Z';
+const MUSTACHE = "M42,58.5 Q46,55 50,57 Q54,55 58,58.5 Q54,59.5 50,58.6 Q46,59.5 42,58.5 Z";
 
 function beard(style: number, h: string, skin: string): ReactNode {
   switch (style) {
     case 1:
-      return <path d="M29,52 Q30,73 50,74 Q70,73 71,52 Q66,66 50,66 Q34,66 29,52 Z M42,58 Q50,55 58,58 L58,59 Q50,57 42,59 Z" fill={shade(skin, 0.45)} opacity={0.3} />;
+      return (
+        <path
+          d="M29,52 Q30,73 50,74 Q70,73 71,52 Q66,66 50,66 Q34,66 29,52 Z M42,58 Q50,55 58,58 L58,59 Q50,57 42,59 Z"
+          fill={shade(skin, 0.45)}
+          opacity={0.3}
+        />
+      );
     case 2:
       return <path d={MUSTACHE} fill={h} />;
     case 3:
       return (
         <>
-          <path d="M28,46 Q28,75 50,76 Q72,75 72,46 L69,46 Q68,66 58,66 Q54,64 50,64.5 Q46,64 42,66 Q32,66 31,46 Z" fill={h} />
+          <path
+            d="M28,46 Q28,75 50,76 Q72,75 72,46 L69,46 Q68,66 58,66 Q54,64 50,64.5 Q46,64 42,66 Q32,66 31,46 Z"
+            fill={h}
+          />
           <path d={MUSTACHE} fill={h} />
         </>
       );
@@ -349,7 +424,7 @@ function beard(style: number, h: string, skin: string): ReactNode {
 }
 
 function glasses(style: number): ReactNode {
-  const frame = { stroke: FRAME, strokeWidth: 1.8, strokeLinecap: 'round' as const };
+  const frame = { stroke: FRAME, strokeWidth: 1.8, strokeLinecap: "round" as const };
   const temple = <path d="M35,46 L29,45" {...frame} />;
   switch (style) {
     case 1:
@@ -394,7 +469,13 @@ function glasses(style: number): ReactNode {
         <>
           {pair(
             <>
-              <path d="M33,41.5 Q40,42 47,43.5 Q47,51 41,51 Q35,51 33,41.5 Z" fill="#fff" fillOpacity={0.15} {...frame} strokeWidth={2} />
+              <path
+                d="M33,41.5 Q40,42 47,43.5 Q47,51 41,51 Q35,51 33,41.5 Z"
+                fill="#fff"
+                fillOpacity={0.15}
+                {...frame}
+                strokeWidth={2}
+              />
               {temple}
             </>,
           )}
@@ -493,7 +574,12 @@ function outfit(style: number, c: string, skin: string, scarf: string): { under?
           <>
             {base}
             <path d="M41,64 L59,64 L60,80 Q50,83 40,80 Z" fill={shade(c, 0.12)} />
-            <path d="M41,69 Q50,71 59,69 M40.5,74 Q50,76 59.5,74" stroke={shade(c, 0.3)} strokeWidth={0.8} fill="none" />
+            <path
+              d="M41,69 Q50,71 59,69 M40.5,74 Q50,76 59.5,74"
+              stroke={shade(c, 0.3)}
+              strokeWidth={0.8}
+              fill="none"
+            />
           </>
         ),
       };
@@ -526,11 +612,12 @@ function extra(style: number, skin: string, l: Look): ReactNode {
       return pair(<ellipse cx={37.5} cy={56.5} rx={4} ry={2.4} fill="#ff6f86" opacity={0.35} />);
     case 2:
       return pair(
-        <>
-          {[[39, 53], [42, 55], [38, 56.5], [41.5, 51.8]].map(([x, y]) => (
-            <circle key={`${x},${y}`} cx={x} cy={y} r={0.65} fill={shade(skin, 0.4)} />
-          ))}
-        </>,
+        [
+          [39, 53],
+          [42, 55],
+          [38, 56.5],
+          [41.5, 51.8],
+        ].map(([x, y]) => <circle key={`${x},${y}`} cx={x} cy={y} r={0.65} fill={shade(skin, 0.4)} />),
       );
     case 3:
       return <circle cx={50} cy={41} r={1.6} fill="#c8233a" />;
@@ -578,7 +665,13 @@ function Drawing({ look: l, viewBox }: { look: Look; viewBox: string }) {
       <path d={FACES[l.face]} fill={skin} />
       {extra(l.extra, skin, l)}
       {beard(l.beard, h, skin)}
-      <path d="M50,49 Q47,55 50,56 Q52,56 53,55" stroke={shade(skin, 0.3)} strokeWidth={1.6} fill="none" strokeLinecap="round" />
+      <path
+        d="M50,49 Q47,55 50,56 Q52,56 53,55"
+        stroke={shade(skin, 0.3)}
+        strokeWidth={1.6}
+        fill="none"
+        strokeLinecap="round"
+      />
       {mouth(l.mouth)}
       {eyes(l.eyes)}
       {brows(l.brows, shade(h, 0.15))}
@@ -594,18 +687,30 @@ function Drawing({ look: l, viewBox }: { look: Look; viewBox: string }) {
  * the face, for choosing small features.
  */
 export function Avatar(props: { code: string; name: string; className?: string; title?: string; zoom?: boolean }) {
-  const { code, name, className = '', title, zoom = false } = props;
+  const { code, name, className = "", title, zoom = false } = props;
   const look = decode(code || lookFromName(name));
   const [top, bottom] = BG[look.bg];
   return (
-    <span className={`avatar ${className}`} title={title} style={{ background: `linear-gradient(170deg, ${top}, ${bottom})` }}>
-      <Drawing look={look} viewBox={zoom ? '25 28 50 50' : '0 0 100 100'} />
+    <span
+      className={`avatar ${className}`}
+      title={title}
+      style={{ background: `linear-gradient(170deg, ${top}, ${bottom})` }}
+    >
+      <Drawing look={look} viewBox={zoom ? "25 28 50 50" : "0 0 100 100"} />
     </span>
   );
 }
 
 /** One row of choices for a part: a strip of previews and a dice that rolls just that part. */
-function PartRow({ part, look, set }: { part: (typeof PARTS)[number]; look: Look; set: (key: PartKey, value: number) => void }) {
+function PartRow({
+  part,
+  look,
+  set,
+}: {
+  part: (typeof PARTS)[number];
+  look: Look;
+  set: (key: PartKey, value: number) => void;
+}) {
   const strip = useRef<HTMLDivElement>(null);
   const value = look[part.key];
   // A roll can land off screen: scroll the strip (only sideways; the sheet stays put) to the pick.
@@ -615,14 +720,20 @@ function PartRow({ part, look, set }: { part: (typeof PARTS)[number]; look: Look
     const box = strip.current.getBoundingClientRect();
     const at = pick.getBoundingClientRect();
     if (at.left < box.left || at.right > box.right) {
-      strip.current.scrollBy({ left: at.left - box.left - (box.width - at.width) / 2, behavior: 'smooth' });
+      strip.current.scrollBy({ left: at.left - box.left - (box.width - at.width) / 2, behavior: "smooth" });
     }
   }, [value]);
   return (
     <div className="look-row">
       <div className="look-row-head">
         <b>{part.label}</b>
-        <button type="button" className="icon-btn" onClick={() => set(part.key, randomChoice(part.key, value))} aria-label={`Random ${part.label.toLowerCase()}`} title="Random">
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => set(part.key, randomChoice(part.key, value))}
+          aria-label={`Random ${part.label.toLowerCase()}`}
+          title="Random"
+        >
           🎲
         </button>
       </div>
@@ -637,13 +748,13 @@ function PartRow({ part, look, set }: { part: (typeof PARTS)[number]; look: Look
               role="radio"
               aria-checked={on}
               aria-label={`${part.label} ${i + 1}`}
-              className={`look-pick ${on ? 'on' : ''}`}
+              className={`look-pick ${on ? "on" : ""}`}
               onClick={() => set(part.key, i)}
             >
-              {'swatch' in part ? (
+              {"swatch" in part ? (
                 <span className="look-swatch" style={{ background: part.swatch(i) }} />
               ) : (
-                <Avatar code={encode(preview)} name="" zoom={'zoom' in part} />
+                <Avatar code={encode(preview)} name="" zoom={"zoom" in part} />
               )}
             </button>
           );
@@ -654,11 +765,28 @@ function PartRow({ part, look, set }: { part: (typeof PARTS)[number]; look: Look
 }
 
 /** Your picture as a button; it opens the editor in a sheet. */
-export function LookButton({ code, name, onChange, className = '' }: { code: string; name: string; onChange: (code: string) => void; className?: string }) {
+export function LookButton({
+  code,
+  name,
+  onChange,
+  className = "",
+}: {
+  code: string;
+  name: string;
+  onChange: (code: string) => void;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="avatar-btn look-btn" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Change your picture" title="Change your picture">
+      <button
+        type="button"
+        className="avatar-btn look-btn"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label="Change your picture"
+        title="Change your picture"
+      >
         <Avatar code={code} name={name} className={className} />
         <span className="look-edit" aria-hidden="true">
           ✎
@@ -677,7 +805,15 @@ export function LookButton({ code, name, onChange, className = '' }: { code: str
 }
 
 /** Builds a look part by part. Every change goes straight to `onChange`. */
-export function AvatarEditor({ code, name, onChange }: { code: string; name: string; onChange: (code: string) => void }) {
+export function AvatarEditor({
+  code,
+  name,
+  onChange,
+}: {
+  code: string;
+  name: string;
+  onChange: (code: string) => void;
+}) {
   const look = decode(code || lookFromName(name));
   const set = (key: PartKey, value: number) => onChange(encode({ ...look, [key]: value }));
   return (

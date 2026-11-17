@@ -13,23 +13,26 @@
     "test": "cargo build -q -p server && vitest run",
     "typecheck": "tsc --noEmit",
     "bots": "node scripts/bots.ts",
-    "cards": "node scripts/cards.mjs"
+    "cards": "node scripts/cards.mjs",
+    "format": "biome check --write",
+    "lint": "biome check"
   },
   "engines": {
     "node": ">=24"
   },
   "devDependencies": {
-    "ws": "^8.23.0",
+    "@biomejs/biome": "2.6.8",
     "@fontsource/anton": "^5.3.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "ws": "^8.23.0"
   }
 }

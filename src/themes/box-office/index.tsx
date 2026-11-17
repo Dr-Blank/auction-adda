@@ -1,13 +1,7 @@
 import type { JSX } from "react";
 import type { Card } from "../../generated/index.ts";
 import { rng } from "../../rng.ts";
-import type {
-  CardLook,
-  CardSize,
-  Genre,
-  SuitSkin,
-  ThemeDef,
-} from "../types.ts";
+import type { CardLook, CardSize, Genre, SuitSkin, ThemeDef } from "../types.ts";
 import "./poster.css";
 
 // All names, titles and taglines here are invented for this game.
@@ -527,15 +521,7 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
         />,
       );
     }
-    shapes.push(
-      <circle
-        key="core"
-        cx={f(cx)}
-        cy={f(cy)}
-        r={f(R)}
-        fill={`url(#${glow})`}
-      />,
-    );
+    shapes.push(<circle key="core" cx={f(cx)} cy={f(cy)} r={f(R)} fill={`url(#${glow})`} />);
     const slope = Math.tan(between(-0.5, -0.3));
     for (let i = 0; i < 5; i++) {
       const y = between(8, 104);
@@ -588,27 +574,9 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
         opacity="0.3"
       />,
     );
+    shapes.push(<circle key="a" cx={f(cx - d)} cy={f(cy)} r={f(R)} fill={hue} opacity="0.6" />);
     shapes.push(
-      <circle
-        key="a"
-        cx={f(cx - d)}
-        cy={f(cy)}
-        r={f(R)}
-        fill={hue}
-        opacity="0.6"
-      />,
-    );
-    shapes.push(
-      <circle
-        key="b"
-        cx={f(cx + d)}
-        cy={f(cy)}
-        r={f(R)}
-        fill="none"
-        stroke={tint}
-        strokeWidth="0.8"
-        opacity="0.9"
-      />,
+      <circle key="b" cx={f(cx + d)} cy={f(cy)} r={f(R)} fill="none" stroke={tint} strokeWidth="0.8" opacity="0.9" />,
     );
     shapes.push(
       <path
@@ -642,8 +610,7 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
     for (let i = 0; i < N; i++) {
       const a0 = Math.PI + (i / N) * Math.PI;
       const a1 = a0 + Math.PI / N / 2;
-      const p = (a: number) =>
-        `${f(cx + Math.cos(a) * 170)},${f(base + Math.sin(a) * 170)}`;
+      const p = (a: number) => `${f(cx + Math.cos(a) * 170)},${f(base + Math.sin(a) * 170)}`;
       shapes.push(
         <polygon
           key={`r${i}`}
@@ -666,20 +633,9 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
           opacity={0.6 - i * 0.18}
         />,
       );
+    shapes.push(<circle key="sun" cx={cx} cy={f(base)} r={f(R)} fill={`url(#${glow})`} />);
     shapes.push(
-      <circle key="sun" cx={cx} cy={f(base)} r={f(R)} fill={`url(#${glow})`} />,
-    );
-    shapes.push(
-      <line
-        key="hz"
-        x1="0"
-        y1={f(base)}
-        x2="120"
-        y2={f(base)}
-        stroke={tint}
-        strokeWidth="0.5"
-        opacity="0.5"
-      />,
+      <line key="hz" x1="0" y1={f(base)} x2="120" y2={f(base)} stroke={tint} strokeWidth="0.5" opacity="0.5" />,
     );
   } else if (genre === 3) {
     // comedy: a neat grid of dots where a few have tripped and fallen
@@ -689,32 +645,14 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
       const x = 20 + (i % 6) * 16;
       const y = 16 + Math.floor(i / 6) * 15;
       if (!fell.has(i)) {
-        shapes.push(
-          <circle
-            key={`d${i}`}
-            cx={x}
-            cy={y}
-            r="1.7"
-            fill={tint}
-            opacity="0.5"
-          />,
-        );
+        shapes.push(<circle key={`d${i}`} cx={x} cy={y} r="1.7" fill={tint} opacity="0.5" />);
         continue;
       }
       const nx = x + between(-9, 9);
       const ny = y + between(14, 34);
       const big = between(3.5, 7);
       shapes.push(
-        <circle
-          key={`e${i}`}
-          cx={x}
-          cy={y}
-          r="1.7"
-          fill="none"
-          stroke={tint}
-          strokeWidth="0.5"
-          opacity="0.45"
-        />,
+        <circle key={`e${i}`} cx={x} cy={y} r="1.7" fill="none" stroke={tint} strokeWidth="0.5" opacity="0.45" />,
       );
       shapes.push(
         <path
@@ -727,16 +665,7 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
           opacity="0.5"
         />,
       );
-      shapes.push(
-        <circle
-          key={`b${i}`}
-          cx={f(nx)}
-          cy={f(ny)}
-          r={f(big)}
-          fill={i % 2 ? hue : tint}
-          opacity="0.9"
-        />,
-      );
+      shapes.push(<circle key={`b${i}`} cx={f(nx)} cy={f(ny)} r={f(big)} fill={i % 2 ? hue : tint} opacity="0.9" />);
     }
   } else if (genre === 4) {
     // art-house: a moon, a long horizon, its reflection, one small figure
@@ -756,28 +685,8 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
         opacity="0.35"
       />,
     );
-    shapes.push(
-      <circle
-        key="m"
-        cx={f(cx)}
-        cy={f(cy)}
-        r={f(R)}
-        fill={tint}
-        opacity="0.92"
-      />,
-    );
-    shapes.push(
-      <line
-        key="hz"
-        x1="0"
-        y1={f(hz)}
-        x2="120"
-        y2={f(hz)}
-        stroke={tint}
-        strokeWidth="0.5"
-        opacity="0.6"
-      />,
-    );
+    shapes.push(<circle key="m" cx={f(cx)} cy={f(cy)} r={f(R)} fill={tint} opacity="0.92" />);
+    shapes.push(<line key="hz" x1="0" y1={f(hz)} x2="120" y2={f(hz)} stroke={tint} strokeWidth="0.5" opacity="0.6" />);
     for (let i = 0; i < 5; i++) {
       const w = R * 2 * (1 - i * 0.16);
       const y = hz + 4 + i * 3.6;
@@ -795,19 +704,8 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
       );
     }
     const fx = between(16, 104);
-    shapes.push(
-      <rect
-        key="fig"
-        x={f(fx)}
-        y={f(hz - 6.5)}
-        width="1.4"
-        height="6.5"
-        fill={hue}
-      />,
-    );
-    shapes.push(
-      <circle key="head" cx={f(fx + 0.7)} cy={f(hz - 7.8)} r="1" fill={hue} />,
-    );
+    shapes.push(<rect key="fig" x={f(fx)} y={f(hz - 6.5)} width="1.4" height="6.5" fill={hue} />);
+    shapes.push(<circle key="head" cx={f(fx + 0.7)} cy={f(hz - 7.8)} r="1" fill={hue} />);
   } else if (genre === 5) {
     // horror: a leaning haveli, one window lit, bats leaving the dome, mist at its feet
     const cx = between(46, 74);
@@ -834,47 +732,20 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
       );
     }
     shapes.push(
-      <g
-        key="haveli"
-        transform={`rotate(${f(between(-4, 4))} ${f(cx)} ${f(base)})`}
-      >
-        <rect
-          x={f(cx - w / 2)}
-          y={f(top)}
-          width={f(w)}
-          height={f(h)}
-          fill={hue}
-          opacity="0.8"
-        />
-        <rect
-          x={f(cx + w / 4 - 3)}
-          y={f(top - 18)}
-          width="6"
-          height="14"
-          fill={hue}
-          opacity="0.8"
-        />
+      <g key="haveli" transform={`rotate(${f(between(-4, 4))} ${f(cx)} ${f(base)})`}>
+        <rect x={f(cx - w / 2)} y={f(top)} width={f(w)} height={f(h)} fill={hue} opacity="0.8" />
+        <rect x={f(cx + w / 4 - 3)} y={f(top - 18)} width="6" height="14" fill={hue} opacity="0.8" />
         <path
           d={`M${f(cx - w / 2 - 4)} ${f(top + 0.5)} L${f(cx - 2)} ${f(top - 20)} L${f(cx + w / 2 + 4)} ${f(top + 0.5)} Z`}
           fill={hue}
           opacity="0.9"
         />
-        <circle
-          cx={f(cx - 2)}
-          cy={f(top - 9)}
-          r="3"
-          fill={ground}
-          opacity="0.7"
-        />
+        <circle cx={f(cx - 2)} cy={f(top - 9)} r="3" fill={ground} opacity="0.7" />
         {windows}
       </g>,
     );
     for (let i = 0; i < 6; i++) {
-      const [bx, by, s] = [
-        between(18, 102),
-        between(10, top - 18),
-        between(2.2, 4),
-      ];
+      const [bx, by, s] = [between(18, 102), between(10, top - 18), between(2.2, 4)];
       shapes.push(
         <path
           key={`b${i}`}
@@ -909,16 +780,7 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
     const base = between(98, 102);
     const wallTop = base - 12;
     shapes.push(
-      <circle
-        key="halo"
-        cx={f(cx)}
-        cy={f(cy)}
-        r="30"
-        fill="none"
-        stroke={tint}
-        strokeWidth="0.4"
-        opacity="0.3"
-      />,
+      <circle key="halo" cx={f(cx)} cy={f(cy)} r="30" fill="none" stroke={tint} strokeWidth="0.4" opacity="0.3" />,
     );
     for (const s of [-1, 1]) {
       const at = (d: number) => `${f(cx + s * d)} ${f(cy - d)}`;
@@ -965,39 +827,13 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
           strokeWidth="1.6"
         />,
       );
-      shapes.push(
-        <circle
-          key={`pm${s}`}
-          cx={f(cx + s * -20.5)}
-          cy={f(cy + 20.5)}
-          r="1.6"
-          fill={hue}
-        />,
-      );
+      shapes.push(<circle key={`pm${s}`} cx={f(cx + s * -20.5)} cy={f(cy + 20.5)} r="1.6" fill={hue} />);
     }
     shapes.push(
-      <rect
-        key="wall"
-        x="0"
-        y={f(wallTop)}
-        width="120"
-        height={f(base - wallTop)}
-        fill={hue}
-        opacity="0.75"
-      />,
+      <rect key="wall" x="0" y={f(wallTop)} width="120" height={f(base - wallTop)} fill={hue} opacity="0.75" />,
     );
     for (let x = 1; x < 120; x += 8)
-      shapes.push(
-        <rect
-          key={`mw${x}`}
-          x={x}
-          y={f(wallTop - 4)}
-          width="4"
-          height="4"
-          fill={hue}
-          opacity="0.75"
-        />,
-      );
+      shapes.push(<rect key={`mw${x}`} x={x} y={f(wallTop - 4)} width="4" height="4" fill={hue} opacity="0.75" />);
     for (const tx of [between(10, 30), between(84, 104)]) {
       const tTop = base - between(28, 34);
       shapes.push(
@@ -1046,25 +882,11 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
       );
     }
     shapes.push(
-      <rect
-        key="gate"
-        x={f(cx - 5)}
-        y={f(base - 10)}
-        width="10"
-        height="10"
-        rx="5"
-        fill={ground}
-        opacity="0.6"
-      />,
+      <rect key="gate" x={f(cx - 5)} y={f(base - 10)} width="10" height="10" rx="5" fill={ground} opacity="0.6" />,
     );
   }
   return (
-    <svg
-      className="poster-art"
-      viewBox="0 0 120 168"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden="true"
-    >
+    <svg className="poster-art" viewBox="0 0 120 168" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <defs>
         <radialGradient id={glow} cx="50%" cy="42%" r="60%">
           <stop offset="0" stopColor={tint} />
@@ -1078,24 +900,13 @@ function Art({ card, genre }: { card: Card; genre: number }): JSX.Element {
 }
 
 /** A hairline frame with clipped deco corners and the star's glyph; drawn over the billing block. */
-function Frame({
-  genre,
-  glyph,
-}: {
-  genre: number;
-  glyph: string;
-}): JSX.Element {
+function Frame({ genre, glyph }: { genre: number; glyph: string }): JSX.Element {
   const { tint } = TONES[genre];
   const c = 4;
   const [a, b, x2, y2] = [5, 5, 115, 163];
   const pts = `${a + c},${b} ${x2 - c},${b} ${x2},${b + c} ${x2},${y2 - c} ${x2 - c},${y2} ${a + c},${y2} ${a},${y2 - c} ${a},${b + c}`;
   return (
-    <svg
-      className="bo-frame"
-      viewBox="0 0 120 168"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
+    <svg className="bo-frame" viewBox="0 0 120 168" preserveAspectRatio="none" aria-hidden="true">
       <polygon
         points={pts}
         fill="none"
@@ -1104,15 +915,7 @@ function Frame({
         opacity="0.4"
         vectorEffect="non-scaling-stroke"
       />
-      <text
-        x="109"
-        y="16"
-        textAnchor="end"
-        fontSize="8"
-        fill={tint}
-        opacity="0.75"
-        fontFamily="system-ui, sans-serif"
-      >
+      <text x="109" y="16" textAnchor="end" fontSize="8" fill={tint} opacity="0.75" fontFamily="system-ui, sans-serif">
         {glyph}
       </text>
     </svg>
@@ -1124,74 +927,34 @@ const STYLES: ((dark: string, light: string, hue: string) => JSX.Element)[] = [
   // action: spiky crop and aviators
   (dark, light) => (
     <>
-      <path
-        d="M14 18 L16 9 L20 13 L23 6 L26 12 L30 7 L32 13 L35 10 L34 19 Z"
-        fill={dark}
-      />
+      <path d="M14 18 L16 9 L20 13 L23 6 L26 12 L30 7 L32 13 L35 10 L34 19 Z" fill={dark} />
       <rect x="16.5" y="19" width="6.5" height="3.6" rx="1.4" fill={dark} />
       <rect x="25" y="19" width="6.5" height="3.6" rx="1.4" fill={dark} />
       <line x1="23" y1="20" x2="25" y2="20" stroke={dark} strokeWidth="1" />
-      <path
-        d="M8 48 L12 36 L24 33 L36 36 L40 48 Z"
-        fill={light}
-        opacity="0.35"
-      />
+      <path d="M8 48 L12 36 L24 33 L36 36 L40 48 Z" fill={light} opacity="0.35" />
     </>
   ),
   // romance: long hair and a bindi
   (dark, _light, hue) => (
     <>
-      <path
-        d="M12 40 C10 20 14 8 24 8 C34 8 38 20 36 40 L31 40 C33 26 30 18 24 16 C18 18 15 26 17 40 Z"
-        fill={dark}
-      />
+      <path d="M12 40 C10 20 14 8 24 8 C34 8 38 20 36 40 L31 40 C33 26 30 18 24 16 C18 18 15 26 17 40 Z" fill={dark} />
       <circle cx="24" cy="17.5" r="1.1" fill={hue} />
     </>
   ),
   // mass hero: thick moustache and a side parting
   (dark) => (
     <>
-      <path
-        d="M14 19 C14 10 20 8 25 8 C31 8 34 12 34 19 C31 13 26 12 21 13 C18 14 16 16 14 19 Z"
-        fill={dark}
-      />
-      <path
-        d="M18 26 C21 24 23 25 24 26 C25 25 27 24 30 26 C28 28 25 27 24 27 C23 27 20 28 18 26 Z"
-        fill={dark}
-      />
+      <path d="M14 19 C14 10 20 8 25 8 C31 8 34 12 34 19 C31 13 26 12 21 13 C18 14 16 16 14 19 Z" fill={dark} />
+      <path d="M18 26 C21 24 23 25 24 26 C25 25 27 24 30 26 C28 28 25 27 24 27 C23 27 20 28 18 26 Z" fill={dark} />
     </>
   ),
   // comedy: round glasses and a tuft
   (dark) => (
     <>
-      <path
-        d="M17 12 C19 7 23 9 24 6 C25 9 29 7 31 12 C27 10 21 10 17 12 Z"
-        fill={dark}
-      />
-      <circle
-        cx="20"
-        cy="21"
-        r="3.2"
-        fill="none"
-        stroke={dark}
-        strokeWidth="1.2"
-      />
-      <circle
-        cx="28"
-        cy="21"
-        r="3.2"
-        fill="none"
-        stroke={dark}
-        strokeWidth="1.2"
-      />
-      <line
-        x1="23.2"
-        y1="21"
-        x2="24.8"
-        y2="21"
-        stroke={dark}
-        strokeWidth="1.2"
-      />
+      <path d="M17 12 C19 7 23 9 24 6 C25 9 29 7 31 12 C27 10 21 10 17 12 Z" fill={dark} />
+      <circle cx="20" cy="21" r="3.2" fill="none" stroke={dark} strokeWidth="1.2" />
+      <circle cx="28" cy="21" r="3.2" fill="none" stroke={dark} strokeWidth="1.2" />
+      <line x1="23.2" y1="21" x2="24.8" y2="21" stroke={dark} strokeWidth="1.2" />
     </>
   ),
   // art-house: bob and a beret
@@ -1212,12 +975,7 @@ const STYLES: ((dark: string, light: string, hue: string) => JSX.Element)[] = [
         d="M11 44 C9 24 12 7 24 7 C36 7 39 24 37 44 L34 40 L32 45 L29 31 C30 21 28 15 24 15 C20 15 18 21 19 31 L16 45 L14 40 Z"
         fill={dark}
       />
-      <path
-        d="M21 15 C20 20 21 25 20 29"
-        fill="none"
-        stroke={dark}
-        strokeWidth="1.2"
-      />
+      <path d="M21 15 C20 20 21 25 20 29" fill="none" stroke={dark} strokeWidth="1.2" />
       <circle cx="21.5" cy="21" r="1.3" fill={hue} />
       <circle cx="27" cy="21" r="1.3" fill={hue} />
     </>
@@ -1231,22 +989,9 @@ const STYLES: ((dark: string, light: string, hue: string) => JSX.Element)[] = [
         stroke={dark}
         strokeWidth="0.8"
       />
-      <path
-        d="M15 13 C20 10 28 10 33 13"
-        fill="none"
-        stroke={dark}
-        strokeWidth="0.7"
-        opacity="0.7"
-      />
+      <path d="M15 13 C20 10 28 10 33 13" fill="none" stroke={dark} strokeWidth="0.7" opacity="0.7" />
       <path d="M24 9 C25 4 29 2 32 3 C29 4 27 6 25.5 9 Z" fill={light} />
-      <circle
-        cx="24"
-        cy="10.5"
-        r="1.6"
-        fill={light}
-        stroke={dark}
-        strokeWidth="0.5"
-      />
+      <circle cx="24" cy="10.5" r="1.6" fill={light} stroke={dark} strokeWidth="0.5" />
       <path
         d="M17 36 Q24 43 31 36"
         fill="none"
@@ -1313,14 +1058,7 @@ export const boxOffice: ThemeDef = {
     const bg = `bo-cameo-${s.key}`;
     const face = `bo-face-${s.key}`;
     return (
-      <svg
-        className="star-face"
-        width={px}
-        height={px}
-        viewBox="0 0 48 48"
-        role="img"
-        aria-label={s.name}
-      >
+      <svg className="star-face" width={px} height={px} viewBox="0 0 48 48" role="img" aria-label={s.name}>
         <defs>
           <radialGradient id={bg} cx="35%" cy="25%" r="80%">
             <stop offset="0" stopColor={hue} />
@@ -1332,61 +1070,19 @@ export const boxOffice: ThemeDef = {
         </defs>
         <circle cx="24" cy="24" r="24" fill={`url(#${bg})`} />
         <path d="M6 48 C8 38 15 33 24 33 C33 33 40 38 42 48 Z" fill={ground} />
-        <rect
-          x="21"
-          y="27"
-          width="6"
-          height="7"
-          rx="2"
-          fill={tint}
-          opacity="0.78"
-        />
+        <rect x="21" y="27" width="6" height="7" rx="2" fill={tint} opacity="0.78" />
         <ellipse cx="24" cy="21" rx="8" ry="9.5" fill={tint} />
-        <rect
-          x="26.5"
-          y="10"
-          width="8"
-          height="22"
-          fill={hue}
-          opacity="0.28"
-          clipPath={`url(#${face})`}
-        />
+        <rect x="26.5" y="10" width="8" height="22" fill={hue} opacity="0.28" clipPath={`url(#${face})`} />
         {STYLES[s.key](ground, tint, hue)}
-        <circle
-          cx="24"
-          cy="24"
-          r="23.3"
-          fill="none"
-          stroke={tint}
-          strokeWidth="0.8"
-          opacity="0.35"
-        />
-        <circle
-          cx="39"
-          cy="39"
-          r="7.6"
-          fill={hue}
-          stroke={ground}
-          strokeWidth="1.4"
-        />
-        <text
-          x="39"
-          y="42.4"
-          textAnchor="middle"
-          fontSize="9"
-          fill={s.ink}
-          fontFamily="system-ui, sans-serif"
-        >
+        <circle cx="24" cy="24" r="23.3" fill="none" stroke={tint} strokeWidth="0.8" opacity="0.35" />
+        <circle cx="39" cy="39" r="7.6" fill={hue} stroke={ground} strokeWidth="1.4" />
+        <text x="39" y="42.4" textAnchor="middle" fontSize="9" fill={s.ink} fontFamily="system-ui, sans-serif">
           {s.glyph}
         </text>
       </svg>
     );
   },
-  renderCard(
-    card: Card,
-    size: CardSize,
-    { suit, title, tagline, theme }: CardLook,
-  ) {
+  renderCard(card: Card, size: CardSize, { suit, title, tagline, theme }: CardLook) {
     const { ground, hue, tint } = TONES[suit.key];
     return (
       <div

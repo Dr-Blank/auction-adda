@@ -1,8 +1,8 @@
-import { SUITS } from '../config.ts';
-import type { Card, Cast } from '../generated/index.ts';
-import { rng } from '../rng.ts';
-import { DEFAULT_TAGLINES, themeText } from './defaults.ts';
-import type { SuitSkin, Theme, ThemeDef } from './types.ts';
+import { SUITS } from "../config.ts";
+import type { Card, Cast } from "../generated/index.ts";
+import { rng } from "../rng.ts";
+import { DEFAULT_TAGLINES, themeText } from "./defaults.ts";
+import type { SuitSkin, Theme, ThemeDef } from "./types.ts";
 
 function shuffle<T>(xs: readonly T[], r: () => number): T[] {
   const out = [...xs];
@@ -27,9 +27,18 @@ export function castGenres(count: number, cast: Cast): number[] {
 /** Initials, or more letters when another suit already has them. */
 function shortName(name: string, taken: Set<string>): string {
   const words = name.split(/[\s-]+/).filter((w) => /^[a-z]/i.test(w));
-  const letters = words.join('').toUpperCase();
-  const tries = [words.map((w) => w[0]).join('').slice(0, 3).toUpperCase(), letters.slice(0, 2), letters.slice(0, 3)];
-  const free = tries.find((t) => !taken.has(t)) ?? [1, 2, 3, 4, 5].map((k) => `${letters[0]}${k}`).find((t) => !taken.has(t))!;
+  const letters = words.join("").toUpperCase();
+  const tries = [
+    words
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 3)
+      .toUpperCase(),
+    letters.slice(0, 2),
+    letters.slice(0, 3),
+  ];
+  const free =
+    tries.find((t) => !taken.has(t)) ?? [1, 2, 3, 4, 5].map((k) => `${letters[0]}${k}`).find((t) => !taken.has(t))!;
   taken.add(free);
   return free;
 }
@@ -42,14 +51,22 @@ export function castTheme(def: ThemeDef, cast: Cast): Theme {
     const g = def.genres[key];
     const r = rng(cast.seed + 7919 * (key + 1));
     const pick = (xs: string[]) => xs[Math.floor(r() * xs.length)];
-    const suit: SuitSkin = { key, name: pick(g.names), short: '', genre: pick(g.labels), color: g.color, ink: g.ink, glyph: g.glyph };
+    const suit: SuitSkin = {
+      key,
+      name: pick(g.names),
+      short: "",
+      genre: pick(g.labels),
+      color: g.color,
+      ink: g.ink,
+      glyph: g.glyph,
+    };
     suit.short = shortName(suit.name, taken);
     return { suit, titles: shuffle(g.titles, r), taglines: shuffle(g.taglines ?? DEFAULT_TAGLINES, r) };
   });
   const cardTitle = (card: Card): string => {
     const { titles } = drawn[card.suit];
     const sequel = Math.floor(card.n / titles.length);
-    return titles[card.n % titles.length] + (sequel ? ` ${sequel + 1}` : '');
+    return titles[card.n % titles.length] + (sequel ? ` ${sequel + 1}` : "");
   };
   const theme: Theme = {
     ...text,
@@ -59,9 +76,14 @@ export function castTheme(def: ThemeDef, cast: Cast): Theme {
     chrome: def.chrome ?? {},
     suits: drawn.map((d) => d.suit),
     cardTitle,
-    renderCard: (card, size = 'md') => {
+    renderCard: (card, size = "md") => {
       const { suit, taglines } = drawn[card.suit];
-      return def.renderCard(card, size, { suit, title: cardTitle(card), tagline: taglines[card.n % taglines.length], theme });
+      return def.renderCard(card, size, {
+        suit,
+        title: cardTitle(card),
+        tagline: taglines[card.n % taglines.length],
+        theme,
+      });
     },
     renderSuit: (suit, px) => def.renderSuit(drawn[suit].suit, px),
   };

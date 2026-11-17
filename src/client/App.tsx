@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { DEFAULT_THEME, getTheme } from '../themes/index.ts';
-import { Home } from './Home.tsx';
-import { Lobby } from './Lobby.tsx';
-import { useRoom } from './net.ts';
-import { Table } from './Table.tsx';
+import { type JSX, useEffect, useState } from "react";
+import { DEFAULT_THEME, getTheme } from "../themes/index.ts";
+import { Home } from "./Home.tsx";
+import { Lobby } from "./Lobby.tsx";
+import { useRoom } from "./net.ts";
+import { Table } from "./Table.tsx";
 
 function roomFromAddress(): string | null {
   const code = location.hash.slice(1).trim().toUpperCase();
@@ -20,12 +20,12 @@ export function App() {
       setCode(roomFromAddress());
       clearError();
     };
-    addEventListener('hashchange', onHash);
-    return () => removeEventListener('hashchange', onHash);
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
   }, []);
 
   useEffect(() => {
-    if (!error || error.code === 'no-room') return;
+    if (!error || error.code === "no-room") return;
     const timer = setTimeout(clearError, 4000);
     return () => clearTimeout(timer);
   }, [error]);
@@ -40,10 +40,10 @@ export function App() {
     return () => vars.forEach(([k]) => root.removeProperty(k));
   }, [theme.chrome]);
 
-  let body;
+  let body: JSX.Element;
   if (!code) {
     body = <Home send={net.send} online={net.online} />;
-  } else if (!net.state && error?.code === 'no-room') {
+  } else if (!net.state && error?.code === "no-room") {
     body = (
       <main className="center-card">
         <h1>Room not found</h1>
@@ -67,7 +67,7 @@ export function App() {
     <>
       {body}
       {!net.online && <div className="banner offline">Connection lost. Reconnecting…</div>}
-      {error && error.code !== 'no-room' && (
+      {error && error.code !== "no-room" && (
         <div className="banner toast" role="alert" onClick={clearError}>
           {error.message}
         </div>

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { SUIT_LIMIT, TOKENS } from '../config.ts';
-import type { View } from '../generated/index.ts';
-import type { Theme } from '../themes/types.ts';
-import { countBySuit, provisionalValues, rankSuits } from './derive.ts';
-import { COMPACT, useMedia } from './hooks.ts';
-import { Sheet } from './Sheet.tsx';
+import { useEffect, useRef, useState } from "react";
+import { SUIT_LIMIT, TOKENS } from "../config.ts";
+import type { View } from "../generated/index.ts";
+import type { Theme } from "../themes/types.ts";
+import { countBySuit, provisionalValues, rankSuits } from "./derive.ts";
+import { COMPACT, useMedia } from "./hooks.ts";
+import { Sheet } from "./Sheet.tsx";
 
 /** How long the reel of a shelved star stays full and flashing after the round closes. */
 const SHELVE_MS = 2200;
@@ -29,8 +29,8 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
   useEffect(() => {
     const fresh = g.log.slice(Math.max(0, seen.current - g.logStart));
     seen.current = g.logStart + g.log.length;
-    const e = fresh.findLast((x) => x.t === 'shelved');
-    if (e?.t === 'shelved') setShelved(e.suit);
+    const e = fresh.findLast((x) => x.t === "shelved");
+    if (e?.t === "shelved") setShelved(e.suit);
   }, [g]);
   // The timer lives apart from the log watcher: later updates must not cancel it, or the flash never clears.
   useEffect(() => {
@@ -52,25 +52,27 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
     const past = g.tokens.slice(0, g.round).map((row, r) => ({ r, v: row[suit] }));
     const earned = past.filter((h) => h.v > 0);
     const pastText = past.length
-      ? past.map((h) => `${theme.roundNames[h.r]}: ${h.v ? `+${h.v}` : '–'}`).join(' · ')
+      ? past.map((h) => `${theme.roundNames[h.r]}: ${h.v ? `+${h.v}` : "–"}`).join(" · ")
       : `No ${round} scored yet`;
     const tagTitle = isShelved
       ? `Shelved: the ${SUIT_LIMIT}th ${s.name} ${card} was played, which ends the ${round} at once.\n` +
         `That ${card} is not auctioned, but it still counts toward ${s.name}'s total for the chart.`
       : values[suit]
         ? `What one ${s.name} ${card} would pay if the ${round} ended now` +
-          (rank >= 0 ? `: ${theme.money(TOKENS[rank])} as ${theme.rankLabels[rank]}, plus its scores from earlier ${round}s` : '')
+          (rank >= 0
+            ? `: ${theme.money(TOKENS[rank])} as ${theme.rankLabels[rank]}, plus its scores from earlier ${round}s`
+            : "")
         : count
           ? `Flop: ${s.name} is outside the top three this ${round}, so ${cards} bought now would pay nothing`
           : `No ${s.name} ${cards} played this ${round} yet`;
-    const tag = isShelved ? 'Shelved' : values[suit] ? theme.money(values[suit]) : count ? 'flop' : '–';
+    const tag = isShelved ? "Shelved" : values[suit] ? theme.money(values[suit]) : count ? "flop" : "–";
     return { s, isShelved, count, hot, rank, past, earned, pastText, tagTitle, tag, flat: !values[suit] && !isShelved };
   };
 
   const reel = (count: number) => (
     <span className="reel" aria-label={`${count} of ${SUIT_LIMIT} ${cards} this ${round}`}>
       {Array.from({ length: SUIT_LIMIT }, (_, i) => (
-        <i key={i} className={i < count ? 'on' : i === SUIT_LIMIT - 1 ? 'last' : ''} />
+        <i key={i} className={i < count ? "on" : i === SUIT_LIMIT - 1 ? "last" : ""} />
       ))}
     </span>
   );
@@ -85,8 +87,8 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
         return (
           <li
             key={suit}
-            className={`star-row ${f.hot ? 'hot' : ''} ${f.flat ? 'flat' : ''} ${f.isShelved ? 'shelving' : ''} ${expanded ? 'expanded' : ''}`}
-            style={{ ['--suit' as string]: s.color }}
+            className={`star-row ${f.hot ? "hot" : ""} ${f.flat ? "flat" : ""} ${f.isShelved ? "shelving" : ""} ${expanded ? "expanded" : ""}`}
+            style={{ ["--suit" as string]: s.color }}
           >
             <span className="face">{theme.renderSuit(suit, 40)}</span>
             <span className="who">
@@ -114,7 +116,7 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
               ) : (
                 <button
                   className="trophies"
-                  title={f.pastText.replaceAll(' · ', '\n')}
+                  title={f.pastText.replaceAll(" · ", "\n")}
                   aria-expanded={open}
                   aria-label={`${s.name}, past ${round}s: ${f.pastText}`}
                   onClick={() => setHistory(open ? null : suit)}
@@ -158,9 +160,9 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
             <b className="key-money">{theme.money(TOKENS[0])}</b>
           </dt>
           <dd>
-            What one {card} of that {suitNoun} pays if the {round} ended now. The three most-played {suitNoun}s score{' '}
-            {TOKENS.map((t) => theme.money(t)).join(' / ')}, plus what the {suitNoun} scored in earlier {round}s. Ties go to the{' '}
-            {suitNoun} listed first. <b>flop</b> = outside the top three, pays nothing.
+            What one {card} of that {suitNoun} pays if the {round} ended now. The three most-played {suitNoun}s score{" "}
+            {TOKENS.map((t) => theme.money(t)).join(" / ")}, plus what the {suitNoun} scored in earlier {round}s. Ties
+            go to the {suitNoun} listed first. <b>flop</b> = outside the top three, pays nothing.
           </dd>
         </div>
         {seated && (
@@ -181,14 +183,19 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
   if (compact)
     return (
       <section className="star-race strip" aria-label={theme.nouns.chart}>
-        <button className="chart-strip" onClick={() => setSheet(true)} aria-haspopup="dialog" aria-label={`${theme.nouns.chart}: open details`}>
+        <button
+          className="chart-strip"
+          onClick={() => setSheet(true)}
+          aria-haspopup="dialog"
+          aria-label={`${theme.nouns.chart}: open details`}
+        >
           {theme.suits.map((_, suit) => {
             const f = facts(suit);
             return (
               <span
                 key={suit}
-                className={`star-cell ${f.hot ? 'hot' : ''} ${f.flat ? 'flat' : ''} ${f.isShelved ? 'shelving' : ''}`}
-                style={{ ['--suit' as string]: f.s.color }}
+                className={`star-cell ${f.hot ? "hot" : ""} ${f.flat ? "flat" : ""} ${f.isShelved ? "shelving" : ""}`}
+                style={{ ["--suit" as string]: f.s.color }}
               >
                 <span className="cell-who">
                   {theme.renderSuit(suit, 26)}
@@ -196,7 +203,7 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
                 </span>
                 {reel(f.count)}
                 <span className="cell-tag">{f.tag}</span>
-                <span className="cell-held">{seated && inHand[suit] > 0 ? `hand ${inHand[suit]}` : ''}</span>
+                <span className="cell-held">{seated && inHand[suit] > 0 ? `hand ${inHand[suit]}` : ""}</span>
               </span>
             );
           })}
@@ -213,7 +220,11 @@ export function StarChart({ g, theme }: { g: View; theme: Theme }) {
       <h2>
         <span className="chart-title">
           {theme.nouns.chart}
-          <button className="info-btn tap-only" onClick={() => setSheet(true)} aria-label={`How to read the ${theme.nouns.chart}`}>
+          <button
+            className="info-btn tap-only"
+            onClick={() => setSheet(true)}
+            aria-label={`How to read the ${theme.nouns.chart}`}
+          >
             <i className="i-dot">i</i>
           </button>
         </span>

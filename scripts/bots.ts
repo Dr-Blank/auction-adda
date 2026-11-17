@@ -19,18 +19,18 @@
 // Bots wait for the server to come up, reconnect if it restarts, and in a running game take a
 // seat someone freed. They play legal moves at random; they are not opponents worth beating.
 
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import readline from 'node:readline/promises';
-import WebSocket from 'ws';
-import { MAX_PLAYERS, MIN_PLAYERS } from '../src/config.ts';
-import type { ClientMsg, SeatInfo, ServerMsg } from '../src/generated/index.ts';
-import { chooseAction } from './bot.ts';
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import readline from "node:readline/promises";
+import WebSocket from "ws";
+import { MAX_PLAYERS, MIN_PLAYERS } from "../src/config.ts";
+import type { ClientMsg, SeatInfo, ServerMsg } from "../src/generated/index.ts";
+import { chooseAction } from "./bot.ts";
 
-type StateMsg = Extract<ServerMsg, { type: 'state' }>;
+type StateMsg = Extract<ServerMsg, { type: "state" }>;
 
-const LAST_ROOM = path.resolve(import.meta.dirname, '../node_modules/.cache/auction-adda/last-room');
+const LAST_ROOM = path.resolve(import.meta.dirname, "../node_modules/.cache/auction-adda/last-room");
 const BOT_NAME = /^Bot \d+$/;
 
 const args = process.argv.slice(2);
@@ -44,7 +44,9 @@ function flag(name: string): boolean {
   return i >= 0;
 }
 function usage(message: string): never {
-  console.error(`${message}\nUsage: node scripts/bots.ts ROOM|last [count] [options]   or   node scripts/bots.ts --create [count] [options]`);
+  console.error(
+    `${message}\nUsage: node scripts/bots.ts ROOM|last [count] [options]   or   node scripts/bots.ts --create [count] [options]`,
+  );
   process.exit(1);
 }
 function number(name: string, fallback: number): number {
@@ -54,25 +56,25 @@ function number(name: string, fallback: number): number {
   return n;
 }
 
-const url = option('--url') ?? 'ws://localhost:8787/ws';
-const web = (option('--web') ?? 'http://localhost:5173').replace(/\/$/, '');
-const delay = number('--delay', 1200);
-const startFlag = flag('--start');
-const startAt = number('--start-at', startFlag ? MIN_PLAYERS : 0);
-const rematch = flag('--rematch');
-const admin = option('--admin') ?? 'bot';
-const dropAfter = number('--drop-after', 0) * 1000;
-const rejoinAfter = number('--rejoin-after', 0) * 1000;
-const openLink = flag('--open');
-const create = flag('--create');
+const url = option("--url") ?? "ws://localhost:8787/ws";
+const web = (option("--web") ?? "http://localhost:5173").replace(/\/$/, "");
+const delay = number("--delay", 1200);
+const startFlag = flag("--start");
+const startAt = number("--start-at", startFlag ? MIN_PLAYERS : 0);
+const rematch = flag("--rematch");
+const admin = option("--admin") ?? "bot";
+const dropAfter = number("--drop-after", 0) * 1000;
+const rejoinAfter = number("--rejoin-after", 0) * 1000;
+const openLink = flag("--open");
+const create = flag("--create");
 const roomArg = create ? undefined : args.shift();
 const count = Number(args.shift() ?? 2);
 
-if (admin !== 'bot' && admin !== 'human') usage(`--admin is "human" or "bot", got "${admin}"`);
+if (admin !== "bot" && admin !== "human") usage(`--admin is "human" or "bot", got "${admin}"`);
 if (!Number.isInteger(count) || count < 0 || count > MAX_PLAYERS) usage(`Bot count must be 0–${MAX_PLAYERS}`);
-if (create && count < 1) usage('--create needs at least one bot (it holds the first seat)');
-if (args.length) usage(`Unknown arguments: ${args.join(' ')}`);
-let room = create ? '' : await resolveRoom(roomArg);
+if (create && count < 1) usage("--create needs at least one bot (it holds the first seat)");
+if (args.length) usage(`Unknown arguments: ${args.join(" ")}`);
+let room = create ? "" : await resolveRoom(roomArg);
 
 /**
  * "last" is the newest of: the room this script last created or joined, and the newest room
@@ -80,20 +82,20 @@ let room = create ? '' : await resolveRoom(roomArg);
  */
 async function resolveRoom(arg: string | undefined): Promise<string> {
   if (!arg) usage('Give a room code, "last", or --create');
-  if (arg.toLowerCase() !== 'last') return arg.trim().toUpperCase();
+  if (arg.toLowerCase() !== "last") return arg.trim().toUpperCase();
   const candidates: { code: string; at: number }[] = [];
   try {
-    candidates.push({ code: fs.readFileSync(LAST_ROOM, 'utf8').trim(), at: fs.statSync(LAST_ROOM).mtimeMs });
+    candidates.push({ code: fs.readFileSync(LAST_ROOM, "utf8").trim(), at: fs.statSync(LAST_ROOM).mtimeMs });
   } catch {
     // nothing remembered
   }
-  const dataDir = process.env.DATA_DIR || path.resolve(import.meta.dirname, '../data');
+  const dataDir = process.env.DATA_DIR || path.resolve(import.meta.dirname, "../data");
   try {
     for (const file of fs.readdirSync(dataDir)) {
       const code = /^([A-Z0-9]{6})\.json$/.exec(file)?.[1];
       if (!code) continue;
-      const { createdAt } = JSON.parse(fs.readFileSync(path.join(dataDir, file), 'utf8'));
-      if (typeof createdAt === 'number') candidates.push({ code, at: createdAt });
+      const { createdAt } = JSON.parse(fs.readFileSync(path.join(dataDir, file), "utf8"));
+      if (typeof createdAt === "number") candidates.push({ code, at: createdAt });
     }
   } catch {
     // no saved rooms (or the server keeps them in memory)
@@ -103,37 +105,41 @@ async function resolveRoom(arg: string | undefined): Promise<string> {
     console.log(`Using room ${newest.code} (most recent)`);
     return newest.code;
   }
-  if (!process.stdin.isTTY) usage('No recent room found; create one with --create or pass its code');
+  if (!process.stdin.isTTY) usage("No recent room found; create one with --create or pass its code");
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const code = (await rl.question('No recent room found. Room code (from the link after #): ')).trim().toUpperCase();
+  const code = (await rl.question("No recent room found. Room code (from the link after #): ")).trim().toUpperCase();
   rl.close();
-  if (!code) usage('No room code given');
+  if (!code) usage("No room code given");
   return code;
 }
 
 function remember(code: string): void {
   fs.mkdirSync(path.dirname(LAST_ROOM), { recursive: true });
-  fs.writeFileSync(LAST_ROOM, code + '\n');
+  fs.writeFileSync(LAST_ROOM, `${code}\n`);
 }
 
 function announce(code: string): void {
   console.log(`Room ${code}:  ${web}/#${code}`);
-  if (!web.endsWith(':8787')) console.log(`         built app:  http://localhost:8787/#${code}`);
+  if (!web.endsWith(":8787")) console.log(`         built app:  http://localhost:8787/#${code}`);
   if (openLink) openBrowser(`${web}/#${code}`);
 }
 
 function openBrowser(link: string): void {
   const [cmd, ...pre] =
-    process.platform === 'darwin' ? ['open'] : process.platform === 'win32' ? ['cmd', '/c', 'start', '""'] : ['xdg-open'];
-  const child = spawn(cmd, [...pre, link], { stdio: 'ignore', detached: true });
-  child.on('error', (e) => console.error(`Could not open a browser (${e.message}); open the link by hand`));
+    process.platform === "darwin"
+      ? ["open"]
+      : process.platform === "win32"
+        ? ["cmd", "/c", "start", '""']
+        : ["xdg-open"];
+  const child = spawn(cmd, [...pre, link], { stdio: "ignore", detached: true });
+  child.on("error", (e) => console.error(`Could not open a browser (${e.message}); open the link by hand`));
   child.unref();
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function waitForServer(): Promise<void> {
-  const health = new URL('/healthz', url.replace(/^ws/, 'http'));
+  const health = new URL("/healthz", url.replace(/^ws/, "http"));
   for (let i = 0; ; i++) {
     try {
       if ((await fetch(health)).ok) return;
@@ -192,35 +198,35 @@ function bot(index: number): void {
   const act = () => {
     if (!latest || seat === null) return;
     const { room: info, game } = latest;
-    if (admin === 'human' && !gaveAdmin && info.admin === seat) {
+    if (admin === "human" && !gaveAdmin && info.admin === seat) {
       const human = info.seats.findIndex((s) => s.connected && !BOT_NAME.test(s.name));
       if (human >= 0) {
         gaveAdmin = true;
         console.log(`${name} hands admin to ${info.seats[human].name}`);
-        return send({ type: 'admin', seat: human });
+        return send({ type: "admin", seat: human });
       }
     }
     // Starting and rematches are the admin's; a bot that handed the role over leaves them to the human.
     if (!game) {
-      if (info.admin === seat && startAt && info.seats.length >= startAt) send({ type: 'start' });
+      if (info.admin === seat && startAt && info.seats.length >= startAt) send({ type: "start" });
       return;
     }
     if (game.over) {
-      if (rematch && info.admin === seat) send({ type: 'rematch' });
+      if (rematch && info.admin === seat) send({ type: "rematch" });
       return;
     }
     const action = chooseAction(game, Math.random);
-    if (action) send({ type: 'action', action });
+    if (action) send({ type: "action", action });
   };
 
   const drop = () => {
-    console.log(`${name} drops its connection${rejoinAfter ? `, back in ${rejoinAfter / 1000} s` : ' for good'}`);
+    console.log(`${name} drops its connection${rejoinAfter ? `, back in ${rejoinAfter / 1000} s` : " for good"}`);
     dropping = true;
     ws.close();
   };
 
   const onMessage = (m: ServerMsg) => {
-    if (m.type === 'joined') {
+    if (m.type === "joined") {
       if (m.seat === null) {
         if (seat !== null) return quit(`lost seat ${seat + 1}; someone removed it`);
         if (rejoining) {
@@ -245,24 +251,24 @@ function bot(index: number): void {
         announce(room);
       }
       if (index + 1 < count) bot(index + 1);
-    } else if (m.type === 'state') {
+    } else if (m.type === "state") {
       latest = m;
       if (seat === null) {
         if (asked) return;
         asked = true;
         name = freeName(m.room.seats);
-        if (!m.game) return send({ type: 'join', room, name });
+        if (!m.game) return send({ type: "join", room, name });
         const open = m.room.seats.findIndex((s) => s.open);
-        if (open < 0) return quit('the game has started and no seat is free');
-        return send({ type: 'claim', seat: open, name });
+        if (open < 0) return quit("the game has started and no seat is free");
+        return send({ type: "claim", seat: open, name });
       }
       if (m.game && !m.game.over && dropAfter && !dropTimer) dropTimer = setTimeout(drop, dropAfter);
       think();
     } else {
-      if (m.code === 'no-room' && roomArg?.toLowerCase() === 'last') {
+      if (m.code === "no-room" && roomArg?.toLowerCase() === "last") {
         return quit(`${m.message}: ${room}. Pass the code from the room link instead of "last".`);
       }
-      if (m.code === 'no-room' || seat === null) return quit(m.message);
+      if (m.code === "no-room" || seat === null) return quit(m.message);
       // Two bots can act on the same view at once; the loser of the race just looks again.
       think();
     }
@@ -270,18 +276,18 @@ function bot(index: number): void {
 
   const connect = () => {
     ws = new WebSocket(url);
-    ws.on('open', () => {
+    ws.on("open", () => {
       lost = false;
       rejoining = token !== null;
-      if (token) send({ type: 'join', room, token });
-      else if (create && index === 0) send({ type: 'create', theme: 'box-office', name });
-      else send({ type: 'join', room });
+      if (token) send({ type: "join", room, token });
+      else if (create && index === 0) send({ type: "create", theme: "box-office", name });
+      else send({ type: "join", room });
     });
-    ws.on('message', (data) => onMessage(JSON.parse(data.toString()) as ServerMsg));
-    ws.on('error', (e) => {
+    ws.on("message", (data) => onMessage(JSON.parse(data.toString()) as ServerMsg));
+    ws.on("error", (e) => {
       if (!lost) console.error(`${name}: ${e.message}`);
     });
-    ws.on('close', () => {
+    ws.on("close", () => {
       clearTimeout(timer);
       clearTimeout(dropTimer);
       dropTimer = undefined;

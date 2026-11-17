@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClientMsg, Prefs, ServerMsg } from '../generated/index.ts';
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClientMsg, Prefs, ServerMsg } from "../generated/index.ts";
 
-export type RoomState = Extract<ServerMsg, { type: 'state' }> & { receivedAt: number };
+export type RoomState = Extract<ServerMsg, { type: "state" }> & { receivedAt: number };
 export interface NetError {
   message: string;
   code?: string;
@@ -25,23 +25,23 @@ const store = {
   },
 };
 
-export const savedName = () => store.get('aa:name') ?? '';
-export const saveName = (name: string) => store.set('aa:name', name);
+export const savedName = () => store.get("aa:name") ?? "";
+export const saveName = (name: string) => store.set("aa:name", name);
 /** The look this person built; empty = drawn from their name. */
-export const savedAvatar = () => store.get('aa:avatar') ?? '';
+export const savedAvatar = () => store.get("aa:avatar") ?? "";
 /** The saved look, and a setter that keeps it for next time. */
 export function useSavedLook(): [string, (code: string) => void] {
   const [look, setLook] = useState(savedAvatar);
   return [
     look,
     useCallback((code: string) => {
-      store.set('aa:avatar', code);
+      store.set("aa:avatar", code);
       setLook(code);
     }, []),
   ];
 }
-export const savedTheme = () => store.get('aa:theme');
-export const saveTheme = (theme: string) => store.set('aa:theme', theme);
+export const savedTheme = () => store.get("aa:theme");
+export const saveTheme = (theme: string) => store.set("aa:theme", theme);
 
 /**
  * Room settings this person last picked as admin: their next room starts with them. The timer is
@@ -49,8 +49,8 @@ export const saveTheme = (theme: string) => store.set('aa:theme', theme);
  */
 export function savedPrefs(theme: string): Prefs | null {
   try {
-    const timer = JSON.parse(store.get('aa:timer') ?? 'null') as { bidTimerS: number; bidExtendS: number } | null;
-    const genres = JSON.parse(store.get(`aa:genres:${theme}`) ?? '[]') as number[];
+    const timer = JSON.parse(store.get("aa:timer") ?? "null") as { bidTimerS: number; bidExtendS: number } | null;
+    const genres = JSON.parse(store.get(`aa:genres:${theme}`) ?? "[]") as number[];
     if (!timer && genres.length === 0) return null;
     // The server swaps anything it would refuse (no saved timer: 0 s after a bid) for its default.
     return { bidTimerS: timer?.bidTimerS ?? 0, bidExtendS: timer?.bidExtendS ?? 0, genres };
@@ -58,7 +58,8 @@ export function savedPrefs(theme: string): Prefs | null {
     return null;
   }
 }
-export const saveTimer = (bidTimerS: number, bidExtendS: number) => store.set('aa:timer', JSON.stringify({ bidTimerS, bidExtendS }));
+export const saveTimer = (bidTimerS: number, bidExtendS: number) =>
+  store.set("aa:timer", JSON.stringify({ bidTimerS, bidExtendS }));
 export const saveGenres = (theme: string, genres: number[]) => store.set(`aa:genres:${theme}`, JSON.stringify(genres));
 const tokenKey = (room: string) => `aa:token:${room}`;
 
@@ -75,11 +76,12 @@ export function useRoom(code: string | null) {
 
   const send = useCallback((msg: ClientMsg) => {
     if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(msg));
-    else setError({ message: 'Not connected, reconnecting…', at: Date.now() });
+    else setError({ message: "Not connected, reconnecting…", at: Date.now() });
   }, []);
 
   const join = useCallback(
-    (room: string, name?: string) => send({ type: 'join', room, token: store.get(tokenKey(room)), name, avatar: savedAvatar() }),
+    (room: string, name?: string) =>
+      send({ type: "join", room, token: store.get(tokenKey(room)), name, avatar: savedAvatar() }),
     [send],
   );
 
@@ -89,7 +91,7 @@ export function useRoom(code: string | null) {
     let timer: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
       ws.current = socket;
       socket.onopen = () => {
         attempt = 0;
@@ -99,11 +101,11 @@ export function useRoom(code: string | null) {
       };
       socket.onmessage = (event) => {
         const msg = JSON.parse(event.data) as ServerMsg;
-        if (msg.type === 'joined') {
+        if (msg.type === "joined") {
           attached.current = msg.room;
           if (msg.token) store.set(tokenKey(msg.room), msg.token);
           if (location.hash.slice(1).toUpperCase() !== msg.room) location.hash = msg.room;
-        } else if (msg.type === 'state') {
+        } else if (msg.type === "state") {
           setState({ ...msg, receivedAt: Date.now() });
         } else {
           setError({ message: msg.message, code: msg.code, at: Date.now() });

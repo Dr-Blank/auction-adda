@@ -759,10 +759,7 @@ mod hidden_information {
             let text = serde_json::to_string(&v).unwrap();
             assert!(!text.contains("\"deck\""));
             assert!(!text.contains("\"seed\""));
-            assert_eq!(
-                v.hand,
-                seat.map(|i| s.players[usize::from(i)].hand.clone()).unwrap_or_default()
-            );
+            assert_eq!(v.hand, seat.map_or_default(|i| s.players[usize::from(i)].hand.clone()));
             for (i, p) in (0..).zip(&v.players) {
                 assert_eq!(p.money, (Some(i) == seat).then_some(100));
             }

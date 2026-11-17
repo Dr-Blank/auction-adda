@@ -1,8 +1,8 @@
 // Facts the table screen shows that are not stored directly in the view.
 
-import { DEALS, ROUNDS, SUITS, TOKENS } from '../config.ts';
-import type { Card, LogEntry, View } from '../generated/index.ts';
-import type { Theme } from '../themes/types.ts';
+import { DEALS, ROUNDS, SUITS, TOKENS } from "../config.ts";
+import type { Card, LogEntry, View } from "../generated/index.ts";
+import type { Theme } from "../themes/types.ts";
 
 /** What the deal at the start of `round` gives every player (all get the same), and why nothing when nothing. */
 export function dealNote(theme: Theme, n: number, round: number): string {
@@ -55,8 +55,8 @@ export interface Purchase {
 export function purchases(g: View): Map<number, Purchase> {
   const map = new Map<number, Purchase>();
   for (const e of g.log) {
-    if (e.t === 'sold') e.cards.forEach((c) => map.set(c.id, { price: e.price, paid: e.from, lot: e.cards.length }));
-    else if (e.t === 'free') e.cards.forEach((c) => map.set(c.id, { price: 0, paid: null, lot: e.cards.length }));
+    if (e.t === "sold") e.cards.forEach((c) => map.set(c.id, { price: e.price, paid: e.from, lot: e.cards.length }));
+    else if (e.t === "free") e.cards.forEach((c) => map.set(c.id, { price: 0, paid: null, lot: e.cards.length }));
   }
   return map;
 }
@@ -66,17 +66,17 @@ function auctionStart(g: View): number {
   if (!g.auction) return -1;
   for (let i = g.log.length - 1; i >= 0; i--) {
     const e = g.log[i];
-    if (e.t === 'offer') return i;
-    if (e.t === 'play') {
+    if (e.t === "offer") return i;
+    if (e.t === "play") {
       // A play straight after a double offer belongs to the same lot.
       for (let j = i - 1; j >= 0; j--) {
         const p = g.log[j];
-        if (p.t === 'decline') continue;
-        return p.t === 'offer' ? j : i;
+        if (p.t === "decline") continue;
+        return p.t === "offer" ? j : i;
       }
       return i;
     }
-    if (e.t === 'sold' || e.t === 'free' || e.t === 'shelved' || e.t === 'round') return -1;
+    if (e.t === "sold" || e.t === "free" || e.t === "shelved" || e.t === "round") return -1;
   }
   return -1;
 }
@@ -106,12 +106,12 @@ export function hammerOrder(g: View): number[] {
 export function doing(g: View, seat: number): string | null {
   if (!g.pending.includes(seat)) return null;
   const a = g.auction;
-  if (!a) return 'choosing';
-  if (a.kind === 'open') return 'bidding';
-  if (a.kind === 'sealed') return 'sealing';
-  if (a.kind === 'once') return 'to bid';
-  if (a.kind === 'fixed') return a.price === null ? 'pricing' : 'deciding';
-  return 'deciding';
+  if (!a) return "choosing";
+  if (a.kind === "open") return "bidding";
+  if (a.kind === "sealed") return "sealing";
+  if (a.kind === "once") return "to bid";
+  if (a.kind === "fixed") return a.price === null ? "pricing" : "deciding";
+  return "deciding";
 }
 
 /** What each seat last said in the running auction ("bid 7", "pass", "no"), from the log. */
@@ -120,12 +120,12 @@ export function lastWords(g: View): (LogEntry | null)[] {
   const from = auctionStart(g);
   if (from < 0) return words;
   for (const e of g.log.slice(from + 1)) {
-    if (e.t === 'bid' || e.t === 'pass' || e.t === 'decline' || e.t === 'price') words[e.p] = e;
+    if (e.t === "bid" || e.t === "pass" || e.t === "decline" || e.t === "price") words[e.p] = e;
   }
   return words;
 }
 
-export type RailState = 'now' | 'lead' | 'bid' | 'passed' | 'done' | 'sealed' | 'waiting';
+export type RailState = "now" | "lead" | "bid" | "passed" | "done" | "sealed" | "waiting";
 export interface RailStop {
   seat: number;
   state: RailState;
@@ -144,20 +144,20 @@ export function rail(g: View): RailStop[] {
   return order.map((seat, idx) => {
     const seller = seat === a.auctioneer;
     const base = { seat, seller };
-    if (a.kind === 'open') {
-      if (a.highBidder === seat) return { ...base, state: 'lead', amount: a.high };
-      if (a.done[seat]) return { ...base, state: 'done' };
-      return { ...base, state: 'waiting' };
+    if (a.kind === "open") {
+      if (a.highBidder === seat) return { ...base, state: "lead", amount: a.high };
+      if (a.done[seat]) return { ...base, state: "done" };
+      return { ...base, state: "waiting" };
     }
-    if (a.kind === 'sealed') return { ...base, state: a.bidsIn[seat] ? 'sealed' : 'waiting' };
-    if (a.kind === 'fixed' && a.price === null) return { ...base, state: seller ? 'now' : 'waiting' };
-    if (a.toAct === seat) return { ...base, state: 'now' };
+    if (a.kind === "sealed") return { ...base, state: a.bidsIn[seat] ? "sealed" : "waiting" };
+    if (a.kind === "fixed" && a.price === null) return { ...base, state: seller ? "now" : "waiting" };
+    if (a.toAct === seat) return { ...base, state: "now" };
     if (turnIdx >= 0 && idx < turnIdx) {
       const w = words[seat];
-      if (w?.t === 'bid') return { ...base, state: a.highBidder === seat ? 'lead' : 'bid', amount: w.amount };
-      return { ...base, state: 'passed' };
+      if (w?.t === "bid") return { ...base, state: a.highBidder === seat ? "lead" : "bid", amount: w.amount };
+      return { ...base, state: "passed" };
     }
-    return { ...base, state: 'waiting' };
+    return { ...base, state: "waiting" };
   });
 }
 
@@ -176,17 +176,17 @@ export function groupLog(log: LogEntry[], start: number): LogGroup[] {
   let current: LogGroup | null = null;
   log.forEach((e, i) => {
     const key = start + i;
-    if (e.t === 'undo') {
+    if (e.t === "undo") {
       // The called lot is back on the table: a new group that the next result closes.
       current = { key, head: e, steps: [e], open: true };
       groups.push(current);
-    } else if (e.t === 'play' || e.t === 'offer') {
+    } else if (e.t === "play" || e.t === "offer") {
       if (!current) {
         current = { key, head: e, steps: [], open: true };
         groups.push(current);
       }
       current.steps.push(e);
-    } else if (e.t === 'sold' || e.t === 'free' || e.t === 'shelved') {
+    } else if (e.t === "sold" || e.t === "free" || e.t === "shelved") {
       if (current) {
         current.head = e;
         current.open = false;
@@ -204,4 +204,4 @@ export function groupLog(log: LogEntry[], start: number): LogGroup[] {
 }
 
 export const reducedMotion = () =>
-  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;

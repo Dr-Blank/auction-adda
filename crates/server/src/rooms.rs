@@ -1004,17 +1004,13 @@ impl Rooms {
         let now = (self.now)();
         let ip = self.client(id)?.ip.clone();
         let window_ms = self.create_limit.window_ms;
-        let mut recent: Vec<u64> = self
-            .creates
-            .get(&ip)
-            .map(|times| {
-                times
-                    .iter()
-                    .copied()
-                    .filter(|&t| now.saturating_sub(t) < window_ms)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let mut recent: Vec<u64> = self.creates.get(&ip).map_or_default(|times| {
+            times
+                .iter()
+                .copied()
+                .filter(|&t| now.saturating_sub(t) < window_ms)
+                .collect()
+        });
         if recent.len() >= usize::try_from(self.create_limit.count).unwrap_or(usize::MAX) {
             warn!(client = id, ip, "Room creation limit reached for this address");
             return fail("Too many rooms created; try again later");

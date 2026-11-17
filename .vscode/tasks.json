@@ -29,7 +29,11 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\s*(Compiling|Running) |^> ",
+          "endsPattern": "listening on port"
+        }
       },
       "presentation": { "group": "dev", "panel": "dedicated" }
     },
@@ -42,7 +46,11 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\s*(Compiling|Running) |^> ",
+          "endsPattern": "listening on port"
+        }
       },
       "presentation": { "group": "dev", "panel": "dedicated" }
     },
@@ -69,7 +77,11 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\s*(Compiling|Running) |^> ",
+          "endsPattern": "listening on port"
+        }
       },
       "presentation": { "panel": "dedicated" }
     },
@@ -82,7 +94,11 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\s*(Compiling|Running) |^> ",
+          "endsPattern": "listening on port"
+        }
       },
       "presentation": { "panel": "dedicated" }
     },
@@ -100,7 +116,16 @@
       "detail": "Bots create a room and open it; you take the next seat, get admin and press Start",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/bots.ts", "--create", "${input:botsBesideYou}", "--delay", "${input:delay}", "--admin", "human", "--open"],
+      "args": [
+        "scripts/bots.ts",
+        "--create",
+        "${input:botsBesideYou}",
+        "--delay",
+        "${input:delay}",
+        "--admin",
+        "human",
+        "--open"
+      ],
       "problemMatcher": [],
       "presentation": { "panel": "new" },
       "runOptions": { "instanceLimit": 10 }
@@ -110,7 +135,16 @@
       "detail": "Bot 1 keeps admin; you see the table as an ordinary player",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/bots.ts", "--create", "${input:botsBesideYou}", "--delay", "${input:delay}", "--start-at", "${input:startAt}", "--open"],
+      "args": [
+        "scripts/bots.ts",
+        "--create",
+        "${input:botsBesideYou}",
+        "--delay",
+        "${input:delay}",
+        "--start-at",
+        "${input:startAt}",
+        "--open"
+      ],
       "problemMatcher": [],
       "presentation": { "panel": "new" },
       "runOptions": { "instanceLimit": 10 }
@@ -120,7 +154,17 @@
       "detail": "Room of bots only, starts by itself and rematches; you watch as a spectator",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/bots.ts", "--create", "${input:players}", "--start-at", "${input:players}", "--rematch", "--delay", "${input:delay}", "--open"],
+      "args": [
+        "scripts/bots.ts",
+        "--create",
+        "${input:players}",
+        "--start-at",
+        "${input:players}",
+        "--rematch",
+        "--delay",
+        "${input:delay}",
+        "--open"
+      ],
       "problemMatcher": [],
       "presentation": { "panel": "new" },
       "runOptions": { "instanceLimit": 10 }
@@ -130,7 +174,15 @@
       "detail": "Bots join a lobby, or take freed seats in a running game",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/bots.ts", "${input:room}", "${input:botCount}", "--delay", "${input:delay}", "--start-at", "${input:startAt}"],
+      "args": [
+        "scripts/bots.ts",
+        "${input:room}",
+        "${input:botCount}",
+        "--delay",
+        "${input:delay}",
+        "--start-at",
+        "${input:startAt}"
+      ],
       "problemMatcher": [],
       "presentation": { "panel": "new" },
       "runOptions": { "instanceLimit": 10 }
@@ -140,7 +192,17 @@
       "detail": "One bot that drops its connection mid-game, for Skip / Free seat / reconnect / admin takeover",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/bots.ts", "${input:room}", "1", "--delay", "${input:delay}", "--drop-after", "${input:dropAfter}", "--rejoin-after", "${input:rejoinAfter}"],
+      "args": [
+        "scripts/bots.ts",
+        "${input:room}",
+        "1",
+        "--delay",
+        "${input:delay}",
+        "--drop-after",
+        "${input:dropAfter}",
+        "--rejoin-after",
+        "${input:rejoinAfter}"
+      ],
       "problemMatcher": [],
       "presentation": { "panel": "new" },
       "runOptions": { "instanceLimit": 10 }
@@ -210,7 +272,11 @@
       "problemMatcher": {
         "owner": "auction-adda-server",
         "pattern": { "regexp": "^__never_matches__$" },
-        "background": { "activeBegins": true, "beginsPattern": "^\\s*(Compiling|Running) |^> ", "endsPattern": "listening on port" }
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\s*(Compiling|Running) |^> ",
+          "endsPattern": "listening on port"
+        }
       },
       "presentation": { "panel": "dedicated" }
     }

@@ -1,12 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
-import { createPortal } from 'react-dom';
-import type { Card, ClientMsg, RoomInfo, View } from '../generated/index.ts';
-import type { Theme } from '../themes/types.ts';
-import { Avatar } from './Avatar.tsx';
-import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from './derive.ts';
-import { COMPACT, TOUCH } from './hooks.ts';
-import { Sheet } from './Sheet.tsx';
+import type { CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { Card, ClientMsg, RoomInfo, View } from "../generated/index.ts";
+import type { Theme } from "../themes/types.ts";
+import { Avatar } from "./Avatar.tsx";
+import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from "./derive.ts";
+import { COMPACT, TOUCH } from "./hooks.ts";
+import { Sheet } from "./Sheet.tsx";
 
 export interface Bubble {
   text: string;
@@ -24,7 +24,7 @@ interface SeatProps {
 
 function clock(ms: number): string {
   const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -35,7 +35,7 @@ export function Seats(props: SeatProps) {
   const order = aroundTable(props.g.n, props.g.you);
   const m = order.length;
   return (
-    <section className={`seats ${m >= 3 ? 'arc' : ''}`} aria-label="Players">
+    <section className={`seats ${m >= 3 ? "arc" : ""}`} aria-label="Players">
       {order.map((i, k) => (
         <Seat key={i} {...props} i={i} arc={Math.sin((Math.PI * (k + 0.5)) / m)} />
       ))}
@@ -67,25 +67,40 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
   const sellsNext = hammer.length > 1 && hammer[1] === i;
   const sellsIn = hammer.indexOf(i);
   const w = words[i];
-  const out = (a?.kind === 'open' && a.done[i]) || w?.t === 'pass' || w?.t === 'decline';
+  const out = (a?.kind === "open" && a.done[i]) || w?.t === "pass" || w?.t === "decline";
   const winner = g.over && g.winners.includes(i);
-  const name = i === me ? 'You' : seat.name;
-  const cls = ['seat', i === me ? 'me' : '', owing ? 'owing' : '', seat.connected ? '' : 'away', out ? 'out' : '', winner ? 'winner' : ''];
+  const name = i === me ? "You" : seat.name;
+  const cls = [
+    "seat",
+    i === me ? "me" : "",
+    owing ? "owing" : "",
+    seat.connected ? "" : "away",
+    out ? "out" : "",
+    winner ? "winner" : "",
+  ];
   const [info, setInfo] = useState(false);
-  const names = room.seats.map((s, k) => (k === me ? 'you' : s.name));
+  const names = room.seats.map((s, k) => (k === me ? "you" : s.name));
   const adminAway = me !== null && room.admin === i && away !== null && away >= room.skipAfterMs;
 
   // Everything the seat says through icons and tooltips, as sentences (for the info sheet).
   const { card, cards, round } = theme.nouns;
   const facts: string[] = [];
   if (winner) facts.push(`👑 ${name} won the game.`);
-  if (holds) facts.push(a ? `🔨 ${name} ${i === me ? 'are' : 'is'} selling this lot.` : `🔨 ${name} ${i === me ? 'are' : 'is'} choosing a ${card} to sell.`);
+  if (holds)
+    facts.push(
+      a
+        ? `🔨 ${name} ${i === me ? "are" : "is"} selling this lot.`
+        : `🔨 ${name} ${i === me ? "are" : "is"} choosing a ${card} to sell.`,
+    );
   else if (sellsIn > 0)
     facts.push(
-      `🔨 ${name} ${i === me ? 'sell' : 'sells'} ${sellsIn === 1 ? 'next' : `in ${sellsIn} lots`}. The hammer passes clockwise to the next player who still has ${cards}.`,
+      `🔨 ${name} ${i === me ? "sell" : "sells"} ${sellsIn === 1 ? "next" : `in ${sellsIn} lots`}. The hammer passes clockwise to the next player who still has ${cards}.`,
     );
-  if (now) facts.push(`${name} ${i === me ? 'owe' : 'owes'} a move now (${now}).`);
-  else if (out) facts.push(`${name} ${i === me ? 'are' : 'is'} out of this auction (${w?.t === 'decline' ? 'declined' : a?.kind === 'open' ? 'done' : 'passed'}).`);
+  if (now) facts.push(`${name} ${i === me ? "owe" : "owes"} a move now (${now}).`);
+  else if (out)
+    facts.push(
+      `${name} ${i === me ? "are" : "is"} out of this auction (${w?.t === "decline" ? "declined" : a?.kind === "open" ? "done" : "passed"}).`,
+    );
   if (room.admin === i) facts.push(`★ Room admin: can end an auction with a result agreed on voice.`);
   if (i !== me) facts.push(`${p.handCount} ${p.handCount === 1 ? card : cards} in hand.`);
   facts.push(
@@ -99,28 +114,41 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
     standIn
       ? `🤖 A bot plays this seat at random until ${name} comes back.`
       : seat.bot
-        ? '🤖 A bot: the server plays this seat at random.'
-        : seat.connected ? 'Connected.' : seat.open           ? 'Seat open: anyone with the room link can take it over.'
-          : `Away for ${clock(away ?? 0)}.`,
+        ? "🤖 A bot: the server plays this seat at random."
+        : seat.connected
+          ? "Connected."
+          : seat.open
+            ? "Seat open: anyone with the room link can take it over."
+            : `Away for ${clock(away ?? 0)}.`,
   );
 
   return (
     <div
-      className={cls.join(' ')}
+      className={cls.join(" ")}
       data-seat={i}
-      style={{ ['--arc' as string]: arc.toFixed(3) }}
+      style={{ ["--arc" as string]: arc.toFixed(3) }}
       // Touch: the whole seat is the tap target (the avatar button alone is too small a target on a phone).
       onClick={(e) => {
-        if ((e.target as Element).closest('button, a, input, select')) return;
+        if ((e.target as Element).closest("button, a, input, select")) return;
         if (matchMedia(`${COMPACT}, ${TOUCH}`).matches) setInfo(true);
       }}
     >
       <div className="avatar-wrap">
-        <button className="avatar-btn" onClick={() => setInfo(true)} aria-haspopup="dialog" aria-label={`About ${name === 'You' ? 'your seat' : name}`}>
-          <Avatar code={seat.avatar} name={seat.name} className={seat.connected ? 'on' : ''} title={seat.connected ? 'Connected' : 'Disconnected'} />
+        <button
+          className="avatar-btn"
+          onClick={() => setInfo(true)}
+          aria-haspopup="dialog"
+          aria-label={`About ${name === "You" ? "your seat" : name}`}
+        >
+          <Avatar
+            code={seat.avatar}
+            name={seat.name}
+            className={seat.connected ? "on" : ""}
+            title={seat.connected ? "Connected" : "Disconnected"}
+          />
         </button>
         {holds && (
-          <span className="role" title={a ? 'Seller' : `Choosing a ${theme.nouns.card} to sell`}>
+          <span className="role" title={a ? "Seller" : `Choosing a ${theme.nouns.card} to sell`}>
             🔨
           </span>
         )}
@@ -145,19 +173,19 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
           )}
           {seat.bot && (
             <span title="A bot plays this seat" aria-label="bot">
-              {' '}
+              {" "}
               🤖
             </span>
           )}
           {now ? (
             <span className="mark now">{now}</span>
           ) : (
-            out && <span className="mark">{w?.t === 'decline' ? 'no' : a?.kind === 'open' ? 'done' : 'pass'}</span>
+            out && <span className="mark">{w?.t === "decline" ? "no" : a?.kind === "open" ? "done" : "pass"}</span>
           )}
         </div>
         {(sellsNext || (i === me && sellsIn > 1)) && (
           <div className="seat-tag" title="The hammer passes clockwise to the next player who still has cards">
-            {i !== me ? 'Sells next' : sellsNext ? 'You sell next' : `You sell in ${sellsIn} lots`}
+            {i !== me ? "Sells next" : sellsNext ? "You sell next" : `You sell in ${sellsIn} lots`}
           </div>
         )}
         {i !== me && (
@@ -174,24 +202,34 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         <Owned g={g} seat={i} name={name} names={names} theme={theme} />
         {!seat.connected && (
           <div className="away-row">
-            <span className="muted small">{standIn ? 'Bot playing' : seat.open ? 'Seat open' : `Away ${clock(away ?? 0)}`}</span>
+            <span className="muted small">
+              {standIn ? "Bot playing" : seat.open ? "Seat open" : `Away ${clock(away ?? 0)}`}
+            </span>
             {canBot && (
-              <button className="btn small" onClick={() => send({ type: 'bot', seat: i })} title="A bot plays until they come back">
+              <button
+                className="btn small"
+                onClick={() => send({ type: "bot", seat: i })}
+                title="A bot plays until they come back"
+              >
                 Bot plays
               </button>
             )}
             {canAct && owing && (
-              <button className="btn small" onClick={() => send({ type: 'skip', seat: i })}>
+              <button className="btn small" onClick={() => send({ type: "skip", seat: i })}>
                 Skip their move
               </button>
             )}
             {canAct && !seat.open && (
-              <button className="btn small" onClick={() => send({ type: 'release', seat: i })} title="Lets someone else take over this seat from the room link">
+              <button
+                className="btn small"
+                onClick={() => send({ type: "release", seat: i })}
+                title="Lets someone else take over this seat from the room link"
+              >
                 Free seat
               </button>
             )}
             {adminAway && (
-              <button className="btn small" onClick={() => send({ type: 'admin', seat: me! })}>
+              <button className="btn small" onClick={() => send({ type: "admin", seat: me! })}>
                 Become admin
               </button>
             )}
@@ -202,10 +240,11 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
         <Sheet
           title={
             <>
-              <Avatar code={seat.avatar} name={seat.name} className="small" /> {i === me ? `You (${seat.name})` : seat.name}
+              <Avatar code={seat.avatar} name={seat.name} className="small" />{" "}
+              {i === me ? `You (${seat.name})` : seat.name}
             </>
           }
-          label={`About ${name === 'You' ? 'your seat' : name}`}
+          label={`About ${name === "You" ? "your seat" : name}`}
           onClose={() => setInfo(false)}
         >
           <ul className="seat-facts">
@@ -216,17 +255,17 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
           {!seat.connected && (canAct || adminAway) && (
             <div className="row">
               {canAct && owing && (
-                <button className="btn" onClick={() => send({ type: 'skip', seat: i })}>
+                <button className="btn" onClick={() => send({ type: "skip", seat: i })}>
                   Skip their move
                 </button>
               )}
               {canAct && !seat.open && (
-                <button className="btn" onClick={() => send({ type: 'release', seat: i })}>
+                <button className="btn" onClick={() => send({ type: "release", seat: i })}>
                   Free seat (someone else can take it from the room link)
                 </button>
               )}
               {adminAway && (
-                <button className="btn" onClick={() => send({ type: 'admin', seat: me! })}>
+                <button className="btn" onClick={() => send({ type: "admin", seat: me! })}>
                   Become admin
                 </button>
               )}
@@ -235,14 +274,14 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
           {(canBot || canKick) && (
             <div className="row">
               {canBot && (
-                <button className="btn" onClick={() => send({ type: 'bot', seat: i })}>
+                <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
                   Let a bot play until they come back
                 </button>
               )}
               {canKick &&
                 (kicking ? (
                   <>
-                    <button className="btn primary" onClick={() => send({ type: 'kick', seat: i })}>
+                    <button className="btn primary" onClick={() => send({ type: "kick", seat: i })}>
                       Kick {seat.name}: a bot plays the seat for good
                     </button>
                     <button className="btn" onClick={() => setKicking(false)}>
@@ -275,9 +314,9 @@ function BoughtList({ g, seat, names, theme }: { g: View; seat: number; names: s
   const paid = purchases(g);
   const how = (c: Card) => {
     const x = paid.get(c.id);
-    if (!x) return '';
-    const pair = x.lot > 1 ? ' for the pair' : '';
-    if (x.paid === null) return 'free';
+    if (!x) return "";
+    const pair = x.lot > 1 ? " for the pair" : "";
+    if (x.paid === null) return "free";
     if (x.paid === seat) return `${theme.money(x.price)}${pair} to the bank`;
     return `${theme.money(x.price)}${pair} to ${names[x.paid]}`;
   };
@@ -285,7 +324,7 @@ function BoughtList({ g, seat, names, theme }: { g: View; seat: number; names: s
     <ul className="bought-list">
       {g.players[seat].bought.map((c) => (
         <li key={c.id}>
-          {theme.renderCard(c, 'sm')}
+          {theme.renderCard(c, "sm")}
           <span className="bp-text">
             <b>{theme.cardTitle(c)}</b>
             <small style={{ color: theme.suits[c.suit].color }}>
@@ -303,21 +342,33 @@ function BoughtList({ g, seat, names, theme }: { g: View; seat: number; names: s
  * The films a seat has bought this round, as small stacks of cards by star. Hover, focus or tap
  * opens them out into the actual posters with what was paid.
  */
-function Owned({ g, seat, name, names, theme }: { g: View; seat: number; name: string; names: string[]; theme: Theme }) {
+function Owned({
+  g,
+  seat,
+  name,
+  names,
+  theme,
+}: {
+  g: View;
+  seat: number;
+  name: string;
+  names: string[];
+  theme: Theme;
+}) {
   const cards = g.players[seat].bought;
   const counts = countBySuit(cards);
-  const [open, setOpen] = useState<'hover' | 'pinned' | null>(null);
+  const [open, setOpen] = useState<"hover" | "pinned" | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<CSSProperties>({ visibility: 'hidden' });
+  const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
   // Moving the pointer from the stack to the panel crosses a gap; a short delay keeps it open.
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const enter = () => {
     clearTimeout(timer.current);
-    setOpen((o) => o ?? 'hover');
+    setOpen((o) => o ?? "hover");
   };
   const leave = () => {
-    timer.current = setTimeout(() => setOpen((o) => (o === 'hover' ? null : o)), 160);
+    timer.current = setTimeout(() => setOpen((o) => (o === "hover" ? null : o)), 160);
   };
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -334,28 +385,28 @@ function Owned({ g, seat, name, names, theme }: { g: View; seat: number; name: s
 
   // A pinned panel closes on a tap elsewhere, Escape or scroll.
   useEffect(() => {
-    if (open !== 'pinned') return;
+    if (open !== "pinned") return;
     const away = (e: Event) => {
       const t = e.target as Node;
       if (!btn.current?.contains(t) && !pop.current?.contains(t)) setOpen(null);
     };
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
     const close = () => setOpen(null);
-    addEventListener('pointerdown', away);
-    addEventListener('keydown', key);
-    addEventListener('scroll', close, true);
+    addEventListener("pointerdown", away);
+    addEventListener("keydown", key);
+    addEventListener("scroll", close, true);
     return () => {
-      removeEventListener('pointerdown', away);
-      removeEventListener('keydown', key);
-      removeEventListener('scroll', close, true);
+      removeEventListener("pointerdown", away);
+      removeEventListener("keydown", key);
+      removeEventListener("scroll", close, true);
     };
   }, [open]);
 
   const empty = cards.length === 0;
   const summary = empty
-    ? `${name} ${name === 'You' ? 'have' : 'has'} bought no ${theme.nouns.cards} this ${theme.nouns.round}`
+    ? `${name} ${name === "You" ? "have" : "has"} bought no ${theme.nouns.cards} this ${theme.nouns.round}`
     : `${name} bought ${cards.length} ${cards.length === 1 ? theme.nouns.card : theme.nouns.cards}: ` +
-      counts.flatMap((n, s) => (n ? [`${n} ${theme.suits[s].name}`] : [])).join(', ');
+      counts.flatMap((n, s) => (n ? [`${n} ${theme.suits[s].name}`] : [])).join(", ");
 
   if (empty)
     return (
@@ -368,22 +419,22 @@ function Owned({ g, seat, name, names, theme }: { g: View; seat: number; name: s
     <>
       <button
         ref={btn}
-        className={`owned ${open ? 'open' : ''}`}
+        className={`owned ${open ? "open" : ""}`}
         data-owned={seat}
         aria-label={summary}
         aria-expanded={!!open}
         onMouseEnter={enter}
         onMouseLeave={leave}
-        onFocus={() => setOpen((o) => o ?? 'hover')}
-        onBlur={(e) => !pop.current?.contains(e.relatedTarget as Node) && setOpen((o) => (o === 'hover' ? null : o))}
-        onClick={() => setOpen((o) => (o === 'pinned' ? null : 'pinned'))}
+        onFocus={() => setOpen((o) => o ?? "hover")}
+        onBlur={(e) => !pop.current?.contains(e.relatedTarget as Node) && setOpen((o) => (o === "hover" ? null : o))}
+        onClick={() => setOpen((o) => (o === "pinned" ? null : "pinned"))}
       >
         {counts.map((n, suit) =>
           n ? (
             <span
               key={suit}
               className={`mini-card n${Math.min(n, 3)}`}
-              style={{ ['--suit' as string]: theme.suits[suit].color, color: theme.suits[suit].ink }}
+              style={{ ["--suit" as string]: theme.suits[suit].color, color: theme.suits[suit].ink }}
             >
               <span className="mc-glyph">{theme.suits[suit].glyph}</span>
               <span className="mc-short">{theme.suits[suit].short}</span>
@@ -393,15 +444,28 @@ function Owned({ g, seat, name, names, theme }: { g: View; seat: number; name: s
         )}
       </button>
       {/* In a portal: a transformed seat would otherwise trap the fixed panel beneath the stage. */}
-      {open && createPortal(
-        <div ref={pop} className="bought-pop" style={pos} role="dialog" aria-label={summary} onMouseEnter={enter} onMouseLeave={leave} onClick={(e) => e.stopPropagation()}>
-          <h3>
-            {name} bought <small>this {theme.nouns.round} · {cards.length} {cards.length === 1 ? theme.nouns.card : theme.nouns.cards}</small>
-          </h3>
-          <BoughtList g={g} seat={seat} names={names} theme={theme} />
-        </div>,
-        document.body,
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={pop}
+            className="bought-pop"
+            style={pos}
+            role="dialog"
+            aria-label={summary}
+            onMouseEnter={enter}
+            onMouseLeave={leave}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>
+              {name} bought{" "}
+              <small>
+                this {theme.nouns.round} · {cards.length} {cards.length === 1 ? theme.nouns.card : theme.nouns.cards}
+              </small>
+            </h3>
+            <BoughtList g={g} seat={seat} names={names} theme={theme} />
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { TOKENS } from '../config.ts';
-import type { Card, RoundSummary, Sale, View } from '../generated/index.ts';
-import type { Theme } from '../themes/types.ts';
-import { dealNote, reducedMotion } from './derive.ts';
-import { TOUCH, useCountUp } from './hooks.ts';
-import { play } from './sound.ts';
+import { useEffect, useState } from "react";
+import { TOKENS } from "../config.ts";
+import type { Card, RoundSummary, Sale, View } from "../generated/index.ts";
+import type { Theme } from "../themes/types.ts";
+import { dealNote, reducedMotion } from "./derive.ts";
+import { TOUCH, useCountUp } from "./hooks.ts";
+import { play } from "./sound.ts";
 
 interface Props {
   s: RoundSummary;
@@ -31,8 +31,8 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
   useEffect(() => {
     if (instant) return;
     const timers = [
-      setTimeout(() => s.ranked.length && play('fanfare'), reveal.length * STEP * 1000),
-      setTimeout(() => play('cash'), payAt * 1000),
+      setTimeout(() => s.ranked.length && play("fanfare"), reveal.length * STEP * 1000),
+      setTimeout(() => play("cash"), payAt * 1000),
       // Last payout row in and counted up: nothing left to skip.
       setTimeout(() => setDone(true), (payAt + s.sold.length * 0.15) * 1000 + 900),
     ];
@@ -43,7 +43,12 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className={`modal premiere ${instant ? 'instant' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Round results">
+      <div
+        className={`modal premiere ${instant ? "instant" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Round results"
+      >
         <header>
           <small>Premiere night</small>
           <h2>{theme.roundNames[s.round]} results</h2>
@@ -53,7 +58,11 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
           {reveal.map((suit, k) => {
             const rank = s.ranked.indexOf(suit);
             return (
-              <div key={suit} className={`billing r${rank}`} style={{ ...delay((k + 1) * STEP), ['--suit' as string]: theme.suits[suit].color }}>
+              <div
+                key={suit}
+                className={`billing r${rank}`}
+                style={{ ...delay((k + 1) * STEP), ["--suit" as string]: theme.suits[suit].color }}
+              >
                 {theme.renderSuit(suit, rank === 0 ? 72 : 56)}
                 <b>{theme.rankLabels[rank]}</b>
                 <span>{theme.suits[suit].name}</span>
@@ -68,7 +77,7 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
         </div>
         {flops.length > 0 && (
           <p className="flops">
-            Flops:{' '}
+            Flops:{" "}
             {flops.map((i) => (
               <span key={i}>
                 {theme.suits[i].glyph} {theme.suits[i].name} ({s.counts[i]})
@@ -91,20 +100,29 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
                   return (
                     <span
                       key={suit}
-                      className={`film-group ${each ? '' : 'worthless'}`}
-                      title={each ? `${what} × ${theme.money(each)} = ${theme.money(each * films.length)}` : `${what}: flop, pays nothing`}
+                      className={`film-group ${each ? "" : "worthless"}`}
+                      title={
+                        each
+                          ? `${what} × ${theme.money(each)} = ${theme.money(each * films.length)}`
+                          : `${what}: flop, pays nothing`
+                      }
                     >
                       <span className="mini-posters">
                         {films.map((c) => (
-                          <span key={c.id}>{theme.renderCard(c, 'sm')}</span>
+                          <span key={c.id}>{theme.renderCard(c, "sm")}</span>
                         ))}
                       </span>
-                      <small>{each ? `+${theme.money(each * films.length)}` : 'Flop'}</small>
+                      <small>{each ? `+${theme.money(each * films.length)}` : "Flop"}</small>
                     </span>
                   );
                 })}
               </span>
-              <Earned value={s.payouts[i]} delay={instant ? 0 : (payAt + i * 0.15) * 1000} instant={instant} money={theme.money} />
+              <Earned
+                value={s.payouts[i]}
+                delay={instant ? 0 : (payAt + i * 0.15) * 1000}
+                instant={instant}
+                money={theme.money}
+              />
             </li>
           ))}
         </ol>
@@ -115,7 +133,7 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
           {/* Touch: no autofocus, which would scroll a tall results sheet past the reveal to this button. */}
           <button className="btn primary big grow" onClick={onClose} autoFocus={!matchMedia(TOUCH).matches}>
             {g.over ? (
-              'See final result'
+              "See final result"
             ) : (
               <>
                 On to {theme.roundNames[g.round]}
@@ -129,7 +147,7 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
             </button>
           )}
           <button className="btn" onClick={() => setDetails(!details)}>
-            {details ? 'Hide' : 'Details'}
+            {details ? "Hide" : "Details"}
           </button>
         </div>
       </div>
@@ -137,7 +155,17 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
   );
 }
 
-function Earned({ value, delay, instant, money }: { value: number; delay: number; instant: boolean; money: (n: number) => string }) {
+function Earned({
+  value,
+  delay,
+  instant,
+  money,
+}: {
+  value: number;
+  delay: number;
+  instant: boolean;
+  money: (n: number) => string;
+}) {
   const shown = useCountUp(value, { from: 0, delay, duration: 900 });
   // The count-up keeps its first delay; Skip must show the final sums now, not +0 until then.
   // Nothing earned is not a gain: no plus sign, and muted.
@@ -165,8 +193,8 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
   const spent = bought.reduce((sum, x) => sum + x.price, 0);
   const fromPlayers = sold.reduce((sum, x) => sum + x.price, 0);
   const net = s.payouts[me] + fromPlayers - spent;
-  const signed = (n: number) => `${n < 0 ? '−' : '+'}${theme.money(Math.abs(n))}`;
-  const tone = (n: number) => (n > 0 ? 'gain' : n < 0 ? 'loss' : '');
+  const signed = (n: number) => `${n < 0 ? "−" : "+"}${theme.money(Math.abs(n))}`;
+  const tone = (n: number) => (n > 0 ? "gain" : n < 0 ? "loss" : "");
 
   const buyers = new Map<number, number>();
   for (const x of sold) buyers.set(x.to, (buyers.get(x.to) ?? 0) + x.price);
@@ -177,20 +205,31 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
     const t = typeOf(lot);
     return (
       <span className="lot-type" title={theme.auctionHints[t]}>
-        <span className="type-icon">{lot.cards.length > 1 ? `${theme.auctionIcons.double} ` : ''}{theme.auctionIcons[t]}</span>{' '}
-        <span className="type-label">{t === 'double' ? `${theme.auctionLabels.double}, nobody added` : theme.auctionLabels[t]}</span>
+        <span className="type-icon">
+          {lot.cards.length > 1 ? `${theme.auctionIcons.double} ` : ""}
+          {theme.auctionIcons[t]}
+        </span>{" "}
+        <span className="type-label">
+          {t === "double" ? `${theme.auctionLabels.double}, nobody added` : theme.auctionLabels[t]}
+        </span>
       </span>
     );
   };
   // Phones show the auction column as icons only; this key spells out the ones used, in theme order.
-  const used = new Set([...bought, ...sold].flatMap((lot) => (lot.cards.length > 1 ? ['double', typeOf(lot)] : [typeOf(lot)])));
+  const used = new Set(
+    [...bought, ...sold].flatMap((lot) => (lot.cards.length > 1 ? ["double", typeOf(lot)] : [typeOf(lot)])),
+  );
   const types = (Object.keys(theme.auctionIcons) as (keyof typeof theme.auctionIcons)[]).filter((t) => used.has(t));
 
   const film = (lot: Sale) => (
     <span className="films">
       {lot.cards.map((c) => (
         <span key={c.id} className="film-name">
-          <i className="suit-dot" style={{ ['--suit' as string]: theme.suits[c.suit].color, color: theme.suits[c.suit].ink }} aria-hidden>
+          <i
+            className="suit-dot"
+            style={{ ["--suit" as string]: theme.suits[c.suit].color, color: theme.suits[c.suit].ink }}
+            aria-hidden
+          >
             {theme.suits[c.suit].glyph}
           </i>
           {theme.cardTitle(c)}
@@ -239,11 +278,15 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
                 <tr key={k}>
                   <td className="left c-film">{film(lot)}</td>
                   <td className="left c-type">{how(lot)}</td>
-                  <td className="left muted c-who" data-label={lot.price === 0 ? undefined : 'from'}>
-                    {lot.price === 0 ? 'Free' : lot.from === me ? 'Bank' : names[lot.from]}
+                  <td className="left muted c-who" data-label={lot.price === 0 ? undefined : "from"}>
+                    {lot.price === 0 ? "Free" : lot.from === me ? "Bank" : names[lot.from]}
                   </td>
-                  <td className="c-a" data-label="paid">{theme.money(lot.price)}</td>
-                  <td className="c-b" data-label="earned">{worth(lot) ? theme.money(worth(lot)) : <span className="muted">Flop</span>}</td>
+                  <td className="c-a" data-label="paid">
+                    {theme.money(lot.price)}
+                  </td>
+                  <td className="c-b" data-label="earned">
+                    {worth(lot) ? theme.money(worth(lot)) : <span className="muted">Flop</span>}
+                  </td>
                   <td className={`c-head ${tone(worth(lot) - lot.price)}`}>{signed(worth(lot) - lot.price)}</td>
                 </tr>
               ))}
@@ -269,19 +312,23 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
                 <tr key={k}>
                   <td className="left c-film">{film(lot)}</td>
                   <td className="left c-type">{how(lot)}</td>
-                  <td className="left muted c-who" data-label="to">{names[lot.to]}</td>
+                  <td className="left muted c-who" data-label="to">
+                    {names[lot.to]}
+                  </td>
                   <td className="gain c-head">{signed(lot.price)}</td>
-                  <td className="muted c-b" data-label="paid them">{worth(lot) ? theme.money(worth(lot)) : 'Flop'}</td>
+                  <td className="muted c-b" data-label="paid them">
+                    {worth(lot) ? theme.money(worth(lot)) : "Flop"}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {buyers.size > 1 && (
             <p className="by-player muted">
-              By {theme.nouns.player.toLowerCase()}:{' '}
+              By {theme.nouns.player.toLowerCase()}:{" "}
               {[...buyers].map(([seat, total], k) => (
                 <span key={seat}>
-                  {k > 0 && ' · '}
+                  {k > 0 && " · "}
                   {names[seat]} {theme.money(total)}
                 </span>
               ))}
@@ -300,12 +347,14 @@ function YourRound({ s, me, names, theme }: { s: RoundSummary; me: number; names
         </p>
       )}
 
-      {bought.length === 0 && sold.length === 0 && <p className="muted">You did not buy or sell anything this {theme.nouns.round}.</p>}
+      {bought.length === 0 && sold.length === 0 && (
+        <p className="muted">You did not buy or sell anything this {theme.nouns.round}.</p>
+      )}
     </section>
   );
 }
 
-function Details({ s, g, names, theme }: Omit<Props, 'onClose'>) {
+function Details({ s, g, names, theme }: Omit<Props, "onClose">) {
   return (
     <>
       {g.you !== null && s.sales && <YourRound s={s} me={g.you} names={names} theme={theme} />}
@@ -325,13 +374,13 @@ function Details({ s, g, names, theme }: Omit<Props, 'onClose'>) {
           {theme.suits.map((suit, i) => {
             const rank = s.ranked.indexOf(i);
             return (
-              <tr key={i} className={rank < 0 ? 'flop' : ''}>
+              <tr key={i} className={rank < 0 ? "flop" : ""}>
                 <th className="left">
                   {suit.glyph} {suit.name}
                 </th>
                 <td>{s.counts[i]}</td>
-                <td>{rank < 0 ? '—' : `${theme.rankLabels[rank]} +${TOKENS[rank]}`}</td>
-                <td>{s.values[i] ? <b>{theme.money(s.values[i])}</b> : '—'}</td>
+                <td>{rank < 0 ? "—" : `${theme.rankLabels[rank]} +${TOKENS[rank]}`}</td>
+                <td>{s.values[i] ? <b>{theme.money(s.values[i])}</b> : "—"}</td>
               </tr>
             );
           })}

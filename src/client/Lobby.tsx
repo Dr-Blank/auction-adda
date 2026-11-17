@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import { SUITS } from '../config.ts';
-import type { ClientMsg, RoomInfo } from '../generated/index.ts';
-import { castGenres } from '../themes/cast.ts';
-import { getDef } from '../themes/index.ts';
-import type { Theme } from '../themes/types.ts';
-import { Avatar, LookButton } from './Avatar.tsx';
-import { saveGenres, saveName, savedName, saveTimer, useSavedLook } from './net.ts';
-import type { RoomState } from './net.ts';
-import { Rules } from './Rules.tsx';
+import { useEffect, useState } from "react";
+import { SUITS } from "../config.ts";
+import type { ClientMsg, RoomInfo } from "../generated/index.ts";
+import { castGenres } from "../themes/cast.ts";
+import { getDef } from "../themes/index.ts";
+import type { Theme } from "../themes/types.ts";
+import { Avatar, LookButton } from "./Avatar.tsx";
+import type { RoomState } from "./net.ts";
+import { savedName, saveGenres, saveName, saveTimer, useSavedLook } from "./net.ts";
+import { Rules } from "./Rules.tsx";
 
 interface Props {
   state: RoomState;
@@ -31,7 +31,7 @@ export function ShareLink({ code }: { code: string }) {
           });
         }}
       >
-        {copied ? 'Copied' : 'Copy link'}
+        {copied ? "Copied" : "Copy link"}
       </button>
     </div>
   );
@@ -39,7 +39,7 @@ export function ShareLink({ code }: { code: string }) {
 
 const FIRST_CHOICES = [0, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
 const EXTEND_CHOICES = [3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120];
-const secs = (n: number) => (n === 0 ? 'No limit' : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
+const secs = (n: number) => (n === 0 ? "No limit" : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
 
 /**
  * The open-auction clock: a long first stretch when a lot goes up (so nobody misses it), then a
@@ -50,16 +50,18 @@ export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null
   const extend = room.bidExtendS;
   const set = (seconds: number, ext: number) => {
     saveTimer(seconds, ext);
-    send({ type: 'timer', seconds, extend: ext });
+    send({ type: "timer", seconds, extend: ext });
   };
   const pick = (value: number, choices: number[], onPick: (n: number) => void) =>
     room.admin === me ? (
       <select value={value} onChange={(e) => onPick(Number(e.target.value))}>
-        {[...new Set([...choices, value])].sort((x, y) => x - y).map((n) => (
-          <option key={n} value={n}>
-            {secs(n)}
-          </option>
-        ))}
+        {[...new Set([...choices, value])]
+          .sort((x, y) => x - y)
+          .map((n) => (
+            <option key={n} value={n}>
+              {secs(n)}
+            </option>
+          ))}
       </select>
     ) : (
       <b>{secs(value)}</b>
@@ -67,17 +69,11 @@ export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null
   return (
     <div className="bid-timer">
       <h3>Open-auction clock</h3>
-      <label>
-        When a lot goes up {pick(first, FIRST_CHOICES, (n) => set(n, extend))}
-      </label>
-      {first > 0 && (
-        <label>
-          After a bid, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n))}
-        </label>
-      )}
+      <label>When a lot goes up {pick(first, FIRST_CHOICES, (n) => set(n, extend))}</label>
+      {first > 0 && <label>After a bid, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n))}</label>}
       <small className="muted">
         {first === 0
-          ? 'Open auctions wait until every bidder says done. Good for tables that call results on voice.'
+          ? "Open auctions wait until every bidder says done. Good for tables that call results on voice."
           : `Players still in have ${secs(first)} once a lot goes up. A bid with less than ${secs(extend)} left tops the clock up to ${secs(extend)}. When it runs out, they are done.`}
       </small>
     </div>
@@ -85,7 +81,17 @@ export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null
 }
 
 /** This game's suits; the admin picks which genres play and can draw new names. */
-export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void; theme: Theme }) {
+export function CastPicker({
+  room,
+  me,
+  send,
+  theme,
+}: {
+  room: RoomInfo;
+  me: number | null;
+  send: (m: ClientMsg) => void;
+  theme: Theme;
+}) {
   const { genres } = getDef(room.theme);
   const playing = castGenres(genres.length, room.cast);
   // A pick of fewer than SUITS genres stays here until it is complete.
@@ -97,7 +103,7 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
     if (next.length === SUITS) {
       setDraft(null);
       saveGenres(room.theme, next);
-      send({ type: 'cast', genres: next, reroll: false });
+      send({ type: "cast", genres: next, reroll: false });
     } else if (next.length < SUITS) {
       setDraft(next);
     }
@@ -127,9 +133,9 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
               {genres.map((g, i) => (
                 <button
                   key={i}
-                  className={`chip-btn ${chosen.includes(i) ? 'on' : ''}`}
+                  className={`chip-btn ${chosen.includes(i) ? "on" : ""}`}
                   aria-pressed={chosen.includes(i)}
-                  style={{ ['--suit' as string]: g.color, ['--suit-ink' as string]: g.ink }}
+                  style={{ ["--suit" as string]: g.color, ["--suit-ink" as string]: g.ink }}
                   onClick={() => toggle(i)}
                 >
                   {g.glyph} {g.labels[0]}
@@ -143,7 +149,10 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
             </p>
           )}
           <div className="row">
-            <button className="btn small" onClick={() => send({ type: 'cast', genres: room.cast.genres, reroll: true })}>
+            <button
+              className="btn small"
+              onClick={() => send({ type: "cast", genres: room.cast.genres, reroll: true })}
+            >
               New names
             </button>
             {genres.length > SUITS && (
@@ -152,7 +161,7 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
                 onClick={() => {
                   setDraft(null);
                   saveGenres(room.theme, []);
-                  send({ type: 'cast', genres: [], reroll: true });
+                  send({ type: "cast", genres: [], reroll: true });
                 }}
               >
                 Random {suits}
@@ -162,8 +171,8 @@ export function CastPicker({ room, me, send, theme }: { room: RoomInfo; me: numb
         </>
       )}
       <p className="muted small">
-        {room.cast.genres.length ? `The admin picked these ${suits}.` : `Picked at random from ${genres.length}.`} Every {suit} gets new names
-        each game.
+        {room.cast.genres.length ? `The admin picked these ${suits}.` : `Picked at random from ${genres.length}.`} Every{" "}
+        {suit} gets new names each game.
       </p>
     </section>
   );
@@ -186,7 +195,11 @@ export function Lobby({ state, send, join, theme }: Props) {
     const timer = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(timer);
   }, [adminAwayMs === null]);
-  const adminAway = you !== null && !isAdmin && adminAwayMs !== null && adminAwayMs + (Date.now() - state.receivedAt) >= room.skipAfterMs;
+  const adminAway =
+    you !== null &&
+    !isAdmin &&
+    adminAwayMs !== null &&
+    adminAwayMs + (Date.now() - state.receivedAt) >= room.skipAfterMs;
 
   return (
     <main className="center-card lobby">
@@ -199,23 +212,31 @@ export function Lobby({ state, send, join, theme }: Props) {
       <ShareLink code={room.code} />
 
       <h2>
-        Players <small>({room.minPlayers}–{room.maxPlayers})</small>
+        Players{" "}
+        <small>
+          ({room.minPlayers}–{room.maxPlayers})
+        </small>
       </h2>
       <ol className="lobby-seats">
         {room.seats.map((s, i) => (
-          <li key={i} className={`${s.connected ? '' : 'away'} ${i === you ? 'me' : ''}`}>
+          <li key={i} className={`${s.connected ? "" : "away"} ${i === you ? "me" : ""}`}>
             {i === you ? (
               <LookButton
                 code={s.avatar}
                 name={s.name}
-                className={s.connected ? 'on' : ''}
+                className={s.connected ? "on" : ""}
                 onChange={(code) => {
                   setLook(code);
-                  send({ type: 'avatar', avatar: code });
+                  send({ type: "avatar", avatar: code });
                 }}
               />
             ) : (
-              <Avatar code={s.avatar} name={s.name} className={s.connected ? 'on' : ''} title={s.connected ? 'Connected' : 'Disconnected'} />
+              <Avatar
+                code={s.avatar}
+                name={s.name}
+                className={s.connected ? "on" : ""}
+                title={s.connected ? "Connected" : "Disconnected"}
+              />
             )}
             <span className="grow">
               <b>{s.name}</b>
@@ -229,12 +250,12 @@ export function Lobby({ state, send, join, theme }: Props) {
               {!s.connected && <em> · disconnected</em>}
             </span>
             {isAdmin && i !== you && (
-              <button className="btn small" onClick={() => send({ type: 'kick', seat: i })}>
-                {s.bot ? 'Remove' : 'Kick'}
+              <button className="btn small" onClick={() => send({ type: "kick", seat: i })}>
+                {s.bot ? "Remove" : "Kick"}
               </button>
             )}
             {adminAway && i === room.admin && (
-              <button className="btn small" onClick={() => send({ type: 'admin', seat: you! })}>
+              <button className="btn small" onClick={() => send({ type: "admin", seat: you! })}>
                 Become admin
               </button>
             )}
@@ -245,7 +266,7 @@ export function Lobby({ state, send, join, theme }: Props) {
             <span className="avatar empty" aria-hidden="true" />
             <span className="grow">Empty seat</span>
             {isAdmin && i === 0 && (
-              <button className="btn small" onClick={() => send({ type: 'bot' })}>
+              <button className="btn small" onClick={() => send({ type: "bot" })}>
                 Add a bot
               </button>
             )}
@@ -253,9 +274,9 @@ export function Lobby({ state, send, join, theme }: Props) {
         ))}
       </ol>
       <p className="admin-note">
-        <span className="admin-mark">★</span> <b>{isAdmin ? 'You are' : `${adminName} is`} the room admin.</b> The admin starts the game
-        and can fill empty seats with bots. Playing on voice? The admin can end an auction with the result the table agreed (and undo a
-        wrong call). Hand the role over any time from the Room menu.
+        <span className="admin-mark">★</span> <b>{isAdmin ? "You are" : `${adminName} is`} the room admin.</b> The admin
+        starts the game and can fill empty seats with bots. Playing on voice? The admin can end an auction with the
+        result the table agreed (and undo a wrong call). Hand the role over any time from the Room menu.
       </p>
       <details className="advanced">
         <summary>
@@ -293,14 +314,18 @@ export function Lobby({ state, send, join, theme }: Props) {
         )
       ) : (
         <div className="row">
-          <button className="btn primary big grow" disabled={!canStart || !isAdmin} onClick={() => send({ type: 'start' })}>
+          <button
+            className="btn primary big grow"
+            disabled={!canStart || !isAdmin}
+            onClick={() => send({ type: "start" })}
+          >
             {!canStart
               ? `Waiting for players (${count}/${room.minPlayers} minimum)`
               : isAdmin
                 ? `Start with ${count} players`
                 : `Waiting for ${adminName} to start`}
           </button>
-          <button className="btn" onClick={() => send({ type: 'leave' })}>
+          <button className="btn" onClick={() => send({ type: "leave" })}>
             Leave
           </button>
         </div>

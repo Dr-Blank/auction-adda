@@ -1,5 +1,5 @@
-import type { JSX } from 'react';
-import type { AuctionType, Card } from '../generated/index.ts';
+import type { JSX } from "react";
+import type { AuctionType, Card } from "../generated/index.ts";
 
 /** One suit as a game shows it: its genre and the names drawn for it. */
 export interface SuitSkin {
@@ -16,7 +16,7 @@ export interface SuitSkin {
   key: number;
 }
 
-export type CardSize = 'sm' | 'md' | 'lg';
+export type CardSize = "sm" | "md" | "lg";
 
 export interface Nouns {
   card: string;

@@ -28,8 +28,7 @@ pub fn view_for(s: &GameState, seat: Option<Seat>) -> View {
             .collect(),
         hand: seat
             .and_then(|seat| s.players.get(usize::from(seat)))
-            .map(|p| p.hand.clone())
-            .unwrap_or_default(),
+            .map_or_default(|p| p.hand.clone()),
         auction: s.auction.as_ref().map(|a| AuctionView {
             kind: a.kind,
             cards: a.cards.clone(),

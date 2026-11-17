@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { reducedMotion } from './derive.ts';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { reducedMotion } from "./derive.ts";
 
 /** One column: the chart becomes a strip pinned to the top edge. Matches the 960 px rules in styles.css. */
-export const COMPACT = '(max-width: 960px)';
+export const COMPACT = "(max-width: 960px)";
 /** Phone: compact seats, stage and hand, and the action bar docked to the bottom edge. Matches the 700 px rules. */
-export const PHONE = '(max-width: 700px)';
+export const PHONE = "(max-width: 700px)";
 /** No hover (touch): nothing may be reachable by hover alone. */
-export const TOUCH = '(hover: none)';
+export const TOUCH = "(hover: none)";
 
 /** Whether a media query matches, kept up to date. */
 export function useMedia(query: string): boolean {
   const subscribe = useCallback(
     (onChange: () => void) => {
       const m = matchMedia(query);
-      m.addEventListener('change', onChange);
-      return () => m.removeEventListener('change', onChange);
+      m.addEventListener("change", onChange);
+      return () => m.removeEventListener("change", onChange);
     },
     [query],
   );

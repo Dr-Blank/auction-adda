@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    // src/generated is written by `cargo test` (ts-rs); the fixtures are blessed engine output.
+    "includes": ["**", "!!**/dist", "!!src/generated", "!!crates/engine/fixtures"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    // Same width as rustfmt.toml.
+    "lineWidth": 120
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": "warn",
+      "correctness": {
+        // Deps are used on purpose as reset triggers and run-once timers; the auto-fix changes behaviour.
+        "useExhaustiveDependencies": "warn"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "warn",
+        // `xs.forEach((x) => set.add(x))` is house style.
+        "useIterableCallbackReturn": "off"
+      },
+      "complexity": {
+        // Used on purpose: reduced-motion and status-colour overrides.
+        "noImportantStyles": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "noDescendingSpecificity": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}

@@ -1,23 +1,32 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { ROUNDS } from '../config.ts';
-import type { Action, AuctionType, AuctionView, Card, ClientMsg, LogEntry, RoomInfo, View } from '../generated/index.ts';
-import type { Theme } from '../themes/types.ts';
-import { BidBox, BidClock } from './BidBox.tsx';
-import { Avatar } from './Avatar.tsx';
-import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from './derive.ts';
-import { PHONE, useCountUp, useMedia } from './hooks.ts';
-import { BidTimer, ShareLink } from './Lobby.tsx';
-import { saveName, savedAvatar, savedName } from './net.ts';
-import type { RoomState } from './net.ts';
-import { Premiere } from './Premiere.tsx';
-import { Ruling } from './Ruling.tsx';
-import { AuctionTypes, Rules } from './Rules.tsx';
-import { Seat, Seats } from './Seats.tsx';
-import type { Bubble } from './Seats.tsx';
-import { isMuted, play, setMuted } from './sound.ts';
-import { Sheet } from './Sheet.tsx';
-import { StarChart } from './StarChart.tsx';
+import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ROUNDS } from "../config.ts";
+import type {
+  Action,
+  AuctionType,
+  AuctionView,
+  Card,
+  ClientMsg,
+  LogEntry,
+  RoomInfo,
+  View,
+} from "../generated/index.ts";
+import type { Theme } from "../themes/types.ts";
+import { Avatar } from "./Avatar.tsx";
+import { BidBox, BidClock } from "./BidBox.tsx";
+import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
+import { PHONE, useCountUp, useMedia } from "./hooks.ts";
+import { BidTimer, ShareLink } from "./Lobby.tsx";
+import type { RoomState } from "./net.ts";
+import { savedAvatar, savedName, saveName } from "./net.ts";
+import { Premiere } from "./Premiere.tsx";
+import { AuctionTypes, Rules } from "./Rules.tsx";
+import { Ruling } from "./Ruling.tsx";
+import type { Bubble } from "./Seats.tsx";
+import { Seat, Seats } from "./Seats.tsx";
+import { Sheet } from "./Sheet.tsx";
+import { StarChart } from "./StarChart.tsx";
+import { isMuted, play, setMuted } from "./sound.ts";
 
 interface Props {
   state: RoomState;
@@ -26,7 +35,7 @@ interface Props {
 }
 
 const canPair = (double: Card, second: Card) =>
-  second.id !== double.id && second.suit === double.suit && second.type !== 'double';
+  second.id !== double.id && second.suit === double.suit && second.type !== "double";
 
 const sameLot = (x: AuctionView | null, y: AuctionView | null) =>
   !!x && !!y && x.auctioneer === y.auctioneer && x.kind === y.kind && x.cards[0].id === y.cards[0].id;
@@ -44,7 +53,7 @@ function RoundRing({ done }: { done: number }) {
           cx="11"
           cy="11"
           r={r}
-          className={i < done ? 'done' : i === done ? 'now' : ''}
+          className={i < done ? "done" : i === done ? "now" : ""}
           strokeDasharray={`${seg - 2.2} ${c}`}
           strokeDashoffset={-i * seg - 1.1}
           transform="rotate(-90 11 11)"
@@ -57,7 +66,7 @@ function RoundRing({ done }: { done: number }) {
 /** A finished lot, shown on the stage for a moment before the next one. */
 interface Moment {
   key: number;
-  e: Extract<LogEntry, { t: 'sold' | 'free' | 'shelved' }>;
+  e: Extract<LogEntry, { t: "sold" | "free" | "shelved" }>;
   /** Sealed auctions: every bid, revealed. */
   bids: number[] | null;
 }
@@ -68,27 +77,27 @@ export function Table({ state, send, theme }: Props) {
   const { room } = state;
   const a = g.auction;
   const names = room.seats.map((s) => s.name);
-  const who = (i: number) => (i === me ? 'You' : names[i]);
+  const who = (i: number) => (i === me ? "You" : names[i]);
   const myMoney = me === null ? 0 : (g.players[me].money ?? 0);
-  const act = (action: Action) => send({ type: 'action', action });
-  const list = (seats: number[]) => seats.map((i) => (i === me ? 'you' : names[i])).join(', ');
+  const act = (action: Action) => send({ type: "action", action });
+  const list = (seats: number[]) => seats.map((i) => (i === me ? "you" : names[i])).join(", ");
 
   // ---- selection in hand ----
   const [sel, setSel] = useState<number | null>(null);
   const [sel2, setSel2] = useState<number | null>(null);
   const myPlay = !g.over && !a && g.turn === me;
-  const myOffer = a?.kind === 'offer' && a.toAct === me;
+  const myOffer = a?.kind === "offer" && a.toAct === me;
   useEffect(() => {
     setSel(null);
     setSel2(null);
   }, [myPlay, myOffer, g.round]);
   const selCard = g.hand.find((c) => c.id === sel) ?? null;
   const selSecond = g.hand.find((c) => c.id === sel2) ?? null;
-  const pairing = myPlay && selCard?.type === 'double' ? selCard : myOffer ? a!.cards[0] : null;
+  const pairing = myPlay && selCard?.type === "double" ? selCard : myOffer ? a!.cards[0] : null;
 
   function clickCard(c: Card): void {
     if (myPlay) {
-      if (selCard?.type === 'double' && canPair(selCard, c)) setSel2(sel2 === c.id ? null : c.id);
+      if (selCard?.type === "double" && canPair(selCard, c)) setSel2(sel2 === c.id ? null : c.id);
       else {
         setSel(sel === c.id ? null : c.id);
         setSel2(null);
@@ -101,10 +110,10 @@ export function Table({ state, send, theme }: Props) {
   // ---- "your move" cue ----
   const owing = me !== null && g.pending.includes(me);
   useEffect(() => {
-    document.title = owing ? '● Your move — Auction Adda' : 'Auction Adda';
-    if (owing) play('turn');
+    document.title = owing ? "● Your move — Auction Adda" : "Auction Adda";
+    if (owing) play("turn");
     return () => {
-      document.title = 'Auction Adda';
+      document.title = "Auction Adda";
     };
   }, [owing]);
 
@@ -128,32 +137,32 @@ export function Table({ state, send, theme }: Props) {
 
     const said: [number, string][] = [];
     if (a && before && sameLot(a, before)) {
-      a.bidsIn.forEach((x, i) => x && !before.bidsIn[i] && said.push([i, '✉ Sealed']));
-      a.done.forEach((x, i) => x && !before.done[i] && said.push([i, 'Done']));
+      a.bidsIn.forEach((x, i) => x && !before.bidsIn[i] && said.push([i, "✉ Sealed"]));
+      a.done.forEach((x, i) => x && !before.done[i] && said.push([i, "Done"]));
     }
     let sound: Parameters<typeof play>[0] | null = null;
     let bids: number[] | null = null;
     for (const e of fresh) {
-      if (e.t === 'bid') {
+      if (e.t === "bid") {
         said.push([e.p, theme.money(e.amount)]);
-        if (e.p !== me) sound ??= 'bid';
-      } else if (e.t === 'pass') {
-        said.push([e.p, 'Pass']);
-        if (e.p !== me) sound ??= 'pass';
-      } else if (e.t === 'decline') {
-        said.push([e.p, 'No']);
-      } else if (e.t === 'price') {
+        if (e.p !== me) sound ??= "bid";
+      } else if (e.t === "pass") {
+        said.push([e.p, "Pass"]);
+        if (e.p !== me) sound ??= "pass";
+      } else if (e.t === "decline") {
+        said.push([e.p, "No"]);
+      } else if (e.t === "price") {
         said.push([e.p, `${theme.money(e.amount)}?`]);
-      } else if (e.t === 'sealed') {
+      } else if (e.t === "sealed") {
         bids = e.bids;
-      } else if (e.t === 'sold' || e.t === 'free' || e.t === 'shelved') {
+      } else if (e.t === "sold" || e.t === "free" || e.t === "shelved") {
         setMoment({ key: ++bubbleKey.current, e, bids });
         bids = null;
-        sound = e.t === 'shelved' ? 'pass' : 'gavel';
-      } else if (e.t === 'undo') {
+        sound = e.t === "shelved" ? "pass" : "gavel";
+      } else if (e.t === "undo") {
         setMoment(null);
-        said.push([e.by, '↶ Undo']);
-        sound = 'pass';
+        said.push([e.by, "↶ Undo"]);
+        sound = "pass";
       }
     }
     if (sound) play(sound);
@@ -164,10 +173,7 @@ export function Table({ state, send, theme }: Props) {
       said.forEach(([seat, text], k) => (next[seat] = { text, key: keys[k] }));
       return next;
     });
-    const timer = setTimeout(
-      () => setBubbles((old) => old.map((b) => (b && keys.includes(b.key) ? null : b))),
-      2200,
-    );
+    const timer = setTimeout(() => setBubbles((old) => old.map((b) => (b && keys.includes(b.key) ? null : b))), 2200);
     return () => clearTimeout(timer);
   }, [g]);
 
@@ -214,7 +220,7 @@ export function Table({ state, send, theme }: Props) {
   const newInHand = hand.filter((c) => fresh.includes(c.id)).length;
   useEffect(() => {
     if (!showDeal) return;
-    play('deal');
+    play("deal");
     const timer = setTimeout(() => setDealing(false), 900 + fresh.length * 90);
     return () => clearTimeout(timer);
   }, [showDeal]);
@@ -233,7 +239,9 @@ export function Table({ state, send, theme }: Props) {
   };
   /** The open-auction clock: when everyone still in becomes done. */
   const bidClock =
-    room.bidMsLeft !== null && room.bidMsWindow !== null ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidMsWindow } : null;
+    room.bidMsLeft !== null && room.bidMsWindow !== null
+      ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidMsWindow }
+      : null;
 
   // ---- chrome ----
   const [menu, setMenu] = useState(false);
@@ -248,7 +256,11 @@ export function Table({ state, send, theme }: Props) {
   const kindLabel = (t: AuctionType, live: boolean) => (
     <div className="kind-label" title={theme.auctionHints[t]} onClick={() => phone && setTypes(live ? t : true)}>
       <span className="type-icon">{theme.auctionIcons[t]}</span> {theme.auctionLabels[t]}
-      <button className="info-btn tap-only" onClick={() => setTypes(live ? t : true)} aria-label={`${theme.auctionLabels[t]}: how auction types work`}>
+      <button
+        className="info-btn tap-only"
+        onClick={() => setTypes(live ? t : true)}
+        aria-label={`${theme.auctionLabels[t]}: how auction types work`}
+      >
         <i className="i-dot">i</i>
       </button>
     </div>
@@ -258,7 +270,7 @@ export function Table({ state, send, theme }: Props) {
     <>
       {cards.map((c, i) => (
         <span key={c.id}>
-          {i > 0 && ' + '}
+          {i > 0 && " + "}
           <span className="lot-name" style={{ borderColor: theme.suits[c.suit].color }}>
             {theme.cardTitle(c)}
           </span>
@@ -273,7 +285,7 @@ export function Table({ state, send, theme }: Props) {
     const next =
       nextSeller === undefined ? null : (
         <span className="next-seller" title="The hammer passes clockwise to the next player who still has cards">
-          {' '}
+          {" "}
           · Next seller: <b>{who(nextSeller)}</b>
         </span>
       );
@@ -286,7 +298,7 @@ export function Table({ state, send, theme }: Props) {
             theme={theme}
             canRematch={me !== null && room.admin === me}
             admin={me !== null ? names[room.admin] : undefined}
-            onRematch={() => send({ type: 'rematch' })}
+            onRematch={() => send({ type: "rematch" })}
           />
         ),
         bar: null,
@@ -312,7 +324,9 @@ export function Table({ state, send, theme }: Props) {
         return {
           body: (
             <div className="idle">
-              <p className="status your-move big-prompt">Your move: pick a {theme.nouns.card} from your hand to auction ↓</p>
+              <p className="status your-move big-prompt">
+                Your move: pick a {theme.nouns.card} from your hand to auction ↓
+              </p>
             </div>
           ),
           bar: null,
@@ -320,13 +334,18 @@ export function Table({ state, send, theme }: Props) {
       const preview = (
         <div className="lot-row">
           <div className="lot-posters">
-            <div key={selCard.id}>{theme.renderCard(selCard, 'lg')}</div>
-            {selCard.type === 'double' && (selSecond ? <div key={selSecond.id}>{theme.renderCard(selSecond, 'lg')}</div> : <div className="slot-empty">+ ?</div>)}
+            <div key={selCard.id}>{theme.renderCard(selCard, "lg")}</div>
+            {selCard.type === "double" &&
+              (selSecond ? (
+                <div key={selSecond.id}>{theme.renderCard(selSecond, "lg")}</div>
+              ) : (
+                <div className="slot-empty">+ ?</div>
+              ))}
           </div>
           <div className="lot-info">
             {kindLabel((selSecond ?? selCard).type, false)}
             <p className="hint">
-              {selCard.type === 'double'
+              {selCard.type === "double"
                 ? `${theme.auctionLabels.double}: pick a second ${theme.suits[selCard.suit].name} ${theme.nouns.card} from your hand to sell both together. Played alone, the others may add one and take the money; if nobody does, you keep it for free.`
                 : theme.auctionHints[selCard.type]}
             </p>
@@ -334,37 +353,40 @@ export function Table({ state, send, theme }: Props) {
         </div>
       );
       const bar =
-        selCard.type !== 'double' ? (
-          <button className="btn primary big" onClick={() => act({ type: 'play', card: selCard.id })}>
+        selCard.type !== "double" ? (
+          <button className="btn primary big" onClick={() => act({ type: "play", card: selCard.id })}>
             Auction “{theme.cardTitle(selCard)}”
           </button>
         ) : selSecond ? (
-          <button className="btn primary big" onClick={() => act({ type: 'play', card: selCard.id, second: selSecond.id })}>
+          <button
+            className="btn primary big"
+            onClick={() => act({ type: "play", card: selCard.id, second: selSecond.id })}
+          >
             Auction both · {theme.auctionLabels[selSecond.type]}
           </button>
         ) : (
-          <button className="btn primary big" onClick={() => act({ type: 'play', card: selCard.id })}>
+          <button className="btn primary big" onClick={() => act({ type: "play", card: selCard.id })}>
             Play “{theme.cardTitle(selCard)}” alone
           </button>
         );
       return { body: preview, bar: <div className="act-row">{bar}</div> };
     }
 
-    const kind = a.kind === 'offer' ? 'double' : a.kind;
+    const kind = a.kind === "offer" ? "double" : a.kind;
     const stops = rail(g);
     const price = (() => {
-      if (a.kind === 'open' || a.kind === 'once') {
+      if (a.kind === "open" || a.kind === "once") {
         if (a.highBidder === null) return <div className="price muted-price">No bids yet</div>;
         return (
           <div className="price">
             <b key={a.high} className="pop">
               {theme.money(a.high)}
             </b>
-            <span>{a.highBidder === me ? 'You lead' : `${names[a.highBidder]} leads`}</span>
+            <span>{a.highBidder === me ? "You lead" : `${names[a.highBidder]} leads`}</span>
           </div>
         );
       }
-      if (a.kind === 'sealed') {
+      if (a.kind === "sealed") {
         const k = a.bidsIn.filter(Boolean).length;
         return (
           <div className="price muted-price">
@@ -372,8 +394,13 @@ export function Table({ state, send, theme }: Props) {
           </div>
         );
       }
-      if (a.kind === 'fixed') {
-        if (a.price === null) return <div className="price muted-price">{who(a.auctioneer)} {a.auctioneer === me ? 'set' : 'is setting'} the price…</div>;
+      if (a.kind === "fixed") {
+        if (a.price === null)
+          return (
+            <div className="price muted-price">
+              {who(a.auctioneer)} {a.auctioneer === me ? "set" : "is setting"} the price…
+            </div>
+          );
         return (
           <div className="price">
             <b>{theme.money(a.price)}</b>
@@ -392,50 +419,50 @@ export function Table({ state, send, theme }: Props) {
       <div className="lot-row">
         <div className="lot-posters">
           {a.cards.map((c) => (
-            <div key={c.id}>{theme.renderCard(c, 'lg')}</div>
+            <div key={c.id}>{theme.renderCard(c, "lg")}</div>
           ))}
-          {a.kind === 'offer' && <div className="slot-empty">+ ?</div>}
+          {a.kind === "offer" && <div className="slot-empty">+ ?</div>}
         </div>
         <div className="lot-info">
           {kindLabel(kind, true)}
           {price}
           <div className="seller">
-            🔨 {a.kind === 'offer' ? `${who(a.auctioneer)} played it alone` : `Seller: ${who(a.auctioneer)}`}
+            🔨 {a.kind === "offer" ? `${who(a.auctioneer)} played it alone` : `Seller: ${who(a.auctioneer)}`}
             {next}
             <span className="hint"> · {theme.auctionHints[kind]}</span>
           </div>
           <ol className={`rail rail-${a.kind}`} aria-label="Order round the table">
             {stops.map((st) => (
-              <li key={st.seat} className={`stop ${st.state} ${st.seat === me ? 'me' : ''}`}>
+              <li key={st.seat} className={`stop ${st.state} ${st.seat === me ? "me" : ""}`}>
                 <Avatar code={room.seats[st.seat].avatar} name={names[st.seat]} className="small" />
                 <span className="stop-name">
                   {who(st.seat)}
-                  {st.seller && ' 🔨'}
+                  {st.seller && " 🔨"}
                 </span>
                 <span className="stop-state">
-                  {st.state === 'now'
-                    ? a.kind === 'fixed' && a.price !== null
+                  {st.state === "now"
+                    ? a.kind === "fixed" && a.price !== null
                       ? `${theme.money(a.price)}?`
-                      : a.kind === 'offer'
-                        ? '+ ?'
-                        : a.kind === 'fixed'
-                          ? 'pricing'
-                          : 'to bid'
-                    : st.state === 'lead'
+                      : a.kind === "offer"
+                        ? "+ ?"
+                        : a.kind === "fixed"
+                          ? "pricing"
+                          : "to bid"
+                    : st.state === "lead"
                       ? `${theme.money(st.amount!)} ▲`
-                      : st.state === 'bid'
+                      : st.state === "bid"
                         ? theme.money(st.amount!)
-                        : st.state === 'passed'
-                          ? a.kind === 'offer'
-                            ? 'no'
-                            : 'pass'
-                          : st.state === 'done'
-                            ? 'done'
-                            : st.state === 'sealed'
-                              ? '✉'
-                              : a.kind === 'sealed'
-                                ? '…'
-                                : ''}
+                        : st.state === "passed"
+                          ? a.kind === "offer"
+                            ? "no"
+                            : "pass"
+                          : st.state === "done"
+                            ? "done"
+                            : st.state === "sealed"
+                              ? "✉"
+                              : a.kind === "sealed"
+                                ? "…"
+                                : ""}
                 </span>
               </li>
             ))}
@@ -449,7 +476,7 @@ export function Table({ state, send, theme }: Props) {
 
     if (me === null) {
       bar = null;
-    } else if (a.kind === 'open') {
+    } else if (a.kind === "open") {
       const clock = bidClock ? <BidClock {...bidClock} /> : null;
       if (a.highBidder === me) {
         bar = (
@@ -461,13 +488,26 @@ export function Table({ state, send, theme }: Props) {
         // A player who cannot outbid still says "done" themselves; the others must not see why.
         const done = a.done[me]
           ? undefined
-          : { label: a.highBidder === null ? 'No bid' : 'Done', onClick: () => act({ type: 'done', seenHigh: a.high }), clock };
+          : {
+              label: a.highBidder === null ? "No bid" : "Done",
+              onClick: () => act({ type: "done", seenHigh: a.high }),
+              clock,
+            };
         bar =
           myMoney > a.high ? (
-            <BidBox key={a.high} min={a.high + 1} max={myMoney} label="Bid" theme={theme} onBid={(amount) => act({ type: 'bid', amount, seenHigh: a.high })} secondary={done}>
+            <BidBox
+              key={a.high}
+              min={a.high + 1}
+              max={myMoney}
+              label="Bid"
+              theme={theme}
+              onBid={(amount) => act({ type: "bid", amount, seenHigh: a.high })}
+              secondary={done}
+            >
               {a.done[me] && (
                 <p className="hint">
-                  You are done: raises do not bring you back. Bid to come back in. Waiting for {list(g.pending)}… {clock}
+                  You are done: raises do not bring you back. Bid to come back in. Waiting for {list(g.pending)}…{" "}
+                  {clock}
                 </p>
               )}
             </BidBox>
@@ -484,11 +524,18 @@ export function Table({ state, send, theme }: Props) {
             </div>
           );
       }
-    } else if (a.kind === 'once' && a.toAct === me) {
-      const pass = { label: 'Pass', onClick: () => act({ type: 'pass' }) };
+    } else if (a.kind === "once" && a.toAct === me) {
+      const pass = { label: "Pass", onClick: () => act({ type: "pass" }) };
       bar =
         myMoney > a.high ? (
-          <BidBox min={a.high + 1} max={myMoney} label="Bid" theme={theme} onBid={(amount) => act({ type: 'bid', amount })} secondary={pass} />
+          <BidBox
+            min={a.high + 1}
+            max={myMoney}
+            label="Bid"
+            theme={theme}
+            onBid={(amount) => act({ type: "bid", amount })}
+            secondary={pass}
+          />
         ) : (
           <div className="act-row">
             <p className="status">You cannot outbid {theme.money(a.high)}. Only you can see that.</p>
@@ -497,10 +544,10 @@ export function Table({ state, send, theme }: Props) {
             </button>
           </div>
         );
-    } else if (a.kind === 'sealed') {
+    } else if (a.kind === "sealed") {
       bar =
         a.yourBid === null ? (
-          <BidBox min={0} max={myMoney} label="Seal" theme={theme} onBid={(amount) => act({ type: 'sealed', amount })}>
+          <BidBox min={0} max={myMoney} label="Seal" theme={theme} onBid={(amount) => act({ type: "sealed", amount })}>
             <p className="hint">Seal {theme.money(0)} to pass. You cannot change it once sealed.</p>
           </BidBox>
         ) : (
@@ -508,19 +555,26 @@ export function Table({ state, send, theme }: Props) {
             Your sealed bid: <b>{theme.money(a.yourBid)}</b>. Waiting for {list(g.pending)}…
           </p>
         );
-    } else if (a.kind === 'fixed' && a.price === null && a.auctioneer === me) {
+    } else if (a.kind === "fixed" && a.price === null && a.auctioneer === me) {
       bar = (
-        <BidBox min={0} max={myMoney} start={Math.min(10, myMoney)} label="Set price" theme={theme} onBid={(amount) => act({ type: 'price', amount })}>
+        <BidBox
+          min={0}
+          max={myMoney}
+          start={Math.min(10, myMoney)}
+          label="Set price"
+          theme={theme}
+          onBid={(amount) => act({ type: "price", amount })}
+        >
           <p className="hint">If nobody buys at your price, you pay it to the bank and keep the lot.</p>
         </BidBox>
       );
-    } else if (a.kind === 'fixed' && a.price !== null && a.toAct === me) {
+    } else if (a.kind === "fixed" && a.price !== null && a.toAct === me) {
       bar = (
         <div className="act-row">
-          <button className="btn primary big" disabled={myMoney < a.price} onClick={() => act({ type: 'accept' })}>
+          <button className="btn primary big" disabled={myMoney < a.price} onClick={() => act({ type: "accept" })}>
             Buy for {theme.money(a.price)}
           </button>
-          <button className="btn big" onClick={() => act({ type: 'pass' })}>
+          <button className="btn big" onClick={() => act({ type: "pass" })}>
             Pass
           </button>
         </div>
@@ -529,20 +583,20 @@ export function Table({ state, send, theme }: Props) {
       bar = (
         <div className="act-row">
           {selCard ? (
-            <button className="btn primary big" onClick={() => act({ type: 'add', card: selCard.id })}>
+            <button className="btn primary big" onClick={() => act({ type: "add", card: selCard.id })}>
               Add “{theme.cardTitle(selCard)}” · {theme.auctionLabels[selCard.type]}
             </button>
           ) : g.hand.some((c) => canPair(a.cards[0], c)) ? (
             <p className="status your-move">
-              Add a second {theme.suits[a.cards[0].suit].name} {theme.nouns.card}? Pick a highlighted one from your hand. You become the
-              seller and take the money.
+              Add a second {theme.suits[a.cards[0].suit].name} {theme.nouns.card}? Pick a highlighted one from your
+              hand. You become the seller and take the money.
             </p>
           ) : (
             <p className="status">
               You have no {theme.suits[a.cards[0].suit].name} {theme.nouns.card} to add. Only you can see that.
             </p>
           )}
-          <button className="btn big" onClick={() => act({ type: 'decline' })}>
+          <button className="btn big" onClick={() => act({ type: "decline" })}>
             Decline
           </button>
         </div>
@@ -565,21 +619,22 @@ export function Table({ state, send, theme }: Props) {
     const dock = dockEl.current;
     if (!table) return;
     if (!dock || !docked) {
-      table.style.setProperty('--dock', '0px');
+      table.style.setProperty("--dock", "0px");
       return;
     }
-    const measure = () => table.style.setProperty('--dock', `${getComputedStyle(dock).position === 'fixed' ? dock.offsetHeight : 0}px`);
+    const measure = () =>
+      table.style.setProperty("--dock", `${getComputedStyle(dock).position === "fixed" ? dock.offsetHeight : 0}px`);
     measure();
     const watch = new ResizeObserver(measure);
     watch.observe(dock);
-    addEventListener('resize', measure);
+    addEventListener("resize", measure);
     return () => {
       watch.disconnect();
-      removeEventListener('resize', measure);
+      removeEventListener("resize", measure);
     };
   }, [docked]);
   const recent = g.log
-    .filter((e) => e.t === 'sold' || e.t === 'free' || e.t === 'shelved' || e.t === 'round' || e.t === 'undo')
+    .filter((e) => e.t === "sold" || e.t === "free" || e.t === "shelved" || e.t === "round" || e.t === "undo")
     .slice(-4)
     .reverse();
 
@@ -589,12 +644,14 @@ export function Table({ state, send, theme }: Props) {
     .filter((x) => x.cards.length > 0);
 
   return (
-    <div ref={tableEl} className={`table ${docked ? 'acting' : ''}`}>
+    <div ref={tableEl} className={`table ${docked ? "acting" : ""}`}>
       <header className="topbar">
         <span className="brand">Auction Adda</span>
         <span className="round">
           <RoundRing done={g.over ? ROUNDS : g.round} />
-          {g.over ? 'Final result' : (
+          {g.over ? (
+            "Final result"
+          ) : (
             <>
               <b>{theme.roundNames[g.round]}</b> · {theme.nouns.round} {g.round + 1} of {ROUNDS}
             </>
@@ -602,7 +659,12 @@ export function Table({ state, send, theme }: Props) {
         </span>
         <span className="grow" />
         {g.summaries.length > 0 && (
-          <button className="icon-btn" onClick={() => setSeenSummaries(g.summaries.length - 1)} title="Last results" aria-label="Last results">
+          <button
+            className="icon-btn"
+            onClick={() => setSeenSummaries(g.summaries.length - 1)}
+            title="Last results"
+            aria-label="Last results"
+          >
             🏆 <span className="lbl">Last results</span>
           </button>
         )}
@@ -615,15 +677,23 @@ export function Table({ state, send, theme }: Props) {
             setMuted(!muted);
             setMutedState(!muted);
           }}
-          title={muted ? 'Sound off' : 'Sound on'}
-          aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
+          title={muted ? "Sound off" : "Sound on"}
+          aria-label={muted ? "Turn sound on" : "Turn sound off"}
         >
-          {muted ? '🔇' : '🔊'}
+          {muted ? "🔇" : "🔊"}
         </button>
-        <button className="icon-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} title="Room and rules" aria-label="Room and rules">
+        <button
+          className="icon-btn"
+          onClick={() => setMenu(!menu)}
+          aria-expanded={menu}
+          title="Room and rules"
+          aria-label="Room and rules"
+        >
           ? <span className="lbl">Room</span>
         </button>
-        {menu && <RoomMenu room={room} me={me} names={names} theme={theme} send={send} onClose={() => setMenu(false)} />}
+        {menu && (
+          <RoomMenu room={room} me={me} names={names} theme={theme} send={send} onClose={() => setMenu(false)} />
+        )}
       </header>
 
       {me === null && <Spectator openSeats={openSeats} names={names} send={send} />}
@@ -636,10 +706,10 @@ export function Table({ state, send, theme }: Props) {
 
       <Seats g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} />
 
-      <section className={`stage ${owing ? 'owing' : ''} ${a ? `stage-${a.kind}` : ''}`}>
+      <section className={`stage ${owing ? "owing" : ""} ${a ? `stage-${a.kind}` : ""}`}>
         {body}
         {bar && (
-          <div ref={dockEl} className={`action-bar ${owing ? 'your-turn' : ''}`}>
+          <div ref={dockEl} className={`action-bar ${owing ? "your-turn" : ""}`}>
             {bar}
           </div>
         )}
@@ -652,27 +722,34 @@ export function Table({ state, send, theme }: Props) {
             names={names}
             me={me}
             theme={theme}
-            onUndo={isAdmin && room.canUndo ? () => send({ type: 'undo' }) : null}
+            onUndo={isAdmin && room.canUndo ? () => send({ type: "undo" }) : null}
             onDone={() => setMoment(null)}
           />
         )}
       </section>
 
       {me !== null && (
-        <section className={`hand-panel ${myPlay || myOffer ? 'owing' : ''}`}>
+        <section className={`hand-panel ${myPlay || myOffer ? "owing" : ""}`}>
           <div className="hand-head">
             <Seat g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} i={me} />
             <h2>
               Your hand <small>{hand.length}</small>
             </h2>
             {newInHand > 0 && (
-              <span className={`dealt-note ${showDeal ? 'dealing' : ''}`} title={`Dealt at the start of ${theme.roundNames[g.round]}`}>
+              <span
+                className={`dealt-note ${showDeal ? "dealing" : ""}`}
+                title={`Dealt at the start of ${theme.roundNames[g.round]}`}
+              >
                 +{newInHand} new
               </span>
             )}
             {myPlay && !selCard && <span className="your-move">Pick one to auction</span>}
             {myOffer && <span className="your-move">Pick a matching {theme.nouns.card} to add</span>}
-            <button className="info-btn tap-only" onClick={() => setTypes(true)} aria-label="What the auction icons mean">
+            <button
+              className="info-btn tap-only"
+              onClick={() => setTypes(true)}
+              aria-label="What the auction icons mean"
+            >
               <i className="i-dot">i</i> <span>Icons</span>
             </button>
             <span className="grow" />
@@ -683,7 +760,7 @@ export function Table({ state, send, theme }: Props) {
           <div className="hand">
             {hand.length === 0 && <span className="muted">No {theme.nouns.cards} left. You can still bid.</span>}
             {groups.map(({ suit, cards }) => (
-              <div key={suit} className="hand-group" style={{ ['--suit' as string]: theme.suits[suit].color }}>
+              <div key={suit} className="hand-group" style={{ ["--suit" as string]: theme.suits[suit].color }}>
                 <span className="group-label">
                   {theme.suits[suit].glyph} {theme.suits[suit].short} <b>×{cards.length}</b>
                 </span>
@@ -693,24 +770,24 @@ export function Table({ state, send, theme }: Props) {
                     const clickable = myPlay || (myOffer && eligible);
                     const dealt = fresh.indexOf(c.id);
                     const cls = [
-                      'hand-card',
-                      dealt >= 0 ? 'fresh' : '',
-                      dealt >= 0 && showDeal ? 'deal-in' : '',
-                      c.id === sel || c.id === sel2 ? 'selected' : '',
-                      eligible ? 'eligible' : '',
-                      pairing && !eligible && c.id !== sel ? 'dim' : '',
-                      clickable ? 'clickable' : 'inspectable',
-                    ].join(' ');
+                      "hand-card",
+                      dealt >= 0 ? "fresh" : "",
+                      dealt >= 0 && showDeal ? "deal-in" : "",
+                      c.id === sel || c.id === sel2 ? "selected" : "",
+                      eligible ? "eligible" : "",
+                      pairing && !eligible && c.id !== sel ? "dim" : "",
+                      clickable ? "clickable" : "inspectable",
+                    ].join(" ");
                     // Not playable now: a tap opens a large view instead (touch has no hover lift).
                     return (
                       <button
                         key={c.id}
                         className={cls}
-                        style={dealt >= 0 ? { ['--i' as string]: dealt } : undefined}
+                        style={dealt >= 0 ? { ["--i" as string]: dealt } : undefined}
                         onClick={() => (clickable ? clickCard(c) : setInspect(c))}
-                        aria-label={`${dealt >= 0 ? 'New: ' : ''}${theme.cardTitle(c)}, ${theme.suits[c.suit].name}, ${theme.auctionLabels[c.type]}${clickable ? '' : ' (view)'}`}
+                        aria-label={`${dealt >= 0 ? "New: " : ""}${theme.cardTitle(c)}, ${theme.suits[c.suit].name}, ${theme.auctionLabels[c.type]}${clickable ? "" : " (view)"}`}
                       >
-                        {theme.renderCard(c, phone ? 'sm' : 'md')}
+                        {theme.renderCard(c, phone ? "sm" : "md")}
                       </button>
                     );
                   })}
@@ -746,7 +823,9 @@ export function Table({ state, send, theme }: Props) {
       )}
       {inspect && <Inspect card={inspect} theme={theme} onClose={() => setInspect(null)} />}
       {/* Results wait for the sold / shelved moment, so the last lot is seen before the round closes. */}
-      {summary && !moment && <Premiere s={summary} g={g} names={names} theme={theme} onClose={() => setSeenSummaries(g.summaries.length)} />}
+      {summary && !moment && (
+        <Premiere s={summary} g={g} names={names} theme={theme} onClose={() => setSeenSummaries(g.summaries.length)} />
+      )}
     </div>
   );
 }
@@ -764,7 +843,7 @@ interface MomentProps {
 function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
   const posters = useRef<HTMLDivElement>(null);
   const { e } = m;
-  const buyer = e.t === 'sold' ? e.to : e.t === 'free' ? e.p : null;
+  const buyer = e.t === "sold" ? e.to : e.t === "free" ? e.p : null;
 
   useEffect(() => {
     const still = reducedMotion();
@@ -781,10 +860,10 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
           const dy = to.top + to.height / 2 - (from.top + from.height / 2);
           el.animate(
             [
-              { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+              { transform: "translate(0, 0) scale(1)", opacity: 1 },
               { transform: `translate(${dx}px, ${dy}px) scale(0.12)`, opacity: 0.2 },
             ],
-            { duration: 650, easing: 'cubic-bezier(.55,0,.7,.2)', fill: 'forwards' },
+            { duration: 650, easing: "cubic-bezier(.55,0,.7,.2)", fill: "forwards" },
           );
         }, 1150),
       );
@@ -792,28 +871,28 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  const who = (i: number) => (i === me ? 'You' : names[i]);
-  const stamp = e.t === 'sold' ? 'Sold' : e.t === 'free' ? 'No bids' : 'Shelved';
+  const who = (i: number) => (i === me ? "You" : names[i]);
+  const stamp = e.t === "sold" ? "Sold" : e.t === "free" ? "No bids" : "Shelved";
   const line =
-    e.t === 'sold'
+    e.t === "sold"
       ? e.to === e.from
         ? `${who(e.to)} · ${theme.money(e.price)} to the bank`
         : `${who(e.to)} · ${theme.money(e.price)} to ${who(e.from)}`
-      : e.t === 'free'
-        ? `${who(e.p)} ${e.p === me ? 'keep' : 'keeps'} it free`
+      : e.t === "free"
+        ? `${who(e.p)} ${e.p === me ? "keep" : "keeps"} it free`
         : theme.shelved;
-  const by = e.t !== 'shelved' && e.by !== undefined ? e.by : null;
+  const by = e.t !== "shelved" && e.by !== undefined ? e.by : null;
 
   return (
     <div className={`moment moment-${e.t}`} onClick={onDone} role="status">
       <div className="moment-posters" ref={posters}>
         {e.cards.map((c) => (
-          <div key={c.id}>{theme.renderCard(c, 'md')}</div>
+          <div key={c.id}>{theme.renderCard(c, "md")}</div>
         ))}
         <span className="stamp">{stamp}</span>
       </div>
       <div className="moment-info">
-        {e.t === 'sold' && <p className="moment-cry">{theme.sold}</p>}
+        {e.t === "sold" && <p className="moment-cry">{theme.sold}</p>}
         <p className="moment-line">{line}</p>
         {by !== null && <p className="hint">Called by {who(by)} from voice</p>}
         {by !== null && onUndo && (
@@ -830,7 +909,11 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
         {m.bids && (
           <ol className="envelopes">
             {m.bids.map((b, i) => (
-              <li key={i} className={i === buyer && e.t === 'sold' ? 'won' : ''} style={{ animationDelay: `${i * 0.08}s` }}>
+              <li
+                key={i}
+                className={i === buyer && e.t === "sold" ? "won" : ""}
+                style={{ animationDelay: `${i * 0.08}s` }}
+              >
                 <span className="env">{theme.money(b)}</span>
                 <small>{who(i)}</small>
               </li>
@@ -842,7 +925,14 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
   );
 }
 
-function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; theme: Theme; send: (m: ClientMsg) => void; onClose: () => void }) {
+function RoomMenu(props: {
+  room: RoomInfo;
+  me: number | null;
+  names: string[];
+  theme: Theme;
+  send: (m: ClientMsg) => void;
+  onClose: () => void;
+}) {
   const { room, me, names, theme, send, onClose } = props;
   // Only a connected player can take the role.
   const eligible = room.seats.flatMap((s, i) => (i !== me && !s.bot && s.connected ? [i] : []));
@@ -861,9 +951,11 @@ function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; t
       <ShareLink code={room.code} />
       <div className="menu-admin">
         <p>
-          <span className="admin-mark">★</span> Admin: <b>{room.admin === me ? 'you' : names[room.admin]}</b>
+          <span className="admin-mark">★</span> Admin: <b>{room.admin === me ? "you" : names[room.admin]}</b>
           <br />
-          <small className="muted">Can end an auction with a result agreed on voice (“Call it from voice” on the stage).</small>
+          <small className="muted">
+            Can end an auction with a result agreed on voice (“Call it from voice” on the stage).
+          </small>
         </p>
         {room.admin === me && to !== undefined && (
           <div className="row">
@@ -874,7 +966,7 @@ function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; t
                 </option>
               ))}
             </select>
-            <button className="btn small" onClick={() => send({ type: 'admin', seat: to })}>
+            <button className="btn small" onClick={() => send({ type: "admin", seat: to })}>
               Make admin
             </button>
           </div>
@@ -886,13 +978,20 @@ function RoomMenu(props: { room: RoomInfo; me: number | null; names: string[]; t
   );
 }
 
-function LogDrawer(props: { g: View; names: string[]; me: number | null; theme: Theme; lot: (cards: Card[]) => ReactNode; onClose: () => void }) {
+function LogDrawer(props: {
+  g: View;
+  names: string[];
+  me: number | null;
+  theme: Theme;
+  lot: (cards: Card[]) => ReactNode;
+  onClose: () => void;
+}) {
   const { g, names, me, theme, lot, onClose } = props;
   const groups = groupLog(g.log, g.logStart);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    return () => removeEventListener('keydown', onKey);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
   }, []);
   return (
     <div className="drawer-back" onClick={onClose}>
@@ -941,53 +1040,100 @@ interface LineProps {
 
 /** One log entry as a sentence. Your own seat reads "You" (with the verb to match), as on the seats. */
 function LogLine({ e, names, me, theme, lot }: LineProps) {
-  const name = (i: number, lower = false) => (i === me ? (lower ? 'you' : 'You') : names[i]);
-  const n = (i: number, lower = false) => <b className={i === me ? 'you' : undefined}>{name(i, lower)}</b>;
+  const name = (i: number, lower = false) => (i === me ? (lower ? "you" : "You") : names[i]);
+  const n = (i: number, lower = false) => <b className={i === me ? "you" : undefined}>{name(i, lower)}</b>;
   /** `v(seat, 'buys', 'buy')`: third person for others, second person for you. */
   const v = (i: number, they: string, you: string) => (i === me ? you : they);
   const called = (by?: number) => (by === undefined ? null : <em className="called"> (called by {name(by, true)})</em>);
   switch (e.t) {
-    case 'round':
+    case "round":
       return (
         <>
-          {theme.roundNames[e.round]} begins. {dealNote(theme, names.length, e.round)} {n(e.first)} {v(e.first, 'goes', 'go')} first.
+          {theme.roundNames[e.round]} begins. {dealNote(theme, names.length, e.round)} {n(e.first)}{" "}
+          {v(e.first, "goes", "go")} first.
         </>
       );
-    case 'play':
-      return <>{n(e.p)} {v(e.p, 'auctions', 'auction')} {lot(e.cards)} · {theme.auctionLabels[e.kind]}</>;
-    case 'offer':
-      return <>{n(e.p)} {v(e.p, 'plays', 'play')} {lot(e.cards)} alone ({theme.auctionLabels.double})</>;
-    case 'bid':
-      return <>{n(e.p)} {v(e.p, 'bids', 'bid')} {theme.money(e.amount)}</>;
-    case 'pass':
-      return <>{n(e.p)} {v(e.p, 'passes', 'pass')}</>;
-    case 'decline':
-      return <>{n(e.p)} {v(e.p, 'adds', 'add')} nothing</>;
-    case 'price':
-      return <>{n(e.p)} {v(e.p, 'sets', 'set')} the price at {theme.money(e.amount)}</>;
-    case 'sealed':
-      return <>Bids revealed: {e.bids.map((b, i) => `${name(i)} ${theme.money(b)}`).join(', ')}</>;
-    case 'sold':
-      return e.to === e.from ? (
-        <>{n(e.to)} {v(e.to, 'keeps', 'keep')} {lot(e.cards)}, paying the bank {theme.money(e.price)}{called(e.by)}</>
-      ) : (
-        <>{n(e.to)} {v(e.to, 'buys', 'buy')} {lot(e.cards)} from {n(e.from, true)} for {theme.money(e.price)}{called(e.by)}</>
-      );
-    case 'free':
-      return <>{n(e.p)} {v(e.p, 'takes', 'take')} {lot(e.cards)} for free{called(e.by)}</>;
-    case 'shelved':
-      return <>{n(e.p)} {v(e.p, 'plays', 'play')} {lot(e.cards)}. {theme.shelved}</>;
-    case 'undo':
-      return <>{n(e.by)} {v(e.by, 'takes', 'take')} back the call on {lot(e.cards)}. The auction is open again.</>;
-    case 'skip':
-      return <>{n(e.p)} {v(e.p, 'is', 'are')} away; {e.p === me ? 'your' : 'their'} move was skipped</>;
-    case 'score':
-      return <>{theme.roundNames[e.round]} is scored.</>;
-    case 'end':
+    case "play":
       return (
         <>
-          Game over. {e.winners.map((i) => name(i)).join(' and ')}{' '}
-          {e.winners.length > 1 ? 'share the win' : v(e.winners[0], 'wins', 'win')}.
+          {n(e.p)} {v(e.p, "auctions", "auction")} {lot(e.cards)} · {theme.auctionLabels[e.kind]}
+        </>
+      );
+    case "offer":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "plays", "play")} {lot(e.cards)} alone ({theme.auctionLabels.double})
+        </>
+      );
+    case "bid":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "bids", "bid")} {theme.money(e.amount)}
+        </>
+      );
+    case "pass":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "passes", "pass")}
+        </>
+      );
+    case "decline":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "adds", "add")} nothing
+        </>
+      );
+    case "price":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "sets", "set")} the price at {theme.money(e.amount)}
+        </>
+      );
+    case "sealed":
+      return <>Bids revealed: {e.bids.map((b, i) => `${name(i)} ${theme.money(b)}`).join(", ")}</>;
+    case "sold":
+      return e.to === e.from ? (
+        <>
+          {n(e.to)} {v(e.to, "keeps", "keep")} {lot(e.cards)}, paying the bank {theme.money(e.price)}
+          {called(e.by)}
+        </>
+      ) : (
+        <>
+          {n(e.to)} {v(e.to, "buys", "buy")} {lot(e.cards)} from {n(e.from, true)} for {theme.money(e.price)}
+          {called(e.by)}
+        </>
+      );
+    case "free":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "takes", "take")} {lot(e.cards)} for free{called(e.by)}
+        </>
+      );
+    case "shelved":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "plays", "play")} {lot(e.cards)}. {theme.shelved}
+        </>
+      );
+    case "undo":
+      return (
+        <>
+          {n(e.by)} {v(e.by, "takes", "take")} back the call on {lot(e.cards)}. The auction is open again.
+        </>
+      );
+    case "skip":
+      return (
+        <>
+          {n(e.p)} {v(e.p, "is", "are")} away; {e.p === me ? "your" : "their"} move was skipped
+        </>
+      );
+    case "score":
+      return <>{theme.roundNames[e.round]} is scored.</>;
+    case "end":
+      return (
+        <>
+          Game over. {e.winners.map((i) => name(i)).join(" and ")}{" "}
+          {e.winners.length > 1 ? "share the win" : v(e.winners[0], "wins", "win")}.
         </>
       );
   }
@@ -995,14 +1141,15 @@ function LogLine({ e, names, me, theme, lot }: LineProps) {
 
 /** Admin: take back the result just called, until anyone moves. */
 function UndoCall({ g, theme, send }: { g: View; theme: Theme; send: (m: ClientMsg) => void }) {
-  const called = g.log.findLast((e) => e.t === 'sold' || e.t === 'free');
-  const title = called && (called.t === 'sold' || called.t === 'free') ? called.cards.map((c) => `“${theme.cardTitle(c)}”`).join(' + ') : 'the last lot';
+  const called = g.log.findLast((e) => e.t === "sold" || e.t === "free");
+  const title =
+    called && (called.t === "sold" || called.t === "free")
+      ? called.cards.map((c) => `“${theme.cardTitle(c)}”`).join(" + ")
+      : "the last lot";
   return (
     <div className="undo-call">
-      <span>
-        You called {title}. Wrong? Take it back before anyone moves.
-      </span>
-      <button className="btn small" onClick={() => send({ type: 'undo' })}>
+      <span>You called {title}. Wrong? Take it back before anyone moves.</span>
+      <button className="btn small" onClick={() => send({ type: "undo" })}>
         ↶ Undo call
       </button>
     </div>
@@ -1012,15 +1159,15 @@ function UndoCall({ g, theme, send }: { g: View; theme: Theme; send: (m: ClientM
 /** A large view of a hand card that cannot be played right now (touch has no hover lift). */
 function Inspect({ card, theme, onClose }: { card: Card; theme: Theme; onClose: () => void }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    return () => removeEventListener('keydown', onKey);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
   }, []);
   const s = theme.suits[card.suit];
   return (
     <div className="overlay inspect" onClick={onClose} role="dialog" aria-label={theme.cardTitle(card)}>
       <div className="inspect-card" onClick={(e) => e.stopPropagation()}>
-        {theme.renderCard(card, 'lg')}
+        {theme.renderCard(card, "lg")}
         <div className="inspect-info">
           <p className="kind-label">
             <span className="type-icon">{theme.auctionIcons[card.type]}</span> {theme.auctionLabels[card.type]}
@@ -1052,11 +1199,11 @@ function GameOver(props: {
   return (
     <div className="gameover">
       <h2>
-        {g.winners.map((i) => names[i]).join(' & ')} {g.winners.length > 1 ? 'share the win' : 'wins'}!
+        {g.winners.map((i) => names[i]).join(" & ")} {g.winners.length > 1 ? "share the win" : "wins"}!
       </h2>
       <ol>
         {order.map(({ i, money }) => (
-          <li key={i} className={g.winners.includes(i) ? 'winner' : ''}>
+          <li key={i} className={g.winners.includes(i) ? "winner" : ""}>
             <span>
               {names[i]}
               {i === g.you && <em> (you)</em>}
@@ -1078,7 +1225,8 @@ function GameOver(props: {
 
 function Spectator({ openSeats, names, send }: { openSeats: number[]; names: string[]; send: (m: ClientMsg) => void }) {
   const [name, setName] = useState(savedName);
-  if (openSeats.length === 0) return <div className="notice">You are watching this game. Hands and money stay hidden.</div>;
+  if (openSeats.length === 0)
+    return <div className="notice">You are watching this game. Hands and money stay hidden.</div>;
   return (
     <div className="notice">
       <span>A seat is free. Take it over:</span>
@@ -1090,7 +1238,7 @@ function Spectator({ openSeats, names, send }: { openSeats: number[]; names: str
           disabled={!name.trim()}
           onClick={() => {
             saveName(name.trim());
-            send({ type: 'claim', seat: i, name, avatar: savedAvatar() });
+            send({ type: "claim", seat: i, name, avatar: savedAvatar() });
           }}
         >
           Take {names[i]}’s seat

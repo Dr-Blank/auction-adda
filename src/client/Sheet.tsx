@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   title: ReactNode;
@@ -17,9 +17,9 @@ interface Props {
  */
 export function Sheet({ title, label, onClose, children }: Props) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    return () => removeEventListener('keydown', onKey);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
   }, []);
   // In a portal: sticky and transformed ancestors would otherwise trap the fixed overlay.
   return createPortal(
@@ -35,7 +35,7 @@ export function Sheet({ title, label, onClose, children }: Props) {
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={label ?? (typeof title === 'string' ? title : undefined)}
+        aria-label={label ?? (typeof title === "string" ? title : undefined)}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="menu-head sheet-head">

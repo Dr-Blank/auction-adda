@@ -1,5 +1,5 @@
 // Game constants. The numbers live in crates/engine/config.json, which the Rust engine reads too.
-import config from '../crates/engine/config.json' with { type: 'json' };
+import config from "../crates/engine/config.json" with { type: "json" };
 
 export const SUITS = config.suits;
 export const ROUNDS = config.rounds;
@@ -12,7 +12,9 @@ export const TOKENS = config.tokens;
 export const CARD_TABLE = config.cardTable;
 
 /** Cards each player is dealt at the start of each round, per player count. */
-export const DEALS: Record<number, number[]> = Object.fromEntries(Object.entries(config.players).map(([n, p]) => [Number(n), p.deal]));
+export const DEALS: Record<number, number[]> = Object.fromEntries(
+  Object.entries(config.players).map(([n, p]) => [Number(n), p.deal]),
+);
 
 const counts = Object.keys(config.players).map(Number);
 export const MIN_PLAYERS = Math.min(...counts);

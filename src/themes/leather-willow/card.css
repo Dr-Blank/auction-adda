@@ -3,7 +3,9 @@
 .poster.willow {
   background: #f4efe2;
   color: #2b2822;
-  box-shadow: 0 0.12em 0.45em rgb(0 0 0 / 35%), inset 0 0 0 1px rgb(0 0 0 / 6%);
+  box-shadow:
+    0 0.12em 0.45em rgb(0 0 0 / 35%),
+    inset 0 0 0 1px rgb(0 0 0 / 6%);
 }
 .willow .poster-type {
   background: var(--team);
@@ -39,9 +41,11 @@
   border-top: 1px solid color-mix(in srgb, var(--team) 35%, transparent);
   padding-top: 0.35em;
 }
-.poster-sm.willow .willow-role { display: none; }
+.poster-sm.willow .willow-role {
+  display: none;
+}
 .poster-sm.willow .poster-code {
   color: var(--team);
   text-shadow: none;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
 }
