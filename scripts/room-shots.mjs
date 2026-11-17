@@ -103,13 +103,16 @@ await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
 // The round label opens the seasons overview.
 shot("seasons", `document.querySelector(".round-btn")?.click()`);
-// A reaction rises over the admin's own seat; the picker stays open.
+// A reaction rises over the admin's own seat. The picker closes on a tap; opened again for a second
+// one, it sits beside the avatar, clear of the one still rising.
 shot(
   "game-react",
   `(async () => {
     document.querySelector("[aria-label='React']")?.click();
     await new Promise((r) => setTimeout(r, 100));
     document.querySelector(".react-btn")?.click();
+    await new Promise((r) => setTimeout(r, 100));
+    document.querySelector("[aria-label='React']")?.click();
   })()`,
 );
 // Seats are drawn when the game starts: find people by name.

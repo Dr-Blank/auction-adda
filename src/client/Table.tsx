@@ -652,19 +652,18 @@ export function Table({ state, send, theme, reactions }: Props) {
 
   // Phones dock the action bar to the bottom edge while you owe a move. Its height varies (bid box,
   // two buttons, a sentence), so measure it: the hand sits right above it and the page ends clear of it.
-  const tableEl = useRef<HTMLDivElement>(null);
+  // On the root, not the table: the toasts live outside the table and must also clear it.
   const dockEl = useRef<HTMLDivElement>(null);
   const docked = owing && !!bar;
   useLayoutEffect(() => {
-    const table = tableEl.current;
+    const root = document.documentElement.style;
     const dock = dockEl.current;
-    if (!table) return;
     if (!dock || !docked) {
-      table.style.setProperty("--dock", "0px");
-      return;
+      root.setProperty("--dock", "0px");
+      return () => root.removeProperty("--dock");
     }
     const measure = () =>
-      table.style.setProperty("--dock", `${getComputedStyle(dock).position === "fixed" ? dock.offsetHeight : 0}px`);
+      root.setProperty("--dock", `${getComputedStyle(dock).position === "fixed" ? dock.offsetHeight : 0}px`);
     measure();
     const watch = new ResizeObserver(measure);
     watch.observe(dock);
@@ -672,6 +671,7 @@ export function Table({ state, send, theme, reactions }: Props) {
     return () => {
       watch.disconnect();
       removeEventListener("resize", measure);
+      root.removeProperty("--dock");
     };
   }, [docked]);
   const recent = g.log
@@ -685,7 +685,7 @@ export function Table({ state, send, theme, reactions }: Props) {
     .filter((x) => x.cards.length > 0);
 
   return (
-    <div ref={tableEl} className={`table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}>
+    <div className={`table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}>
       <header className="topbar">
         <Brand />
         <button

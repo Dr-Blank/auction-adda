@@ -190,7 +190,7 @@ export function Seat({
           </span>
         )}
         <Floats reactions={reactions} seat={i} />
-        {i === me && <ReactBar room={room} send={send} up />}
+        {i === me && <ReactBar room={room} send={send} side />}
       </div>
       <div className="seat-body">
         <div className="seat-name">

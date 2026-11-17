@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ClientMsg, RoomInfo, RoomSettings } from "../generated/index.ts";
 import { SmileIcon } from "./Icons.tsx";
-import type { Reaction } from "./net.ts";
+import { REACTION_MS, type Reaction } from "./net.ts";
 
 /** What the admin can pick from (and anything already in the room's set). */
 const CHOICES = [
@@ -30,9 +30,18 @@ const MAX = 8;
 
 /**
  * A small badge on the corner of your own avatar: it opens the room's reactions, and each tap floats
- * one over that avatar for everyone. `up` opens the choices above it (a seat near the bottom edge).
+ * one over that avatar for everyone. `side` opens the choices beside the avatar (a seat near the
+ * bottom edge), never above it: that is where the reactions rise.
  */
-export function ReactBar({ room, send, up = false }: { room: RoomInfo; send: (m: ClientMsg) => void; up?: boolean }) {
+export function ReactBar({
+  room,
+  send,
+  side = false,
+}: {
+  room: RoomInfo;
+  send: (m: ClientMsg) => void;
+  side?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -62,9 +71,18 @@ export function ReactBar({ room, send, up = false }: { room: RoomInfo; send: (m:
         <SmileIcon />
       </button>
       {open && (
-        <div className={`react-pop ${up ? "up" : ""}`} role="group" aria-label="Reactions">
+        <div className={`react-pop ${side ? "beside" : ""}`} role="group" aria-label="Reactions">
           {set.map((e) => (
-            <button key={e} type="button" className="react-btn" onClick={() => send({ type: "react", emoji: e })}>
+            <button
+              key={e}
+              type="button"
+              className="react-btn"
+              // One tap, one reaction: the choices get out of the way of the emoji they sent.
+              onClick={() => {
+                send({ type: "react", emoji: e });
+                setOpen(false);
+              }}
+            >
               {e}
             </button>
           ))}
@@ -82,7 +100,12 @@ export function Floats({ reactions, seat }: { reactions: Reaction[]; seat: numbe
       {reactions
         .filter((r) => r.seat === seat)
         .map((r) => (
-          <span key={r.key} className="reaction" style={{ ["--k" as string]: r.key % 3 }} aria-hidden="true">
+          <span
+            key={r.key}
+            className="reaction"
+            style={{ ["--k" as string]: r.key % 3, animationDuration: `${REACTION_MS}ms` }}
+            aria-hidden="true"
+          >
             {r.emoji}
           </span>
         ))}

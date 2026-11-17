@@ -10,7 +10,7 @@ export interface Reaction {
   key: number;
 }
 /** How long a reaction floats over its seat. */
-export const REACTION_MS = 2600;
+export const REACTION_MS = 4200;
 export interface NetError {
   message: string;
   code?: string;
