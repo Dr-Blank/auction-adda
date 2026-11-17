@@ -87,3 +87,140 @@
   color: #fff;
   text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
 }
+
+/* ---- Box Office: a two-ink premiere poster. --g ground, --h hue, --t tint come from the card. ---- */
+.poster.bo {
+  /* Its layers stack among themselves, never over a SOLD stamp laid on the poster. */
+  isolation: isolate;
+  border-radius: 0.32em;
+  color: var(--t);
+  background:
+    radial-gradient(130% 70% at 50% 14%, color-mix(in srgb, var(--h) 34%, var(--g)) 0%, var(--g) 72%),
+    var(--g);
+  box-shadow:
+    0 0.06em 0.12em rgb(0 0 0 / 40%),
+    0 0.5em 1.1em -0.35em rgb(0 0 0 / 60%),
+    inset 0 0 0 1px color-mix(in srgb, var(--t) 14%, transparent);
+}
+/* Print grain, then a foil sheen that waits off the left edge. */
+.poster.bo::after,
+.poster.bo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.poster.bo::after {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
+}
+.poster.bo::before {
+  background: linear-gradient(112deg, transparent 38%, rgb(255 255 255 / 0%) 42%, rgb(255 250 235 / 22%) 50%, rgb(255 255 255 / 0%) 58%, transparent 62%) no-repeat;
+  background-size: 260% 100%;
+  background-position: 100% 0;
+}
+.bo-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.bo .poster-type {
+  top: 0.62em;
+  left: 0.62em;
+  z-index: 2;
+  background: var(--t);
+  color: var(--g);
+  border-radius: 0.18em;
+  padding: 0.22em 0.5em 0.2em;
+  font-size: 0.5em;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+.bo .poster-type b { font-size: 1.3em; letter-spacing: 0; }
+
+.bo .poster-foot {
+  z-index: 1;
+  padding: 3.2em 0.75em 0.8em;
+  text-align: center;
+  background: linear-gradient(to top, var(--g) 46%, color-mix(in srgb, var(--g) 75%, transparent) 70%, transparent);
+}
+.bo-billing {
+  font-family: system-ui, sans-serif;
+  font-size: 0.46em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--t);
+  opacity: 0.85;
+  text-wrap: balance;
+  margin-bottom: 0.45em;
+}
+.bo .poster-title {
+  font-size: 1.04em;
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: 0.005em;
+  color: #fffaf1;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+}
+.bo-rule {
+  width: 1.4em;
+  height: 1px;
+  margin: 0.45em auto 0.4em;
+  background: var(--h);
+}
+.bo .poster-tag {
+  margin: 0;
+  font-size: 0.48em;
+  color: var(--t);
+  opacity: 0.75;
+  text-wrap: balance;
+}
+
+/* Small posters: icon top left, initials in serif on a ground fade. */
+.poster-sm.bo .poster-type { top: 0.3em; left: 0.3em; padding: 0.05em 0.28em; font-size: 1.5em; letter-spacing: 0; }
+.poster-sm.bo .bo-frame text { display: none; }
+.poster-sm.bo .poster-code {
+  z-index: 1;
+  bottom: 0;
+  padding: 1.6em 0 0.35em;
+  background: linear-gradient(to top, var(--g) 45%, transparent);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--t);
+  text-shadow: none;
+}
+
+/* Motion. A hand card catches the light as you reach for it; a lot comes up like the house lights
+   going down: dark, a beat of glare, then the poster. All of it is off under reduced motion. */
+.hand-card:hover .poster.bo::before,
+.hand-card:focus-visible .poster.bo::before,
+.hand-card.selected .poster.bo::before {
+  background-position: 0 0;
+  transition: background-position 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.lot-posters .poster.bo { animation: bo-house-lights 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.lot-posters .poster.bo::before { animation: bo-sheen 1s cubic-bezier(0.3, 0.6, 0.2, 1) 0.45s both; }
+.lot-posters > :nth-child(2) .poster.bo,
+.lot-posters > .poster.bo:nth-child(2) { animation-delay: 0.12s; }
+@keyframes bo-house-lights {
+  from { opacity: 0; transform: translateY(0.4em) scale(0.97); filter: brightness(0.25) saturate(0.3); }
+  55% { opacity: 1; filter: brightness(1.18) saturate(1.05); }
+  to { transform: none; filter: none; }
+}
+@keyframes bo-sheen {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+@media (hover: none) {
+  .hand-card:hover .poster.bo::before { background-position: 100% 0; transition: none; }
+}

@@ -320,8 +320,8 @@ export function Table({ state, send, theme }: Props) {
       const preview = (
         <div className="lot-row">
           <div className="lot-posters">
-            {theme.renderCard(selCard, 'lg')}
-            {selCard.type === 'double' && (selSecond ? theme.renderCard(selSecond, 'lg') : <div className="slot-empty">+ ?</div>)}
+            <div key={selCard.id}>{theme.renderCard(selCard, 'lg')}</div>
+            {selCard.type === 'double' && (selSecond ? <div key={selSecond.id}>{theme.renderCard(selSecond, 'lg')}</div> : <div className="slot-empty">+ ?</div>)}
           </div>
           <div className="lot-info">
             {kindLabel((selSecond ?? selCard).type, false)}

@@ -140,6 +140,8 @@ export function Premiere({ s, g, names, theme, onClose }: Props) {
 function Earned({ value, delay, instant, money }: { value: number; delay: number; instant: boolean; money: (n: number) => string }) {
   const shown = useCountUp(value, { from: 0, delay, duration: 900 });
   // The count-up keeps its first delay; Skip must show the final sums now, not +0 until then.
+  // Nothing earned is not a gain: no plus sign, and muted.
+  if (value === 0) return <b className="earned muted">{money(0)}</b>;
   return <b className="earned">+{money(instant ? value : shown)}</b>;
 }
 

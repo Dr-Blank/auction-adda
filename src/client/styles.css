@@ -93,11 +93,15 @@ kbd {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, filter 0.15s, transform 0.08s;
 }
 .btn:hover:not(:disabled) { border-color: var(--accent-line); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+/* Faded gold over a dark ground turns to mud; a disabled main button is an outline in gold instead. */
+.btn.primary:disabled { opacity: 1; background: transparent; color: color-mix(in srgb, var(--gold) 55%, var(--muted)); border-color: color-mix(in srgb, var(--gold) 35%, var(--line)); }
 .btn.big { padding: 12px 18px; font-size: 1.05rem; }
 .btn.small { padding: 3px 9px; font-size: 0.8rem; }
 .btn.ghost { background: transparent; }
@@ -125,6 +129,7 @@ input, select {
   padding: 8px 10px;
   min-width: 0;
 }
+input[type='radio'], input[type='checkbox'] { accent-color: var(--gold); }
 label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
 legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px; }
@@ -258,7 +263,7 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
 .menu-admin p { margin: 0; }
 .admin-mark { color: var(--accent); margin-left: 4px; font-size: 0.85em; }
 
-.drawer-back { position: fixed; inset: 0; background: rgb(8 5 14 / 55%); z-index: 30; }
+.drawer-back { position: fixed; inset: 0; background: color-mix(in srgb, var(--night) 55%, transparent); z-index: 30; }
 .drawer {
   position: absolute;
   right: 0;
@@ -389,15 +394,16 @@ legend { font-size: 0.85rem; color: var(--muted); padding: 0; margin-bottom: 4px
 }
 .seat.owing .seat-name { color: var(--accent-soft); }
 .seat.me.owing .seat-name { color: var(--gold); }
-.seat-name .mark.now { color: #1d1530; background: var(--accent); border-color: transparent; font-weight: 800; }
+.seat-name .mark.now { color: var(--panel); background: var(--accent); border-color: transparent; font-weight: 800; }
 .seat.me .seat-name .mark.now { background: var(--gold); }
 /* Where the hammer goes after this lot (and, on your seat, how far off your turn to sell is). */
 .seat-tag { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); opacity: 0.85; white-space: nowrap; }
+/* Above the avatar, tail pointing down at it, so it never covers the name beside it. */
 .bubble {
   position: absolute;
-  left: 30px;
-  bottom: 40px;
-  z-index: 5;
+  left: 22px;
+  bottom: calc(100% + 2px);
+  z-index: 7; /* over the stage's sold moment (6): your seat's bubble rises into the stage */
   white-space: nowrap;
   background: #fff8e6;
   color: #22183a;
@@ -488,7 +494,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   padding: 0 4px;
   border-radius: 9px;
   background: var(--text);
-  color: #1d1730;
+  color: var(--panel);
   font-size: 0.68rem;
   display: grid;
   place-items: center;
@@ -752,7 +758,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   padding: 1px 5px;
   border-radius: 6px;
   background: var(--gold);
-  color: #1d1730;
+  color: var(--gold-ink);
   font: 700 0.6rem/1.2 system-ui, sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -793,7 +799,7 @@ button.owned:hover .mini-card + .mini-card, button.owned.open .mini-card + .mini
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--gold);
-  color: #1d1730;
+  color: var(--gold-ink);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -918,7 +924,7 @@ b.you { color: var(--gold); }
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(8 5 14 / 82%);
+  background: color-mix(in srgb, var(--night) 82%, transparent);
   display: grid;
   /* `safe`: a modal taller than the screen starts at the top instead of being cut off above it. */
   place-items: safe center;
@@ -1146,7 +1152,7 @@ b.you { color: var(--gold); }
   display: grid;
   place-items: center;
   background: var(--text);
-  color: #1d1730;
+  color: var(--panel);
   font-size: 1.05rem;
 }
 .seat-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.9rem; }
@@ -1184,7 +1190,7 @@ b.you { color: var(--gold); }
     border: 0;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
-    background: #150f22;
+    background: var(--felt);
     box-shadow: 0 6px 14px rgb(0 0 0 / 35%);
   }
   .chart-strip {
@@ -1340,7 +1346,7 @@ b.you { color: var(--gold); }
   .table.acting .action-bar .hint, .table.acting .action-bar .status { font-size: 0.8rem; }
 
   /* Hand: every card on screen at once as small cards (auction icon + star), no sideways scroll. */
-  .hand-panel { margin: 0 -14px; padding: 6px 14px 8px; background: #1a1430; border-top: 1px solid var(--line); z-index: 12; }
+  .hand-panel { margin: 0 -14px; padding: 6px 14px 8px; background: color-mix(in srgb, var(--panel) 80%, var(--bg)); border-top: 1px solid var(--line); z-index: 12; }
   .hand-head { align-items: center; gap: 4px 8px; margin-bottom: 0; }
   .hand-head .seat { min-width: 0; margin-right: 0; padding-right: 0; border-right: 0; align-items: center; gap: 6px; cursor: pointer; }
   .hand-head .seat .avatar { width: 30px; height: 30px; font-size: 0.7rem; }
