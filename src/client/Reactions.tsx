@@ -28,8 +28,11 @@ const CHOICES = [
 ];
 const MAX = 8;
 
-/** A button that opens the room's reactions; each tap floats one over your seat for everyone. */
-export function ReactBar({ room, send }: { room: RoomInfo; send: (m: ClientMsg) => void }) {
+/**
+ * A small badge on the corner of your own avatar: it opens the room's reactions, and each tap floats
+ * one over that avatar for everyone. `up` opens the choices above it (a seat near the bottom edge).
+ */
+export function ReactBar({ room, send, up = false }: { room: RoomInfo; send: (m: ClientMsg) => void; up?: boolean }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -46,19 +49,20 @@ export function ReactBar({ room, send }: { room: RoomInfo; send: (m: ClientMsg) 
   const set = room.settings.reactions;
   if (set.length === 0) return null;
   return (
-    <div className="react-bar" ref={box}>
+    // A tap here must not also open the seat's info sheet.
+    <div className="react-bar" ref={box} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
-        className="icon-btn"
+        className={`react-badge ${open ? "open" : ""}`}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         title="React: float an emoji over your seat"
         aria-label="React"
       >
-        <SmileIcon /> <span className="lbl">React</span>
+        <SmileIcon />
       </button>
       {open && (
-        <div className="react-pop" role="group" aria-label="Reactions">
+        <div className={`react-pop ${up ? "up" : ""}`} role="group" aria-label="Reactions">
           {set.map((e) => (
             <button key={e} type="button" className="react-btn" onClick={() => send({ type: "react", emoji: e })}>
               {e}
@@ -70,7 +74,8 @@ export function ReactBar({ room, send }: { room: RoomInfo; send: (m: ClientMsg) 
   );
 }
 
-/** The reactions floating over one seat. */
+/** The reactions floating over one seat. Each keeps the lane it rose in (from its own key, not its
+ * place in the list, which shifts as older ones fade). */
 export function Floats({ reactions, seat }: { reactions: Reaction[]; seat: number }) {
   return (
     <>

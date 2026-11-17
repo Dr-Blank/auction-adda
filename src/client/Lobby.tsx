@@ -613,15 +613,18 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
           <li key={i} className={`${s.connected ? "" : "away"} ${i === you ? "me" : ""}`}>
             <Floats reactions={reactions} seat={i} />
             {i === you ? (
-              <LookButton
-                code={s.avatar}
-                name={s.name}
-                className={s.connected ? "on" : ""}
-                onChange={(code) => {
-                  setLook(code);
-                  send({ type: "avatar", avatar: code });
-                }}
-              />
+              <span className="avatar-wrap">
+                <LookButton
+                  code={s.avatar}
+                  name={s.name}
+                  className={s.connected ? "on" : ""}
+                  onChange={(code) => {
+                    setLook(code);
+                    send({ type: "avatar", avatar: code });
+                  }}
+                />
+                <ReactBar room={room} send={send} />
+              </span>
             ) : (
               <Avatar
                 code={s.avatar}
@@ -669,7 +672,6 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
           </li>
         ))}
       </ol>
-      {you !== null && <ReactBar room={room} send={send} />}
       <WatcherList room={room} me={you} send={send} />
       <p className="admin-note">
         <span className="admin-mark">★</span> <b>{isAdmin ? "You are" : `${adminName} is`} the room admin.</b> The admin

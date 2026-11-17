@@ -1163,18 +1163,55 @@ legend {
 .lobby-seats li {
   position: relative;
 }
-.react-bar {
-  position: relative;
+/* The react badge sits on the lower right of your own avatar. */
+.avatar-wrap .react-bar {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  z-index: 9;
 }
-.lobby .react-bar {
-  justify-self: start;
+.lobby-seats .avatar-wrap {
+  position: relative;
+  flex: none;
+  display: inline-block;
+}
+.react-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 45%);
+}
+/* A finger-sized target around the small badge. */
+.react-badge::before {
+  content: "";
+  position: absolute;
+  inset: -11px;
+}
+.react-badge:hover,
+.react-badge:focus-visible,
+.react-badge.open {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .react-pop {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  /* Near the avatar's left edge (the badge sits about 29px in), so eight choices fit a phone. */
+  left: -22px;
   z-index: 30;
   display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   gap: 4px;
   padding: 6px;
   background: var(--panel-2);
@@ -1182,9 +1219,9 @@ legend {
   border-radius: 14px;
   box-shadow: 0 10px 28px rgb(0 0 0 / 50%);
 }
-.lobby .react-pop {
-  left: 0;
-  right: auto;
+.react-pop.up {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 .react-btn {
   appearance: none;

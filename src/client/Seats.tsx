@@ -8,7 +8,7 @@ import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } fr
 import { COMPACT, TOUCH } from "./hooks.ts";
 import { Rename } from "./Lobby.tsx";
 import type { Reaction } from "./net.ts";
-import { Floats } from "./Reactions.tsx";
+import { Floats, ReactBar } from "./Reactions.tsx";
 import { Sheet } from "./Sheet.tsx";
 
 export interface Bubble {
@@ -190,6 +190,7 @@ export function Seat({
           </span>
         )}
         <Floats reactions={reactions} seat={i} />
+        {i === me && <ReactBar room={room} send={send} up />}
       </div>
       <div className="seat-body">
         <div className="seat-name">

@@ -31,7 +31,6 @@ import {
 import type { Reaction, RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
-import { ReactBar } from "./Reactions.tsx";
 import { AuctionTypes, Rules } from "./Rules.tsx";
 import { Ruling } from "./Ruling.tsx";
 import type { Bubble } from "./Seats.tsx";
@@ -700,7 +699,6 @@ export function Table({ state, send, theme, reactions }: Props) {
             <FreezeIcon /> <span className="lbl">Freeze</span>
           </button>
         )}
-        {me !== null && <ReactBar room={room} send={send} />}
         <button className="icon-btn" onClick={() => setLogOpen(true)} title="Auction log" aria-label="Auction log">
           ☰ <span className="lbl">Log</span>
         </button>
