@@ -17,24 +17,51 @@ interface Props {
   theme: Theme;
 }
 
-export function ShareLink({ code }: { code: string }) {
+/** Copies `text`; `copied` is true for a moment afterwards. */
+function useCopy(text: string): [boolean, () => void] {
   const [copied, setCopied] = useState(false);
+  return [
+    copied,
+    () =>
+      navigator.clipboard?.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }),
+  ];
+}
+
+export function ShareLink({ code }: { code: string }) {
   const link = `${location.origin}/#${code}`;
+  const [copied, copy] = useCopy(link);
   return (
     <div className="share">
       <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Room link" />
-      <button
-        className="btn"
-        onClick={() => {
-          navigator.clipboard?.writeText(link).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          });
-        }}
-      >
+      <button className="btn" onClick={copy}>
         {copied ? "Copied" : "Copy link"}
       </button>
     </div>
+  );
+}
+
+/** A room code with a small button that copies just the code. */
+export function RoomCode({ code }: { code: string }) {
+  const [copied, copy] = useCopy(code);
+  return (
+    <span className="room-code">
+      <b className="code">{code}</b>
+      <button
+        type="button"
+        className="copy-code"
+        onClick={(e) => {
+          e.stopPropagation();
+          copy();
+        }}
+        title={copied ? "Copied" : "Copy room code"}
+        aria-label={copied ? "Room code copied" : "Copy room code"}
+      >
+        {copied ? "✓" : "📋"}
+      </button>
+    </span>
   );
 }
 
@@ -206,7 +233,7 @@ export function Lobby({ state, send, join, theme }: Props) {
     <main className="center-card lobby">
       <Brand as="h1" />
       <p className="muted">
-        {theme.title} · room <b className="code">{room.code}</b>
+        {theme.title} · room <RoomCode code={room.code} />
       </p>
 
       <p>Paste this link in Discord. Everyone who opens it lands in this room.</p>

@@ -17,7 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { BidTimer, ShareLink } from "./Lobby.tsx";
+import { BidTimer, RoomCode, ShareLink } from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
@@ -943,7 +943,7 @@ function RoomMenu(props: {
     <div className="menu" role="dialog" aria-label="Room">
       <div className="menu-head">
         <span>
-          Room <b className="code">{room.code}</b>
+          Room <RoomCode code={room.code} />
         </span>
         <button className="icon-btn" onClick={onClose} aria-label="Close">
           ✕

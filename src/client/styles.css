@@ -119,6 +119,28 @@ kbd {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.room-code {
+  white-space: nowrap;
+}
+.copy-code {
+  font: inherit;
+  font-size: 0.85em;
+  line-height: 1;
+  margin-left: 4px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: 1px;
+  opacity: 0.75;
+}
+.copy-code:hover,
+.copy-code:focus-visible {
+  opacity: 1;
+  border-color: var(--line, currentColor);
+}
 .brand-link {
   color: inherit;
   text-decoration: none;
