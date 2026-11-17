@@ -12,7 +12,8 @@
     "start": "cargo run --release -p server",
     "test": "cargo build -q -p server && vitest run",
     "typecheck": "tsc --noEmit",
-    "bots": "node scripts/bots.ts"
+    "bots": "node scripts/bots.ts",
+    "cards": "node scripts/cards.mjs"
   },
   "engines": {
     "node": ">=24"
