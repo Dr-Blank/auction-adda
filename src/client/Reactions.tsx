@@ -76,8 +76,8 @@ export function Floats({ reactions, seat }: { reactions: Reaction[]; seat: numbe
     <>
       {reactions
         .filter((r) => r.seat === seat)
-        .map((r, k) => (
-          <span key={r.key} className="reaction" style={{ ["--k" as string]: k % 3 }} aria-hidden="true">
+        .map((r) => (
+          <span key={r.key} className="reaction" style={{ ["--k" as string]: r.key % 3 }} aria-hidden="true">
             {r.emoji}
           </span>
         ))}
