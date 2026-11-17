@@ -839,11 +839,7 @@ impl Rooms {
             }
             ClientMsg::Close => {
                 room.require_admin(me, "close the room")?;
-                let by = room
-                    .seats
-                    .get(usize::from(me))
-                    .map(|s| s.name.clone())
-                    .unwrap_or_default();
+                let by = room.seats.get(usize::from(me)).map_or_default(|s| s.name.clone());
                 info!(room = %code, seat = me, "Admin closed the room");
                 self.close(&code, &by);
                 return Ok(());

@@ -370,7 +370,7 @@ fn a_browser_lists_its_rooms_by_token_admin_rooms_first_a_reused_code_is_not_the
     advance(&now, 8 * 24 * 3600 * 1000);
     rooms.sweep();
     let (list, gone) = my_rooms(&mut rooms, &home, json!([{ "room": code_a, "token": admin_a }]));
-    assert!(list.is_empty());
+    assert_eq!(list, Vec::<Value>::new());
     assert_eq!(gone, [code_a]);
 }
 
@@ -955,7 +955,7 @@ fn the_admin_closes_the_room_and_everyone_in_it_is_told() {
     }
     assert_eq!(rooms.len(), 0);
     rooms.flush();
-    assert!(dir.files().is_empty());
+    assert_eq!(dir.files(), Vec::<String>::new());
     send(&mut rooms, &clients[1], json!({ "type": "start" }));
     assert_error(&clients[1], "Join a room first");
     send(&mut rooms, &watcher, json!({ "type": "join", "room": code }));
