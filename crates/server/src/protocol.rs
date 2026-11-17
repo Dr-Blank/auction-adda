@@ -108,6 +108,10 @@ pub enum ClientMsg {
     Leave,
     /// This tab left the room screen: it stops watching, and its seat counts as disconnected.
     Part,
+    /// The rooms this browser has a seat in, by their saved seat tokens. Answered with `rooms`.
+    Rooms {
+        seats: Vec<SeatKey>,
+    },
     /// Admin only.
     Rematch,
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
@@ -158,6 +162,7 @@ impl ClientMsg {
             Self::Release { .. } => "release",
             Self::Leave => "leave",
             Self::Part => "part",
+            Self::Rooms { .. } => "rooms",
             Self::Rematch => "rematch",
             Self::Rule { .. } => "rule",
             Self::Undo => "undo",
@@ -214,6 +219,42 @@ pub struct RoomInfo {
     pub bid_ms_window: Option<u64>,
 }
 
+/// A room code and the seat token this browser keeps for it.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+pub struct SeatKey {
+    pub room: String,
+    pub token: String,
+}
+
+/// Where a game stands, for a list of rooms.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "t", rename_all = "lowercase")]
+pub enum RoomStage {
+    Lobby,
+    /// `round` counts from 0.
+    Playing {
+        round: u8,
+    },
+    Over,
+}
+
+/// One room this browser has a seat in.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MyRoom {
+    pub code: String,
+    pub theme: String,
+    pub stage: RoomStage,
+    /// Everyone seated, in seat order.
+    pub players: Vec<String>,
+    pub seat: Seat,
+    pub admin: bool,
+    /// Since anything last happened in the room.
+    pub idle_ms: u64,
+    /// Until the room is deleted, if nothing happens in it before then.
+    pub expires_in_ms: u64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ErrorCode {
@@ -234,6 +275,10 @@ pub enum ServerMsg {
         you: Option<Seat>,
         game: Option<View>,
     },
+    /// Answer to `rooms`: the rooms where a token still holds a seat, admin rooms first, then the
+    /// most recently active. `gone`: codes where it does not (expired, left, or a new room that
+    /// reused the code); the browser forgets those tokens.
+    Rooms { rooms: Vec<MyRoom>, gone: Vec<String> },
     Error {
         message: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]

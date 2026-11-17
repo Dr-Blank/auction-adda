@@ -143,6 +143,7 @@ describe("server over real sockets", () => {
                 if (i + 1 < n) open(i + 1);
                 return;
               }
+              if (m.type !== "state") return;
               // Nothing secret may appear in what this seat receives.
               for (const t of tokens) expect(text).not.toContain(t);
               if (!m.game) {

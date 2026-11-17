@@ -313,6 +313,67 @@ fn a_tab_that_parts_stops_watching_and_its_seat_shows_away() {
     assert!(state(&clients[0]).room.seats[1].connected);
 }
 
+fn my_rooms(rooms: &mut Rooms, c: &Fake, seats: Value) -> (Vec<Value>, Vec<String>) {
+    send(rooms, c, json!({ "type": "rooms", "seats": seats }));
+    let msg = serde_json::to_value(last(c)).unwrap();
+    assert_eq!(msg["type"], "rooms");
+    (
+        msg["rooms"].as_array().unwrap().clone(),
+        serde_json::from_value(msg["gone"].clone()).unwrap(),
+    )
+}
+
+#[test]
+fn a_browser_lists_its_rooms_by_token_admin_rooms_first_a_reused_code_is_not_theirs() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (a, code_a) = seated(&mut rooms, 3);
+    send(&mut rooms, &a[0], json!({ "type": "start" }));
+    advance(&now, 1_000);
+    let (b, code_b) = seated(&mut rooms, 2);
+    let admin_a = joined(&a[0]).2.unwrap();
+    let player_b = joined(&b[1]).2.unwrap();
+    let home = fake(&mut rooms, "10.0.0.9");
+
+    let keys = json!([
+        { "room": code_b, "token": player_b },
+        { "room": code_a, "token": admin_a },
+        // Someone else's room under this browser's old token: the code alone grants nothing.
+        { "room": code_b, "token": admin_a },
+        { "room": "ZZZZZZ", "token": admin_a },
+    ]);
+    let (list, gone) = my_rooms(&mut rooms, &home, keys);
+    assert_eq!(gone, [code_b.clone(), "ZZZZZZ".into()]);
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0]["code"], code_a.as_str());
+    assert_eq!(list[0]["admin"], true);
+    assert_eq!(list[0]["stage"], json!({ "t": "playing", "round": 0 }));
+    assert_eq!(list[0]["players"], json!(["P0", "P1", "P2"]));
+    assert_eq!(list[1]["code"], code_b.as_str());
+    assert_eq!(
+        (list[1]["admin"].clone(), list[1]["seat"].clone()),
+        (json!(false), json!(1))
+    );
+    assert_eq!(list[1]["stage"], json!({ "t": "lobby" }));
+    assert_eq!(list[1]["idleMs"], 0);
+    assert_eq!(list[1]["expiresInMs"], 7 * 24 * 3600 * 1000);
+    let text = serde_json::to_string(&last(&home)).unwrap();
+    assert!(
+        !text.contains(&admin_a) && !text.contains(&player_b),
+        "tokens are never echoed"
+    );
+
+    // Expired rooms are gone for good.
+    for c in a.iter().chain(&b) {
+        rooms.disconnect(c.id);
+    }
+    advance(&now, 8 * 24 * 3600 * 1000);
+    rooms.sweep();
+    let (list, gone) = my_rooms(&mut rooms, &home, json!([{ "room": code_a, "token": admin_a }]));
+    assert!(list.is_empty());
+    assert_eq!(gone, [code_a]);
+}
+
 #[test]
 fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() {
     let (now, opts) = clock(1_000_000);

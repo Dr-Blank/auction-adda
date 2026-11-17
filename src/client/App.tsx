@@ -43,7 +43,7 @@ export function App() {
 
   let body: JSX.Element;
   if (!code) {
-    body = <Home send={net.send} online={net.online} />;
+    body = <Home send={net.send} online={net.online} myRooms={net.myRooms} listRooms={net.listRooms} />;
   } else if (!net.state && error?.code === "no-room") {
     body = (
       <main className="center-card">

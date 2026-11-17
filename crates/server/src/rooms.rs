@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
-use crate::protocol::{Cast, ClientMsg, ErrorCode, Prefs, RoomInfo, SeatInfo, ServerMsg, ThemeId};
+use crate::protocol::{
+    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomStage, SeatInfo, SeatKey, ServerMsg, ThemeId,
+};
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH: usize = 6;
@@ -42,6 +44,8 @@ const MIN_BID_EXTEND_S: u16 = 3;
 const MAX_BID_EXTEND_S: u16 = 120;
 /// Upper bound on a theme's genre list; the server does not know each theme's length.
 const MAX_GENRES: u8 = 64;
+/// At most this many rooms in one `rooms` answer; tokens beyond it are left alone.
+const MAX_LISTED_ROOMS: usize = 50;
 
 const fn default_bid_timer() -> u16 {
     DEFAULT_BID_TIMER_S
@@ -693,6 +697,11 @@ impl Rooms {
                 self.detach(id);
                 return Ok(());
             }
+            ClientMsg::Rooms { seats } => {
+                let msg = self.my_rooms(&seats);
+                self.send(id, &msg);
+                return Ok(());
+            }
             msg => msg,
         };
         let code = self
@@ -1251,6 +1260,48 @@ impl Rooms {
                 c.seat = Some(s - 1);
             }
         }
+    }
+
+    /// The rooms where one of `seats` still holds a seat. Only the token counts: a code that was
+    /// freed by expiry and reused by a new room does not match an old token.
+    fn my_rooms(&self, seats: &[SeatKey]) -> ServerMsg {
+        let now = (self.now)();
+        let mut rooms = Vec::new();
+        let mut gone = Vec::new();
+        for key in seats.iter().take(MAX_LISTED_ROOMS) {
+            let code = key.room.trim().to_uppercase();
+            let found = self.rooms.get(&code).and_then(|room| {
+                let seat = (!key.token.is_empty())
+                    .then(|| {
+                        room.seats
+                            .iter()
+                            .position(|s| s.token.as_deref() == Some(key.token.as_str()))
+                    })
+                    .flatten()?;
+                let seat = u8::try_from(seat).ok()?;
+                let idle_ms = now.saturating_sub(room.updated_at);
+                Some(MyRoom {
+                    code: code.clone(),
+                    theme: room.theme.clone(),
+                    stage: match &room.game {
+                        None => RoomStage::Lobby,
+                        Some(g) if g.over => RoomStage::Over,
+                        Some(g) => RoomStage::Playing { round: g.round },
+                    },
+                    players: room.seats.iter().map(|s| s.name.clone()).collect(),
+                    seat,
+                    admin: room.admin == seat,
+                    idle_ms,
+                    expires_in_ms: self.room_ttl_ms.saturating_sub(idle_ms),
+                })
+            });
+            match found {
+                Some(r) => rooms.push(r),
+                None => gone.push(key.room.clone()),
+            }
+        }
+        rooms.sort_by_key(|r| (!r.admin, r.idle_ms));
+        ServerMsg::Rooms { rooms, gone }
     }
 
     fn info(&self, room: &Room) -> RoomInfo {

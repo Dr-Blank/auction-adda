@@ -1,11 +1,87 @@
-import { useState } from "react";
-import type { ClientMsg, ThemeId } from "../generated/index.ts";
-import { THEME_IDS, THEMES } from "../themes/index.ts";
+import { useEffect, useState } from "react";
+import { ROUNDS } from "../config.ts";
+import type { ClientMsg, MyRoom, ThemeId } from "../generated/index.ts";
+import { getDef, getTheme, THEME_IDS, THEMES } from "../themes/index.ts";
 import { LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
+import { RoomCode } from "./Lobby.tsx";
 import { savedName, savedPrefs, savedTheme, saveName, saveTheme, useSavedLook } from "./net.ts";
 
-export function Home({ send, online }: { send: (m: ClientMsg) => void; online: boolean }) {
+/** "3 days", "5 h", "12 min", "now": the largest whole unit. */
+function span(ms: number): string {
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "a moment";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(h / 24);
+  return `${d} ${d === 1 ? "day" : "days"}`;
+}
+
+function stageText(r: MyRoom): string {
+  if (r.stage.t === "lobby") return "In the lobby";
+  if (r.stage.t === "over") return "Game over";
+  const theme = getTheme(r.theme);
+  return `${theme.roundNames[r.stage.round]} · ${theme.nouns.round} ${r.stage.round + 1} of ${ROUNDS}`;
+}
+
+/** Rooms this browser has a seat in, admin rooms first, with when each expires. */
+function MyRooms({ rooms }: { rooms: MyRoom[] }) {
+  if (rooms.length === 0) return null;
+  const ttl = rooms[0].idleMs + rooms[0].expiresInMs;
+  return (
+    <section className="my-rooms" aria-label="Your rooms">
+      <h2>Your rooms</h2>
+      <ul>
+        {rooms.map((r) => {
+          const soon = r.expiresInMs < 24 * 3600 * 1000;
+          return (
+            <li key={r.code} className="my-room">
+              <span className="grow">
+                <span className="my-room-head">
+                  {r.admin && (
+                    <span className="admin-mark" title="You are the admin">
+                      ★
+                    </span>
+                  )}
+                  <b>{getDef(r.theme).title}</b>
+                  <RoomCode code={r.code} />
+                </span>
+                <small className="muted">
+                  {stageText(r)} · {r.players.map((p, i) => (i === r.seat ? `${p} (you)` : p)).join(", ")}
+                </small>
+                <small className={soon ? "expiry soon" : "expiry muted"}>
+                  Active {span(r.idleMs)} ago · deleted in {span(r.expiresInMs)}
+                </small>
+              </span>
+              <a className="btn small" href={`#${r.code}`}>
+                Rejoin
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted small">
+        A room is deleted {span(ttl)} after anything last happened in it. Opening it and playing keeps it.
+      </p>
+    </section>
+  );
+}
+
+export function Home({
+  send,
+  online,
+  myRooms,
+  listRooms,
+}: {
+  send: (m: ClientMsg) => void;
+  online: boolean;
+  myRooms: MyRoom[] | null;
+  listRooms: () => void;
+}) {
+  useEffect(() => {
+    if (online) listRooms();
+  }, [online, listRooms]);
   const [name, setName] = useState(savedName);
   const [look, setLook] = useSavedLook();
   const [theme, setTheme] = useState<ThemeId>(() => THEME_IDS.find((id) => id === savedTheme()) ?? THEME_IDS[0]);
@@ -18,6 +94,8 @@ export function Home({ send, online }: { send: (m: ClientMsg) => void; online: b
       <p className="muted">
         An auction card game for 3–5 friends. Everyone joins from their own device; keep the voice chat going.
       </p>
+
+      {myRooms && <MyRooms rooms={myRooms} />}
 
       <form
         onSubmit={(e) => {

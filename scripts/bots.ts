@@ -264,7 +264,7 @@ function bot(index: number): void {
       }
       if (m.game && !m.game.over && dropAfter && !dropTimer) dropTimer = setTimeout(drop, dropAfter);
       think();
-    } else {
+    } else if (m.type === "error") {
       if (m.code === "no-room" && roomArg?.toLowerCase() === "last") {
         return quit(`${m.message}: ${room}. Pass the code from the room link instead of "last".`);
       }

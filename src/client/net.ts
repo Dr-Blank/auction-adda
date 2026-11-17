@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientMsg, Prefs, ServerMsg } from "../generated/index.ts";
+import type { ClientMsg, MyRoom, Prefs, SeatKey, ServerMsg } from "../generated/index.ts";
 
 export type RoomState = Extract<ServerMsg, { type: "state" }> & { receivedAt: number };
 export interface NetError {
@@ -21,6 +21,20 @@ const store = {
       localStorage.setItem(key, value);
     } catch {
       // private mode: the seat simply will not survive a refresh
+    }
+  },
+  remove(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // nothing kept, nothing to remove
+    }
+  },
+  keys(): string[] {
+    try {
+      return Object.keys(localStorage);
+    } catch {
+      return [];
     }
   },
 };
@@ -61,13 +75,23 @@ export function savedPrefs(theme: string): Prefs | null {
 export const saveTimer = (bidTimerS: number, bidExtendS: number) =>
   store.set("aa:timer", JSON.stringify({ bidTimerS, bidExtendS }));
 export const saveGenres = (theme: string, genres: number[]) => store.set(`aa:genres:${theme}`, JSON.stringify(genres));
-const tokenKey = (room: string) => `aa:token:${room}`;
+const TOKEN = "aa:token:";
+const tokenKey = (room: string) => `${TOKEN}${room}`;
+/** Every room this browser holds a seat token for. */
+const savedSeats = (): SeatKey[] =>
+  store.keys().flatMap((k) => {
+    const token = k.startsWith(TOKEN) ? store.get(k) : null;
+    return token ? [{ room: k.slice(TOKEN.length), token }] : [];
+  });
+export const forgetRoom = (room: string) => store.remove(tokenKey(room));
 
 /** One WebSocket for the page; reconnects on its own and re-attaches to the seat with the saved token. */
 export function useRoom(code: string | null) {
   const [online, setOnline] = useState(false);
   const [state, setState] = useState<RoomState | null>(null);
   const [error, setError] = useState<NetError | null>(null);
+  /** Rooms this browser has a seat in; null until the server has answered. */
+  const [myRooms, setMyRooms] = useState<MyRoom[] | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const codeRef = useRef(code);
   codeRef.current = code;
@@ -84,6 +108,12 @@ export function useRoom(code: string | null) {
       send({ type: "join", room, token: store.get(tokenKey(room)), name, avatar: savedAvatar() }),
     [send],
   );
+
+  const listRooms = useCallback(() => {
+    const seats = savedSeats();
+    if (seats.length === 0) setMyRooms([]);
+    else if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify({ type: "rooms", seats }));
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -107,6 +137,9 @@ export function useRoom(code: string | null) {
           if (location.hash.slice(1).toUpperCase() !== msg.room) location.hash = msg.room;
         } else if (msg.type === "state") {
           setState({ ...msg, receivedAt: Date.now() });
+        } else if (msg.type === "rooms") {
+          msg.gone.forEach(forgetRoom);
+          setMyRooms(msg.rooms);
         } else {
           setError({ message: msg.message, code: msg.code, at: Date.now() });
         }
@@ -136,5 +169,5 @@ export function useRoom(code: string | null) {
   }, [code, join, send]);
 
   const current = state && code && state.room.code === code ? state : null;
-  return { online, state: current, error, send, join, clearError: () => setError(null) };
+  return { online, state: current, error, send, join, myRooms, listRooms, clearError: () => setError(null) };
 }
