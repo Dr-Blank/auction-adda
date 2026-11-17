@@ -5,6 +5,7 @@ import { castGenres } from "../themes/cast.ts";
 import { getDef } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
+import { Brand } from "./Brand.tsx";
 import type { RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveTimer, useSavedLook } from "./net.ts";
 import { Rules } from "./Rules.tsx";
@@ -203,7 +204,7 @@ export function Lobby({ state, send, join, theme }: Props) {
 
   return (
     <main className="center-card lobby">
-      <h1 className="brand">Auction Adda</h1>
+      <Brand as="h1" />
       <p className="muted">
         {theme.title} · room <b className="code">{room.code}</b>
       </p>

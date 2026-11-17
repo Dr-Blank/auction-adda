@@ -106,6 +106,8 @@ pub enum ClientMsg {
         seat: Seat,
     },
     Leave,
+    /// This tab left the room screen: it stops watching, and its seat counts as disconnected.
+    Part,
     /// Admin only.
     Rematch,
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
@@ -155,6 +157,7 @@ impl ClientMsg {
             Self::Skip { .. } => "skip",
             Self::Release { .. } => "release",
             Self::Leave => "leave",
+            Self::Part => "part",
             Self::Rematch => "rematch",
             Self::Rule { .. } => "rule",
             Self::Undo => "undo",

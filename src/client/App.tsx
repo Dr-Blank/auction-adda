@@ -1,5 +1,6 @@
 import { type JSX, useEffect, useState } from "react";
 import { DEFAULT_THEME, getTheme } from "../themes/index.ts";
+import { goHome } from "./Brand.tsx";
 import { Home } from "./Home.tsx";
 import { Lobby } from "./Lobby.tsx";
 import { useRoom } from "./net.ts";
@@ -50,7 +51,7 @@ export function App() {
         <p>
           Room <b>{code}</b> does not exist. It may have expired, or the link is mistyped.
         </p>
-        <a className="btn primary" href="/">
+        <a className="btn primary" href="/" onClick={goHome}>
           Back to start
         </a>
       </main>

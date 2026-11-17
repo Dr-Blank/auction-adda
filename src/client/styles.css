@@ -119,6 +119,15 @@ kbd {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+.brand-link:hover,
+.brand-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
 .code {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   letter-spacing: 0.12em;

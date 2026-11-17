@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ClientMsg, ThemeId } from "../generated/index.ts";
 import { THEME_IDS, THEMES } from "../themes/index.ts";
 import { LookButton } from "./Avatar.tsx";
+import { Brand } from "./Brand.tsx";
 import { savedName, savedPrefs, savedTheme, saveName, saveTheme, useSavedLook } from "./net.ts";
 
 export function Home({ send, online }: { send: (m: ClientMsg) => void; online: boolean }) {
@@ -13,7 +14,7 @@ export function Home({ send, online }: { send: (m: ClientMsg) => void; online: b
 
   return (
     <main className="center-card home">
-      <h1 className="brand">Auction Adda</h1>
+      <Brand as="h1" />
       <p className="muted">
         An auction card game for 3–5 friends. Everyone joins from their own device; keep the voice chat going.
       </p>

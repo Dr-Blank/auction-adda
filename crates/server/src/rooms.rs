@@ -689,6 +689,10 @@ impl Rooms {
                     clean_avatar(avatar.as_deref()),
                 );
             }
+            ClientMsg::Part => {
+                self.detach(id);
+                return Ok(());
+            }
             msg => msg,
         };
         let code = self

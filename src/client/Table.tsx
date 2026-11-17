@@ -14,6 +14,7 @@ import type {
 import type { Theme } from "../themes/types.ts";
 import { Avatar } from "./Avatar.tsx";
 import { BidBox, BidClock } from "./BidBox.tsx";
+import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
 import { BidTimer, ShareLink } from "./Lobby.tsx";
@@ -646,7 +647,7 @@ export function Table({ state, send, theme }: Props) {
   return (
     <div ref={tableEl} className={`table ${docked ? "acting" : ""}`}>
       <header className="topbar">
-        <span className="brand">Auction Adda</span>
+        <Brand />
         <span className="round">
           <RoundRing done={g.over ? ROUNDS : g.round} />
           {g.over ? (

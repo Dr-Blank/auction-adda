@@ -125,10 +125,15 @@ export function useRoom(code: string | null) {
     };
   }, [join]);
 
-  // The address changed (pasted link, typed code): attach to that room.
+  // The address changed (pasted link, typed code, back to Home): attach to that room, or part.
   useEffect(() => {
-    if (code && attached.current !== code && ws.current?.readyState === WebSocket.OPEN) join(code);
-  }, [code, join]);
+    if (ws.current?.readyState !== WebSocket.OPEN || attached.current === code) return;
+    if (code) join(code);
+    else {
+      send({ type: "part" });
+      attached.current = null;
+    }
+  }, [code, join, send]);
 
   const current = state && code && state.room.code === code ? state : null;
   return { online, state: current, error, send, join, clearError: () => setError(null) };

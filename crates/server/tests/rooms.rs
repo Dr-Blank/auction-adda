@@ -289,6 +289,31 @@ fn reconnect_with_the_seat_token_restores_the_seat_tokens_are_never_broadcast() 
 }
 
 #[test]
+fn a_tab_that_parts_stops_watching_and_its_seat_shows_away() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    send(&mut rooms, &clients[1], json!({ "type": "part" }));
+    assert!(!state(&clients[0]).room.seats[1].connected);
+    let seen = clients[1].got.lock().unwrap().len();
+    send(&mut rooms, &clients[0], json!({ "type": "bot" }));
+    assert_eq!(
+        clients[1].got.lock().unwrap().len(),
+        seen,
+        "a parted tab gets no more states"
+    );
+    send(&mut rooms, &clients[1], json!({ "type": "start" }));
+    assert_error(&clients[1], "Join a room first");
+    let token = joined(&clients[1]).2.unwrap();
+    send(
+        &mut rooms,
+        &clients[1],
+        json!({ "type": "join", "room": code, "token": token }),
+    );
+    assert_eq!(joined(&clients[1]).1, Some(1));
+    assert!(state(&clients[0]).room.seats[1].connected);
+}
+
+#[test]
 fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() {
     let (now, opts) = clock(1_000_000);
     let mut rooms = Rooms::new(opts).unwrap();
