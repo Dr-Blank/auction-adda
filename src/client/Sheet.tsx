@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 interface Props {
@@ -16,8 +16,13 @@ interface Props {
  * Closes on Escape, a tap outside, or the ✕.
  */
 export function Sheet({ title, label, onClose, children }: Props) {
+  const back = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Escape closes only the top sheet (the QR code opens over the room sheet).
+    const onKey = (e: KeyboardEvent) => {
+      const open = document.querySelectorAll(".sheet-back");
+      if (e.key === "Escape" && open[open.length - 1] === back.current) onClose();
+    };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, []);
@@ -25,6 +30,7 @@ export function Sheet({ title, label, onClose, children }: Props) {
   return createPortal(
     // React events cross portals: stop them here, or a tappable parent (a seat) would reopen the sheet.
     <div
+      ref={back}
       className="overlay sheet-back"
       onClick={(e) => {
         e.stopPropagation();

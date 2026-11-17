@@ -1007,15 +1007,15 @@ function RoomMenu(props: {
   const [picked, setTo] = useState<number | null>(null);
   const to = picked !== null && eligible.includes(picked) ? picked : eligible[0];
   return (
-    <div className="menu" role="dialog" aria-label="Room">
-      <div className="menu-head">
-        <span>
+    <Sheet
+      title={
+        <>
           Room <RoomCode code={room.code} />
-        </span>
-        <button className="icon-btn" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+        </>
+      }
+      label="Room"
+      onClose={onClose}
+    >
       <ShareLink code={room.code} />
       {me !== null && room.settings.rename && (
         <p className="rename-row">
@@ -1083,7 +1083,7 @@ function RoomMenu(props: {
         </div>
       )}
       <Rules theme={theme} n={names.length} />
-    </div>
+    </Sheet>
   );
 }
 
