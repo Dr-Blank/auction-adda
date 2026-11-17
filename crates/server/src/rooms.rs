@@ -218,6 +218,17 @@ struct SeatData {
     /// In the lobby: the player said they are ready.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     ready: bool,
+    /// Games this seat won in the room (a shared win counts for each winner).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    wins: u16,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+const fn is_zero(n: &u16) -> bool {
+    *n == 0
 }
 
 impl SeatData {
@@ -251,6 +262,8 @@ struct Room {
     banned: Vec<Ban>,
     /// The game is frozen (saved as who froze it; a loaded room counts as frozen since loading).
     frozen: Option<Frozen>,
+    /// Games played to the end in this room.
+    games: u16,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
@@ -335,9 +348,39 @@ impl Room {
         self.missed.push((token, message));
     }
 
+    /// A new game (start or rematch): the one before it, over, stays in the tally.
+    fn new_game(&mut self, game: GameState) {
+        self.game = None;
+        self.set_game(game);
+    }
+
     fn set_game(&mut self, game: GameState) {
-        if game.over && !self.game.as_ref().is_some_and(|g| g.over) {
-            info!(room = %self.code, "Game over");
+        // The series tally: a game that ends counts its winners; an undo that takes the end back
+        // takes the wins back.
+        let was_over = self.game.as_ref().filter(|g| g.over);
+        let tally = match (was_over, game.over) {
+            (None, true) => Some((game.winners.clone(), true)),
+            (Some(g), false) => Some((g.winners.clone(), false)),
+            _ => None,
+        };
+        if let Some((winners, won)) = tally {
+            for w in winners {
+                if let Some(s) = self.seats.get_mut(usize::from(w)) {
+                    s.wins = if won {
+                        s.wins.saturating_add(1)
+                    } else {
+                        s.wins.saturating_sub(1)
+                    };
+                }
+            }
+            self.games = if won {
+                self.games.saturating_add(1)
+            } else {
+                self.games.saturating_sub(1)
+            };
+            if won {
+                info!(room = %self.code, "Game over ({} played)", self.games);
+            }
         }
         if game.over {
             self.frozen = None;
@@ -485,6 +528,8 @@ struct SavedRef<'a> {
     banned: &'a [Ban],
     #[serde(skip_serializing_if = "Option::is_none")]
     frozen_by: Option<Seat>,
+    #[serde(skip_serializing_if = "is_zero")]
+    games: u16,
 }
 
 #[derive(Deserialize)]
@@ -509,6 +554,8 @@ struct Saved {
     banned: Vec<Ban>,
     #[serde(default)]
     frozen_by: Option<Seat>,
+    #[serde(default)]
+    games: u16,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -1091,7 +1138,7 @@ impl Rooms {
                     return fail(format!("Needs {}–{} players", cfg.min_players(), cfg.max_players()));
                 }
                 let seed = new_seed();
-                room.set_game(new_game(n, seed)?);
+                room.new_game(new_game(n, seed)?);
                 room.reshuffle = shuffle_seats;
                 info!(room = %code, seat = me, "Game started with {n} players (seed {seed})");
             }
@@ -1101,7 +1148,7 @@ impl Rooms {
                 };
                 room.require_admin(me, "start a rematch")?;
                 let (n, seed) = (game.n, new_seed());
-                room.set_game(new_game(n, seed)?);
+                room.new_game(new_game(n, seed)?);
                 room.reshuffle = shuffle_seats;
                 // Same genres, new names.
                 room.cast.seed = new_seed();
@@ -1563,6 +1610,7 @@ impl Rooms {
                 settings,
                 banned: Vec::new(),
                 frozen: None,
+                games: 0,
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -1939,6 +1987,7 @@ impl Rooms {
                         bot: s.bot,
                         avatar: s.avatar.clone(),
                         ready: s.ready || s.bot,
+                        wins: s.wins,
                     }
                 })
                 .collect(),
@@ -1956,6 +2005,7 @@ impl Rooms {
             frozen_by: room.frozen.map(|f| f.by),
             settings: room.settings.clone(),
             watchers: self.watchers(room),
+            games: room.games,
         }
     }
 
@@ -2123,6 +2173,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         settings: saved.settings,
         banned: saved.banned,
         frozen,
+        games: saved.games,
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -2245,6 +2296,7 @@ impl Store {
             settings: &room.settings,
             banned: &room.banned,
             frozen_by: room.frozen.map(|f| f.by),
+            games: room.games,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {

@@ -336,6 +336,8 @@ pub struct SeatInfo {
     pub avatar: String,
     /// In the lobby: the player said they are ready. Bots are always ready.
     pub ready: bool,
+    /// Games this seat won in the room (a shared win counts for each winner).
+    pub wins: u16,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -372,6 +374,8 @@ pub struct RoomInfo {
     pub settings: RoomSettings,
     /// People here without a seat, then kicked or removed people who are not here.
     pub watchers: Vec<Watcher>,
+    /// Games played to the end in this room (the series the seats' `wins` count).
+    pub games: u16,
 }
 
 /// Someone watching the room, or someone the admin kicked or removed.

@@ -17,7 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { FreezeIcon, ResumeIcon } from "./Icons.tsx";
+import { CrownIcon, FreezeIcon, ResumeIcon } from "./Icons.tsx";
 import {
   AdminAway,
   BidTimer,
@@ -27,6 +27,7 @@ import {
   RoomSettingsPanel,
   ShareLink,
   WatcherList,
+  Wins,
 } from "./Lobby.tsx";
 import type { Reaction, RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
@@ -327,6 +328,7 @@ export function Table({ state, send, theme, reactions }: Props) {
         body: (
           <GameOver
             g={g}
+            room={room}
             names={names}
             theme={theme}
             isAdmin={me !== null && room.admin === me}
@@ -801,7 +803,7 @@ export function Table({ state, send, theme, reactions }: Props) {
       </section>
 
       {me !== null && (
-        <section className={`hand-panel ${myPlay || myOffer ? "owing" : ""}`}>
+        <section className={`hand-panel ${myPlay || myOffer ? "owing" : ""} ${g.over ? "done" : ""}`}>
           <div className="hand-head">
             <Seat
               g={g}
@@ -1308,8 +1310,95 @@ function Inspect({ card, theme, onClose }: { card: Card; theme: Theme; onClose: 
   );
 }
 
+/** Places from the top: winners first, then by money; equal money (and equal standing) shares a place. */
+function standings(g: View): { i: number; money: number; place: number }[] {
+  const won = (i: number) => g.winners.includes(i);
+  const order = g.players
+    .map((p, i) => ({ i, money: p.money ?? 0 }))
+    .sort((x, y) => Number(won(y.i)) - Number(won(x.i)) || y.money - x.money);
+  const out: { i: number; money: number; place: number }[] = [];
+  order.forEach((o, k) => {
+    const prev = out[k - 1];
+    const tied = prev && prev.money === o.money && won(prev.i) === won(o.i);
+    out.push({ ...o, place: tied ? prev.place : k + 1 });
+  });
+  return out;
+}
+
+/** When each step rises (first, second, third): third, then second, then first. Its money counts up as it lands. */
+const RISE_MS = [650, 350, 0];
+
+function PodiumStep(props: {
+  i: number;
+  money: number;
+  place: number;
+  /** Position on the podium: 0 first, 1 second, 2 third. */
+  step: number;
+  room: RoomInfo;
+  you: number | null;
+  theme: Theme;
+  series: boolean;
+}) {
+  const { i, place, step, room, theme } = props;
+  const seat = room.seats[i];
+  const delay = RISE_MS[step] ?? 0;
+  const money = useCountUp(props.money, { from: 0, delay: delay + 250, duration: 1200 });
+  return (
+    <li className={`place place-${step + 1}`} style={{ ["--d" as string]: `${delay}ms` }}>
+      {place === 1 && (
+        <span className="crown" title="Winner">
+          <CrownIcon />
+        </span>
+      )}
+      <Avatar code={seat?.avatar ?? ""} name={seat?.name ?? ""} />
+      <span className="who">
+        {seat?.name}
+        {i === props.you && <em> (you)</em>}
+      </span>
+      <b className="money">{theme.money(money)}</b>
+      {props.series && <Wins n={seat?.wins ?? 0} />}
+      <span className="block" aria-label={`Place ${place}`}>
+        {place}
+      </span>
+    </li>
+  );
+}
+
+/** Paper falling over the podium, once. Its look is drawn when it mounts, so a re-render keeps it still. */
+function Confetti() {
+  const [bits] = useState(() =>
+    Array.from({ length: 42 }, (_, k) => ({
+      left: Math.random() * 100,
+      delay: 900 + Math.random() * 900,
+      fall: 2200 + Math.random() * 1400,
+      spin: Math.round(Math.random() * 720 - 360),
+      drift: Math.round(Math.random() * 80 - 40),
+      hue: k % 5,
+    })),
+  );
+  if (reducedMotion()) return null;
+  return (
+    <div className="confetti" aria-hidden="true">
+      {bits.map((b, k) => (
+        <i
+          key={k}
+          className={`c${b.hue}`}
+          style={{
+            left: `${b.left}%`,
+            animationDelay: `${b.delay}ms`,
+            animationDuration: `${b.fall}ms`,
+            ["--spin" as string]: `${b.spin}deg`,
+            ["--drift" as string]: `${b.drift}px`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function GameOver(props: {
   g: View;
+  room: RoomInfo;
   names: string[];
   theme: Theme;
   isAdmin: boolean;
@@ -1318,12 +1407,19 @@ function GameOver(props: {
   onRematch: () => void;
   onSetup: () => void;
 }) {
-  const { g, names, theme } = props;
-  const order = g.players.map((p, i) => ({ i, money: p.money ?? 0 })).sort((x, y) => y.money - x.money);
+  const { g, room, names, theme } = props;
+  const order = standings(g);
+  const top = order.slice(0, 3);
+  // Second, first, third, left to right.
+  const podium = [top[1], top[0], top[2]].flatMap((o) => (o ? [{ ...o, step: top.indexOf(o) }] : []));
+  const rest = order.slice(3);
+  // After one game the tally only repeats the podium.
+  const series = room.games > 1;
   const end = g.log.findLast((e) => e.t === "end");
   const endedBy = end?.t === "end" ? end.by : undefined;
   return (
     <div className="gameover">
+      <Confetti />
       {endedBy != null && (
         <p className="ended-early">
           {names[endedBy]} ended the game during {theme.roundNames[g.round] ?? `${theme.nouns.round} ${g.round + 1}`}.
@@ -1333,17 +1429,28 @@ function GameOver(props: {
       <h2>
         {g.winners.map((i) => names[i]).join(" & ")} {g.winners.length > 1 ? "share the win" : "wins"}!
       </h2>
-      <ol>
-        {order.map(({ i, money }) => (
-          <li key={i} className={g.winners.includes(i) ? "winner" : ""}>
-            <span>
-              {names[i]}
-              {i === g.you && <em> (you)</em>}
-            </span>
-            <b>{theme.money(money)}</b>
-          </li>
+      {series && (
+        <p className="muted series-note">Game {room.games} in this room. The trophies count each seat's wins.</p>
+      )}
+      <ol className="podium">
+        {podium.map((o) => (
+          <PodiumStep key={o.i} {...o} room={room} you={g.you} theme={theme} series={series} />
         ))}
       </ol>
+      {rest.length > 0 && (
+        <ol className="also-ran" start={4}>
+          {rest.map(({ i, money, place }) => (
+            <li key={i} value={place}>
+              <span>
+                {room.seats[i]?.name}
+                {i === g.you && <em> (you)</em>}
+              </span>
+              <b>{theme.money(money)}</b>
+              {series && <Wins n={room.seats[i]?.wins ?? 0} />}
+            </li>
+          ))}
+        </ol>
+      )}
       {props.isAdmin ? (
         <div className="row gameover-next">
           <button type="button" className="btn primary big" onClick={props.onRematch}>

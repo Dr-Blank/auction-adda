@@ -6,7 +6,7 @@ import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { CheckIcon, CopyIcon, LockIcon, PencilIcon, QrIcon, ShareIcon } from "./Icons.tsx";
+import { CheckIcon, CopyIcon, LockIcon, PencilIcon, QrIcon, ShareIcon, TrophyIcon } from "./Icons.tsx";
 import type { Reaction, RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
 import { Qr } from "./Qr.tsx";
@@ -144,6 +144,15 @@ export function ShareLink({ code }: { code: string }) {
         </Sheet>
       )}
     </div>
+  );
+}
+
+/** Games won in this room, with a trophy. */
+export function Wins({ n }: { n: number }) {
+  return (
+    <span className="wins" title={`${n} ${n === 1 ? "game" : "games"} won in this room`}>
+      <TrophyIcon /> {n}
+    </span>
   );
 }
 
@@ -601,6 +610,7 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
         Players{" "}
         <small>
           ({room.minPlayers}–{room.maxPlayers})
+          {room.games > 0 && ` · ${room.games} ${room.games === 1 ? "game" : "games"} played`}
         </small>
         {room.settings.locked && (
           <span className="locked-mark" title="The admin locked the room: no new seats">
@@ -644,6 +654,12 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
               {i === you && room.settings.rename && <Rename name={s.name} send={send} />}
               {s.bot && <em> · bot</em>}
               {!s.connected && <em> · disconnected</em>}
+              {room.games > 0 && (
+                <>
+                  {" "}
+                  <Wins n={s.wins} />
+                </>
+              )}
             </span>
             {i !== room.admin &&
               (s.ready ? (

@@ -78,6 +78,23 @@ export const QrIcon = () => (
   </svg>
 );
 
+/** Games won in the room. */
+export const TrophyIcon = () => (
+  <svg {...base} className="icon">
+    <path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0z" />
+    <path d="M7.5 6H4.5a3 3 0 0 0 3 4M16.5 6h3a3 3 0 0 1-3 4" />
+    <path d="M12 13.5V17M8.5 20h7M9.5 20l.5-3h4l.5 3" />
+  </svg>
+);
+
+/** The winner. */
+export const CrownIcon = () => (
+  <svg {...base} className="icon">
+    <path d="M4 8l4 4 4-6.5 4 6.5 4-4-1.6 9.5H5.6z" />
+    <path d="M6 20.5h12" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

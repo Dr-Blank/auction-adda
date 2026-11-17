@@ -66,11 +66,12 @@ const benKey = await benToken;
 await until((s) => s.room.seats.length === 4);
 
 /** One shot of the room page as the admin's browser (`as`: another seat token, or null for a browser without one). */
-const shot = (name, then, as = token) => {
+const shot = (name, then, as = token, wait = null) => {
   const file = path.join(out, `${name}.png`);
   const setup = as ? `localStorage.setItem("aa:token:${code}", ${JSON.stringify(as)})` : "localStorage.clear()";
   const cmd = ["scripts/page-shot.mjs", file, `${BASE}/#${code}`, "--setup", setup, "--full"];
   if (then) cmd.push("--then", then);
+  if (wait) cmd.push("--wait", String(wait));
   if (phone) cmd.push("--phone");
   execFileSync("node", cmd, { stdio: "inherit" });
 };
@@ -129,7 +130,15 @@ shot("game-left", null, benKey);
 shot("game-viewer", null, null);
 send({ type: "end" });
 await until((s) => s.game?.over);
-shot("over");
+// The podium mid-confetti, then settled.
+shot("over-confetti", null, token, 1700);
+shot("over", null, token, 3800);
+// A second game: the podium shows each seat's wins in the room.
+send({ type: "rematch" });
+await until((s) => s.game && !s.game.over);
+send({ type: "end" });
+await until((s) => s.game?.over && s.room.games === 2);
+shot("over-series", null, token, 3800);
 send({ type: "lobby" });
 await until((s) => !s.game);
 shot("lobby-after", click("Close room"));

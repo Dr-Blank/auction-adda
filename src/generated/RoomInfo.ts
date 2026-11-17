@@ -49,4 +49,8 @@ frozenBy: number | null, settings: RoomSettings,
 /**
  * People here without a seat, then kicked or removed people who are not here.
  */
-watchers: Array<Watcher>, };
+watchers: Array<Watcher>, 
+/**
+ * Games played to the end in this room (the series the seats' `wins` count).
+ */
+games: number, };

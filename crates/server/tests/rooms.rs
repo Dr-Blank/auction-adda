@@ -1374,6 +1374,34 @@ fn the_admin_ends_early_shows_the_score_then_goes_back_to_the_lobby_with_the_sam
 }
 
 #[test]
+fn the_room_counts_each_seats_wins_across_games_and_rematches() {
+    let mut rooms = Rooms::new(fixed()).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    let a = &clients[0];
+    let wins = |c: &Fake| -> Vec<u16> { state(c).room.seats.iter().map(|s| s.wins).collect() };
+    assert_eq!((wins(a), state(a).room.games), (vec![0, 0, 0], 0));
+
+    let mut expect = vec![0u16; 3];
+    for played in 1..=2 {
+        if played == 1 {
+            send(&mut rooms, a, json!({ "type": "start" }));
+        } else {
+            send(&mut rooms, a, json!({ "type": "rematch" }));
+            assert_eq!(wins(a), expect, "a rematch keeps the tally");
+        }
+        send(&mut rooms, a, json!({ "type": "end" }));
+        for &w in &game(a).winners {
+            expect[usize::from(w)] += 1;
+        }
+        assert_eq!((wins(&clients[1]), state(a).room.games), (expect.clone(), played));
+    }
+    send(&mut rooms, a, json!({ "type": "lobby" }));
+    assert_eq!(wins(a), expect, "the lobby keeps the tally");
+    send(&mut rooms, a, json!({ "type": "start" }));
+    assert_eq!((wins(a), state(a).room.games), (expect, 2));
+}
+
+#[test]
 fn the_admin_closes_the_room_and_everyone_in_it_is_told() {
     let dir = TmpDir::new("close");
     let (_, opts) = clock(1_000_000);

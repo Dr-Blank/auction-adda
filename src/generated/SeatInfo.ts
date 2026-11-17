@@ -23,4 +23,8 @@ avatar: string,
 /**
  * In the lobby: the player said they are ready. Bots are always ready.
  */
-ready: boolean, };
+ready: boolean, 
+/**
+ * Games this seat won in the room (a shared win counts for each winner).
+ */
+wins: number, };
