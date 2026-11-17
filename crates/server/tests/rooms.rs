@@ -78,6 +78,17 @@ fn joined(c: &Fake) -> (String, Option<u8>, Option<String>) {
         .expect("a joined message")
 }
 
+/// Every `notice` this client got, oldest first.
+fn notices(c: &Fake) -> Vec<String> {
+    let got = c.got.lock().unwrap();
+    got.iter()
+        .filter_map(|m| match m {
+            ServerMsg::Notice { message } => Some(message.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
 fn last(c: &Fake) -> ServerMsg {
     c.got.lock().unwrap().last().cloned().expect("a message")
 }
@@ -394,6 +405,7 @@ fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() 
 
     send(&mut rooms, other, json!({ "type": "skip", "seat": turn }));
     assert_error(other, "connected");
+    let gone_token = joined(&clients[t]).2.unwrap();
     rooms.disconnect(clients[t].id);
     advance(&now, 29_000);
     send(&mut rooms, other, json!({ "type": "skip", "seat": turn }));
@@ -430,6 +442,21 @@ fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() 
     assert_eq!(game(&sub).hand.len(), 10);
     let seat = &state(other).room.seats[t];
     assert_eq!((seat.name.as_str(), seat.open, seat.connected), ("Sub", false, true));
+
+    // The player who was away hears why when they come back, once.
+    let admin = state(other).room.seats[a].name.clone();
+    let back = fake(&mut rooms, "10.0.0.9");
+    let rejoin = json!({ "type": "join", "room": code, "token": gone_token });
+    send(&mut rooms, &back, rejoin.clone());
+    assert_eq!(joined(&back).1, None);
+    assert_eq!(
+        notices(&back),
+        [format!(
+            "While you were away, {admin} freed your seat for someone else. You can watch."
+        )]
+    );
+    send(&mut rooms, &back, rejoin);
+    assert_eq!(notices(&back).len(), 1);
 }
 
 #[test]
@@ -895,6 +922,10 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
     );
     assert_eq!(joined(&back).1, Some(1));
     assert!(!state(a).room.seats[1].bot && state(a).room.seats[1].connected);
+    assert_eq!(
+        notices(&back),
+        ["A bot played your seat while you were away. It is yours again."]
+    );
 
     // Kicking: admin only, not yourself; the player becomes a watcher and a bot plays on.
     send(&mut rooms, &back, json!({ "type": "kick", "seat": 2 }));
@@ -905,6 +936,7 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
     send(&mut rooms, a, json!({ "type": "kick", "seat": 2 }));
     assert_eq!(joined(c).1, None);
     assert_eq!(state(c).you, None);
+    assert_eq!(notices(c), ["P0 gave your seat to a bot. You can still watch."]);
     let seat = state(a).room.seats[2].clone();
     assert!(seat.bot && seat.connected && !seat.open);
     let again = fake(&mut rooms, "10.0.0.3");
@@ -1016,7 +1048,12 @@ fn the_admin_kicks_from_the_lobby() {
     let (clients, _) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[0], json!({ "type": "kick", "seat": 1 }));
     assert_eq!(state(&clients[1]).you, None);
+    assert_eq!(
+        notices(&clients[1]),
+        ["P0 removed you from the lobby. You can still watch."]
+    );
     assert_eq!(state(&clients[2]).you, Some(1));
+    assert_eq!(notices(&clients[2]), Vec::<String>::new());
     let names: Vec<String> = state(&clients[0]).room.seats.iter().map(|s| s.name.clone()).collect();
     assert_eq!(names, ["P0", "P2"]);
 }
