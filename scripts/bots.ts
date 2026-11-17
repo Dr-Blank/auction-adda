@@ -253,6 +253,8 @@ function bot(index: number): void {
       if (index + 1 < count) bot(index + 1);
     } else if (m.type === "state") {
       latest = m;
+      // Seats are drawn when a game starts (and each round, if the admin wants): follow ours.
+      if (m.you !== null) seat = m.you;
       if (seat === null) {
         if (asked) return;
         asked = true;

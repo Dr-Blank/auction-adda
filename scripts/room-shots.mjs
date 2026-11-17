@@ -94,19 +94,22 @@ send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
+// Seats are drawn when the game starts: find people by name.
+const seatOf = (s, name) => s.room.seats.findIndex((x) => x.name === name);
 // Ben freezes the game: the admin and Ben may unfreeze it.
 ben.send(JSON.stringify({ type: "freeze", on: true }));
-await until((s) => s.room.frozenBy === 3);
+await until((s) => s.room.frozenBy === seatOf(s, "Ben"));
 shot("game-frozen");
 shot("game-frozen-ben", null, benKey);
 send({ type: "freeze", on: false });
 await until((s) => s.room.frozenBy === null);
 // Ben leaves to a bot; the admin frees bot seat 1 for whoever opens the link.
 ben.send(JSON.stringify({ type: "leave" }));
-await until((s) => s.room.seats[3].bot);
-send({ type: "release", seat: 1 });
-await until((s) => s.room.seats[1].open);
-shot("game-freed", `document.querySelector("[data-seat='1'] .avatar-btn")?.click()`);
+await until((s) => s.room.seats[seatOf(s, "Ben")].bot);
+const bot1 = seatOf(state, "Bot 1");
+send({ type: "release", seat: bot1 });
+await until((s) => s.room.seats[bot1].open);
+shot("game-freed", `document.querySelector("[data-seat='${bot1}'] .avatar-btn")?.click()`);
 shot("game-left", null, benKey);
 shot("game-viewer", null, null);
 send({ type: "end" });

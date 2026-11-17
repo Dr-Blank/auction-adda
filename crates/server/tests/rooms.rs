@@ -134,9 +134,17 @@ fn clock(start: u64) -> (Arc<AtomicU64>, Options) {
     let read = Arc::clone(&now);
     let opts = Options {
         now: Box::new(move || read.load(Ordering::SeqCst)),
-        ..Options::default()
+        ..fixed()
     };
     (now, opts)
+}
+
+/// Seat numbers stay as joined when a game starts, so a test knows who sits where.
+fn fixed() -> Options {
+    Options {
+        shuffle_seats: false,
+        ..Options::default()
+    }
 }
 
 fn advance(now: &AtomicU64, ms: u64) {
@@ -180,7 +188,7 @@ fn rooms_in(dir: &Path, opts: Options) -> Rooms {
 
 #[test]
 fn lobby_join_leave_start_needs_3_to_5_players() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 2);
     assert!(code.len() == 6 && code.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()));
     let names: Vec<String> = state(&clients[1]).room.seats.iter().map(|s| s.name.clone()).collect();
@@ -217,7 +225,7 @@ fn lobby_join_leave_start_needs_3_to_5_players() {
 
 #[test]
 fn unknown_room_bad_theme_full_room_spectators() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let a = fake(&mut rooms, "10.0.0.1");
     send(&mut rooms, &a, json!({ "type": "join", "room": "NOPE00", "name": "x" }));
     assert!(matches!(
@@ -270,7 +278,7 @@ fn unknown_room_bad_theme_full_room_spectators() {
 
 #[test]
 fn reconnect_with_the_seat_token_restores_the_seat_tokens_are_never_broadcast() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[0], json!({ "type": "start" }));
     let token = joined(&clients[1]).2.unwrap();
@@ -303,7 +311,7 @@ fn reconnect_with_the_seat_token_restores_the_seat_tokens_are_never_broadcast() 
 
 #[test]
 fn a_tab_that_parts_stops_watching_and_its_seat_shows_away() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[1], json!({ "type": "part" }));
     assert!(!state(&clients[0]).room.seats[1].connected);
@@ -463,7 +471,7 @@ fn skip_and_release_need_30_s_of_disconnection_a_released_seat_can_be_claimed() 
 
 #[test]
 fn only_whitelisted_moves_from_the_right_seat_are_applied() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, _) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[0], json!({ "type": "start" }));
     let turn = usize::from(game(&clients[0]).turn);
@@ -805,7 +813,7 @@ fn only_the_admin_changes_settings_a_locked_room_takes_no_new_seats_but_watchers
 
 #[test]
 fn players_rename_themselves_only_while_the_admin_allows_it() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, _) = seated(&mut rooms, 3);
     let rename = json!({ "type": "rename", "name": "  Neo\u{1} " });
     send(&mut rooms, &clients[1], rename.clone());
@@ -833,6 +841,73 @@ fn players_rename_themselves_only_while_the_admin_allows_it() {
     );
     send(&mut rooms, &watcher, rename);
     assert_error(&watcher, "take a seat first");
+}
+
+/// Every client still sits under the name it joined with, and the admin role stayed with P0.
+fn names_follow_seats(clients: &[Fake]) {
+    for (i, c) in clients.iter().enumerate() {
+        let s = state(c);
+        let seat = usize::from(s.you.unwrap());
+        assert_eq!(s.room.seats[seat].name, format!("P{i}"));
+        assert_eq!(s.game.unwrap().you, s.you);
+    }
+    let s = state(&clients[0]);
+    assert_eq!(s.room.admin, s.you.unwrap());
+}
+
+#[test]
+fn seats_are_drawn_when_a_game_starts_and_each_round_if_the_admin_wants() {
+    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let (clients, _) = seated(&mut rooms, 5);
+    send(
+        &mut rooms,
+        &clients[0],
+        json!({ "type": "settings", "settings": { "shuffleEachRound": true } }),
+    );
+    // Some start out of join order (5 seats drawn twice in a row as joined: 1 in 14 400).
+    let mut drawn = false;
+    for _ in 0..2 {
+        send(&mut rooms, &clients[0], json!({ "type": "start" }));
+        names_follow_seats(&clients);
+        assert!(
+            notices(&clients[3])
+                .last()
+                .unwrap()
+                .starts_with("Seats drawn at random. Clockwise: ")
+        );
+        drawn |= clients
+            .iter()
+            .enumerate()
+            .any(|(i, c)| state(c).you != u8::try_from(i).ok());
+        send(&mut rooms, &clients[0], json!({ "type": "end" }));
+        send(&mut rooms, &clients[0], json!({ "type": "lobby" }));
+    }
+    assert!(drawn);
+
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    let mut rng = rand::rng();
+    while game(&clients[0]).round == 0 {
+        for c in &clients {
+            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+                send(&mut rooms, c, json!({ "type": "action", "action": action }));
+            }
+        }
+    }
+    assert!(
+        notices(&clients[1])
+            .last()
+            .unwrap()
+            .starts_with("New seats for this round. Clockwise: ")
+    );
+    names_follow_seats(&clients);
+    // The hands moved with their players: everyone holds what the game says they hold.
+    for c in &clients {
+        let g = game(c);
+        assert_eq!(
+            g.hand.len(),
+            usize::from(g.players[usize::from(g.you.unwrap())].hand_count)
+        );
+    }
 }
 
 #[test]
@@ -980,7 +1055,7 @@ fn a_frozen_game_stops_the_clock_and_every_move_until_whoever_froze_it_or_the_ad
 
 #[test]
 fn bots_never_hold_admin_and_leave_with_the_last_player() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 1);
     let a = &clients[0];
     send(&mut rooms, a, json!({ "type": "bot" }));
@@ -1076,7 +1151,7 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
 
 #[test]
 fn a_player_leaves_mid_game_to_a_bot_and_takes_the_seat_back_only_when_asked() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 3);
     let (a, b, c) = (&clients[0], &clients[1], &clients[2]);
     send(&mut rooms, a, json!({ "type": "start" }));
@@ -1113,7 +1188,7 @@ fn a_player_leaves_mid_game_to_a_bot_and_takes_the_seat_back_only_when_asked() {
 
 #[test]
 fn the_admin_frees_a_bot_seat_the_bot_plays_until_someone_claims_it() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 3);
     let (a, b, c) = (&clients[0], &clients[1], &clients[2]);
     send(&mut rooms, a, json!({ "type": "bot" }));
@@ -1245,7 +1320,7 @@ fn the_admin_closes_the_room_and_everyone_in_it_is_told() {
 
 #[test]
 fn the_admin_kicks_from_the_lobby() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, _) = seated(&mut rooms, 3);
     send(&mut rooms, &clients[0], json!({ "type": "kick", "seat": 1 }));
     assert_eq!(state(&clients[1]).you, None);
@@ -1261,7 +1336,7 @@ fn the_admin_kicks_from_the_lobby() {
 
 #[test]
 fn a_kick_sticks_until_the_admin_lets_them_back_in_watchers_are_listed_and_can_be_removed() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, code) = seated(&mut rooms, 3);
     let (admin, kicked) = (&clients[0], &clients[1]);
     let token = joined(kicked).2.unwrap();
@@ -1331,7 +1406,7 @@ fn a_kick_sticks_until_the_admin_lets_them_back_in_watchers_are_listed_and_can_b
 
 #[test]
 fn players_bring_and_change_their_look_bots_get_one() {
-    let mut rooms = Rooms::new(Options::default()).unwrap();
+    let mut rooms = Rooms::new(fixed()).unwrap();
     let a = fake(&mut rooms, "10.0.0.1");
     send(
         &mut rooms,

@@ -225,6 +225,78 @@ pub fn undo_ruling(before: &GameState, after: &GameState, by: Seat) -> Result<Ga
     Ok(s)
 }
 
+/// `items` (one per seat) in the new seat order: the item of seat `i` goes to `to[i]`.
+#[must_use]
+pub fn permuted<T: Clone>(items: &[T], to: &[Seat]) -> Vec<T> {
+    let mut placed: Vec<(Seat, T)> = to.iter().copied().zip(items.iter().cloned()).collect();
+    placed.sort_by_key(|&(t, _)| t);
+    placed.into_iter().map(|(_, x)| x).collect()
+}
+
+/// Moves every player to a new seat, `to[old] = new`, with everything that names a seat (turn,
+/// log, scores, winners) following them. Only between lots: an auction's order round the table
+/// would change under it.
+///
+/// # Errors
+/// When `to` is not an order of the seats, or an auction is running.
+pub fn reseat(prev: &GameState, to: &[Seat]) -> Result<GameState, RuleError> {
+    let mut sorted = to.to_vec();
+    sorted.sort_unstable();
+    if !sorted.iter().copied().eq(0..prev.n) {
+        return fail("Not an order of the seats");
+    }
+    if prev.auction.is_some() {
+        return fail("Seats move only between lots");
+    }
+    let m = |s: Seat| to.get(usize::from(s)).copied().unwrap_or(s);
+    let mut s = prev.clone();
+    s.players = permuted(&s.players, to);
+    s.turn = m(s.turn);
+    s.winners = s.winners.iter().map(|&w| m(w)).collect();
+    s.winners.sort_unstable();
+    for e in &mut s.log {
+        match e {
+            LogEntry::Round { first, .. } => *first = m(*first),
+            LogEntry::Play { p, .. }
+            | LogEntry::Offer { p, .. }
+            | LogEntry::Bid { p, .. }
+            | LogEntry::Pass { p }
+            | LogEntry::Decline { p }
+            | LogEntry::Price { p, .. }
+            | LogEntry::Shelved { p, .. }
+            | LogEntry::Skip { p } => *p = m(*p),
+            LogEntry::Sealed { bids } => *bids = permuted(bids, to),
+            LogEntry::Sold {
+                to: buyer, from, by, ..
+            } => {
+                *buyer = m(*buyer);
+                *from = m(*from);
+                *by = by.map(m);
+            }
+            LogEntry::Free { p, by, .. } => {
+                *p = m(*p);
+                *by = by.map(m);
+            }
+            LogEntry::Undo { by, .. } => *by = m(*by),
+            LogEntry::End { winners, by } => {
+                *winners = winners.iter().map(|&w| m(w)).collect();
+                winners.sort_unstable();
+                *by = by.map(m);
+            }
+            LogEntry::Score { .. } => {}
+        }
+    }
+    for r in &mut s.summaries {
+        r.sold = permuted(&r.sold, to);
+        r.payouts = permuted(&r.payouts, to);
+        for sale in r.sales.iter_mut().flatten() {
+            sale.to = m(sale.to);
+            sale.from = m(sale.from);
+        }
+    }
+    Ok(s)
+}
+
 fn check_seat(s: &GameState, seat: Seat) -> Step {
     if s.over {
         return fail("The game is over");

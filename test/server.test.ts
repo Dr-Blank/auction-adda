@@ -116,8 +116,10 @@ describe("server over real sockets", () => {
             return send(sockets[0], { type: "rematch" });
           }
           const seat = g.pending[Math.floor(random() * g.pending.length)];
+          // Seats are drawn when a game starts: find the socket sitting there.
+          const k = latest.findIndex((s) => s.you === seat);
           moves++;
-          send(sockets[seat], { type: "action", action: chooseAction(latest[seat].game!, random)! });
+          send(sockets[k], { type: "action", action: chooseAction(latest[k].game!, random)! });
         };
         const open = (i: number) => {
           const ws = new WebSocket(`ws://${base}/ws`);
@@ -151,13 +153,15 @@ describe("server over real sockets", () => {
                 return;
               }
               const g = m.game;
-              expect(m.you).toBe(i);
+              const you = m.you!;
+              expect(g.you).toBe(you);
+              expect(m.room.seats[you].name).toBe(`P${i}`);
               expect(Object.keys(g)).not.toContain("deck");
               expect(Object.keys(g)).not.toContain("seed");
-              expect(g.hand).toHaveLength(g.players[i].handCount);
+              expect(g.hand).toHaveLength(g.players[you].handCount);
               g.players.forEach((p, j) => {
                 expect(Object.keys(p).sort()).toEqual(["bought", "handCount", "money"]);
-                if (!g.over && j !== i) expect(p.money).toBeNull();
+                if (!g.over && j !== you) expect(p.money).toBeNull();
               });
               if (g.auction) expect(Object.keys(g.auction)).not.toContain("bids");
               latest[i] = m;

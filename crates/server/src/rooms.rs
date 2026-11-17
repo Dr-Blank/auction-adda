@@ -13,10 +13,10 @@ use std::{fs, io};
 
 use engine::{
     Action, AuctionKind, GameState, LogEntry, RuleError, Seat, apply_action, apply_ruling, apply_skip, config,
-    end_early, new_game, pending, undo_ruling, view_for,
+    end_early, new_game, pending, permuted, reseat, undo_ruling, view_for,
 };
 use rand::RngExt;
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
@@ -130,6 +130,8 @@ pub struct Options {
     pub create_limit: CreateLimit,
     /// Average thinking time of a bot seat before each move (half to one and a half of it).
     pub bot_delay_ms: u64,
+    /// Players sit in a random order when a game starts. Tests that follow seat numbers turn it off.
+    pub shuffle_seats: bool,
 }
 
 impl Default for Options {
@@ -139,6 +141,7 @@ impl Default for Options {
             now: Box::new(system_now),
             skip_after_ms: 30_000,
             bot_delay_ms: 1_500,
+            shuffle_seats: true,
             max_rooms: 200,
             room_ttl_ms: 7 * 24 * 3600 * 1000,
             create_limit: CreateLimit {
@@ -245,6 +248,8 @@ struct Room {
     away: Vec<Option<u64>>,
     /// When a bot that owes a move makes it.
     bot_due: Option<u64>,
+    /// The seats are drawn again before the next broadcast (a game or a round started).
+    reshuffle: bool,
     /// Why a seat was taken from a player who was not here, by its old token: told when they
     /// come back. Newest last, at most `MAX_MISSED`.
     missed: Vec<(String, String)>,
@@ -324,8 +329,30 @@ impl Room {
         if game.over {
             self.frozen = None;
         }
+        let new_round = self.game.as_ref().is_some_and(|g| game.round > g.round);
+        if new_round && !game.over && self.settings.shuffle_each_round {
+            self.reshuffle = true;
+        }
         self.game = Some(game);
         self.version += 1;
+    }
+
+    /// Moves every seat, `to[old] = new`; the game follows. A call made before can no longer be
+    /// undone.
+    fn reseat(&mut self, to: &[Seat]) -> Result<(), Fail> {
+        if let Some(g) = &self.game {
+            self.game = Some(reseat(g, to)?);
+        }
+        let m = |s: Seat| to.get(usize::from(s)).copied().unwrap_or(s);
+        self.seats = permuted(&self.seats, to);
+        self.away = permuted(&self.away, to);
+        self.admin = m(self.admin);
+        if let Some(f) = &mut self.frozen {
+            f.by = m(f.by);
+        }
+        self.last_call = None;
+        self.bot_due = None;
+        Ok(())
     }
 
     /// Starts the open-auction clock when a lot goes up or a call is undone, and tops it up to
@@ -559,6 +586,7 @@ pub struct Rooms {
     room_ttl_ms: u64,
     create_limit: CreateLimit,
     bot_delay_ms: u64,
+    shuffle_seats: bool,
     store: Option<Store>,
     /// Clients whose queue overflowed, disconnected once the current message is done.
     dropped: Vec<ClientId>,
@@ -581,6 +609,7 @@ impl Rooms {
             room_ttl_ms: opts.room_ttl_ms,
             create_limit: opts.create_limit,
             bot_delay_ms: opts.bot_delay_ms,
+            shuffle_seats: opts.shuffle_seats,
             store: None,
             dropped: Vec::new(),
         };
@@ -991,6 +1020,7 @@ impl Rooms {
         let me = self.seat_of(id)?;
         let now = (self.now)();
         let skip_after_ms = self.skip_after_ms;
+        let shuffle_seats = self.shuffle_seats;
         let require_away = |room: &Room, seat: Seat| -> Result<(), Fail> {
             if !room.has_seat(seat) {
                 return fail("No such seat");
@@ -1036,6 +1066,7 @@ impl Rooms {
                 }
                 let seed = new_seed();
                 room.set_game(new_game(n, seed)?);
+                room.reshuffle = shuffle_seats;
                 info!(room = %code, seat = me, "Game started with {n} players (seed {seed})");
             }
             ClientMsg::Rematch => {
@@ -1045,6 +1076,7 @@ impl Rooms {
                 room.require_admin(me, "start a rematch")?;
                 let (n, seed) = (game.n, new_seed());
                 room.set_game(new_game(n, seed)?);
+                room.reshuffle = shuffle_seats;
                 // Same genres, new names.
                 room.cast.seed = new_seed();
                 info!(room = %code, seat = me, "Rematch with {n} players (seed {seed})");
@@ -1478,6 +1510,7 @@ impl Rooms {
                 clients: Vec::new(),
                 away: vec![Some(now)],
                 bot_due: None,
+                reshuffle: false,
                 missed: Vec::new(),
             },
         );
@@ -1923,7 +1956,45 @@ impl Rooms {
         }
     }
 
+    /// Draws a new seat order and tells everyone in the room.
+    fn shuffle(&mut self, code: &str) {
+        let Some(room) = self.rooms.get_mut(code) else {
+            return;
+        };
+        let mut to: Vec<Seat> = (0..room.seats.len()).filter_map(|i| u8::try_from(i).ok()).collect();
+        to.shuffle(&mut rand::rng());
+        if let Err(e) = room.reseat(&to) {
+            error!(room = %code, "Cannot shuffle the seats: {}", e.message);
+            return;
+        }
+        info!(room = %code, "Seats shuffled: {to:?}");
+        let order: Vec<&str> = room.seats.iter().map(|s| s.name.as_str()).collect();
+        let what = if room.game.as_ref().is_some_and(|g| g.round > 0) {
+            "New seats for this round"
+        } else {
+            "Seats drawn at random"
+        };
+        let notice = ServerMsg::Notice {
+            message: format!("{what}. Clockwise: {}.", order.join(", ")),
+        };
+        for &cid in &room.clients {
+            if let Some(c) = self.clients.get_mut(&cid) {
+                c.seat = c.seat.map(|s| to.get(usize::from(s)).copied().unwrap_or(s));
+                if !(c.sink)(&notice) {
+                    self.dropped.push(cid);
+                }
+            }
+        }
+    }
+
     fn changed(&mut self, code: &str) {
+        if self
+            .rooms
+            .get_mut(code)
+            .is_some_and(|r| std::mem::take(&mut r.reshuffle))
+        {
+            self.shuffle(code);
+        }
         let now = (self.now)();
         if let Some(room) = self.rooms.get_mut(code) {
             room.updated_at = now;
@@ -1996,6 +2067,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         last_call: None,
         clients: Vec::new(),
         bot_due: None,
+        reshuffle: false,
         missed: Vec::new(),
     }))
 }

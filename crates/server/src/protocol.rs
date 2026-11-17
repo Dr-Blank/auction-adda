@@ -70,6 +70,8 @@ pub struct RoomSettings {
     pub freeze: FreezeBy,
     /// Players may change their name (`rename`) in the lobby and in a game.
     pub rename: bool,
+    /// The seats are drawn again at the start of every round, not only when a game starts.
+    pub shuffle_each_round: bool,
 }
 
 /// Who may freeze a running game. Whoever froze it, and the admin, may unfreeze it.

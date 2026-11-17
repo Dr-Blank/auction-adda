@@ -19,4 +19,8 @@ freeze: FreezeBy,
 /**
  * Players may change their name (`rename`) in the lobby and in a game.
  */
-rename: boolean, };
+rename: boolean, 
+/**
+ * The seats are drawn again at the start of every round, not only when a game starts.
+ */
+shuffleEachRound: boolean, };

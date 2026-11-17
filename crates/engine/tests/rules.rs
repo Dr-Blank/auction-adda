@@ -822,3 +822,34 @@ fn the_admin_can_end_a_game_early_and_the_money_as_it_stands_decides() {
     assert!(view_for(&end, Some(2)).players.iter().all(|p| p.money.is_some()));
     assert!(engine::end_early(&end, 0).is_err());
 }
+
+#[test]
+fn reseating_moves_each_player_with_their_hand_money_and_history() {
+    let s = table(&[&[c(0, Open, 0), f(0)], &[f(1)], &[f(2)]], Some(&[50, 60, 70]));
+    let lot = run(s, &[(0, play(c(0, Open, 0)))]);
+    assert!(engine::reseat(&lot, &[2, 0, 1]).is_err(), "not during a lot");
+    let s = run(lot, &[(1, bid(5, 0)), (2, done(5)), (0, done(5))]);
+    assert!(engine::reseat(&s, &[0, 0, 1]).is_err(), "not an order");
+
+    // Seat 0 goes to 2, 1 to 0, 2 to 1.
+    let to = [2, 0, 1];
+    let r = engine::reseat(&s, &to).unwrap();
+    assert_eq!(money(&r), [55, 70, 55]);
+    assert_eq!(r.players[2].hand, s.players[0].hand);
+    assert_eq!(r.turn, to[usize::from(s.turn)]);
+    assert!(matches!(
+        r.log.iter().rev().find(|e| matches!(e, LogEntry::Sold { .. })),
+        Some(LogEntry::Sold {
+            to: 0,
+            from: 2,
+            price: 5,
+            ..
+        })
+    ));
+    // Moving them back gives the same game.
+    assert_eq!(engine::reseat(&r, &[1, 2, 0]).unwrap(), s);
+    // Play goes on from the new seats.
+    let seat = r.turn;
+    let card = r.players[usize::from(seat)].hand[0];
+    run(r, &[(seat, play(card))]);
+}

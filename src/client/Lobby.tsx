@@ -277,6 +277,13 @@ export function RoomSettingsPanel({
         admin={admin}
         onChange={(rename) => set({ rename })}
       />
+      <Toggle
+        label="New seats each round"
+        hint="Seats are drawn at random when a game starts. With this on, they are drawn again at the start of every round."
+        on={room.settings.shuffleEachRound}
+        admin={admin}
+        onChange={(shuffleEachRound) => set({ shuffleEachRound })}
+      />
     </div>
   );
 }
@@ -613,7 +620,11 @@ export function Lobby({ state, send, join, theme }: Props) {
           </button>
         </div>
       )}
-      {you !== null && <p className="muted small">Only the admin can start. Seats are locked once the game begins.</p>}
+      {you !== null && (
+        <p className="muted small">
+          Only the admin can start. Seats are drawn at random when the game begins, and nobody new sits down after that.
+        </p>
+      )}
       {isAdmin && (
         <div className="row room-danger">
           <ConfirmButton
