@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "bots": "node scripts/bots.ts",
     "cards": "node scripts/cards.mjs",
+    "room-shots": "node scripts/room-shots.mjs",
     "format": "biome check --write",
     "lint": "biome check"
   },
