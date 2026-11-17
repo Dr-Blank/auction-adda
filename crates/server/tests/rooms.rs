@@ -831,21 +831,8 @@ fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_late_bid_adds_time()
     assert_eq!((state(admin).room.bid_timer_s, state(admin).room.bid_extend_s), (8, 3));
     send(&mut rooms, admin, json!({ "type": "start" }));
 
-    // Play at random until an open auction is up; the clock does not move meanwhile.
-    let is_open = |c: &Fake| game(c).auction.is_some_and(|a| a.kind == AuctionKind::Open);
-    let mut rng = rand::rng();
-    'play: for _ in 0..2_000 {
-        assert!(!game(admin).over, "no open auction came up");
-        for c in &clients {
-            if is_open(c) {
-                break 'play;
-            }
-            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
-                send(&mut rooms, c, json!({ "type": "action", "action": action }));
-            }
-        }
-    }
-    assert!(is_open(admin));
+    // The clock does not move while the players reach it.
+    play_to_open_auction(&mut rooms, &clients);
     assert_eq!(state(admin).room.bid_ms_left, Some(8_000));
     assert_eq!(state(admin).room.bid_ms_window, Some(8_000));
 
@@ -877,6 +864,86 @@ fn an_open_auction_closes_when_its_bid_timer_runs_out_and_a_late_bid_adds_time()
     assert_eq!(state(admin).room.bid_ms_left, None);
     let sold = v.log.iter().rev().find(|e| matches!(e, LogEntry::Sold { .. }));
     assert!(matches!(sold, Some(LogEntry::Sold { to, price, .. }) if *to == seat && *price == high + 1));
+}
+
+fn is_open(c: &Fake) -> bool {
+    game(c).auction.is_some_and(|a| a.kind == AuctionKind::Open)
+}
+
+/// Plays random moves for every client until an open auction is up.
+fn play_to_open_auction(rooms: &mut Rooms, clients: &[Fake]) {
+    let mut rng = rand::rng();
+    for _ in 0..2_000 {
+        assert!(!game(&clients[0]).over, "no open auction came up");
+        for c in clients {
+            if is_open(c) {
+                return;
+            }
+            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+                send(rooms, c, json!({ "type": "action", "action": action }));
+            }
+        }
+    }
+    panic!("no open auction came up");
+}
+
+#[test]
+fn a_frozen_game_stops_the_clock_and_every_move_until_whoever_froze_it_or_the_admin_unfreezes() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    let admin = &clients[0];
+    send(&mut rooms, admin, json!({ "type": "freeze", "on": true }));
+    assert_error(admin, "The game has not started");
+    send(&mut rooms, admin, json!({ "type": "timer", "seconds": 8, "extend": 3 }));
+    send(&mut rooms, admin, json!({ "type": "start" }));
+    play_to_open_auction(&mut rooms, &clients);
+
+    send(&mut rooms, &clients[1], json!({ "type": "freeze", "on": true }));
+    assert_error(&clients[1], "Only the room admin can freeze the game");
+    send(
+        &mut rooms,
+        admin,
+        json!({ "type": "settings", "settings": { "freeze": "anyone" } }),
+    );
+    send(&mut rooms, &clients[1], json!({ "type": "freeze", "on": true }));
+    assert_eq!(state(admin).room.frozen_by, Some(1));
+    send(&mut rooms, admin, json!({ "type": "freeze", "on": true }));
+    assert_error(admin, "already froze the game");
+
+    // Time passes, the clock stands still, nobody moves.
+    advance(&now, 20_000);
+    rooms.tick();
+    assert!(is_open(admin));
+    assert_eq!(state(admin).room.bid_ms_left, Some(8_000));
+    for c in &clients {
+        if let Some(action) = server::bot::choose_action(&game(c), &mut rand::rng()) {
+            send(&mut rooms, c, json!({ "type": "action", "action": action }));
+            assert_error(c, "froze the game; wait until it runs again");
+        }
+    }
+    send(&mut rooms, admin, json!({ "type": "rule", "winner": null, "price": 0 }));
+    assert_error(admin, "P1 froze the game");
+    send(&mut rooms, &clients[2], json!({ "type": "freeze", "on": false }));
+    assert_error(&clients[2], "Only P1 or the room admin can unfreeze");
+
+    // The admin unfreezes anyone's freeze; the clock goes on from where it stood.
+    send(&mut rooms, admin, json!({ "type": "freeze", "on": false }));
+    assert_eq!(state(admin).room.frozen_by, None);
+    assert_eq!(state(admin).room.bid_ms_left, Some(8_000));
+    advance(&now, 5_000);
+    rooms.tick();
+    send(&mut rooms, &clients[2], json!({ "type": "freeze", "on": true }));
+    assert_eq!(state(admin).room.bid_ms_left, Some(3_000));
+    advance(&now, 60_000);
+    rooms.tick();
+    send(&mut rooms, &clients[2], json!({ "type": "freeze", "on": false }));
+    assert_eq!(state(admin).room.bid_ms_left, Some(3_000));
+    advance(&now, 3_000);
+    rooms.tick();
+    assert!(!is_open(admin), "time is up");
+    send(&mut rooms, admin, json!({ "type": "freeze", "on": false }));
+    assert_error(admin, "The game is not frozen");
 }
 
 #[test]

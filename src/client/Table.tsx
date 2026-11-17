@@ -17,6 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
+import { FreezeIcon, ResumeIcon } from "./Icons.tsx";
 import { AdminAway, BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink, WatcherList } from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
@@ -238,10 +239,15 @@ export function Table({ state, send, theme }: Props) {
     const ms = room.seats[i].awayMs;
     return ms === null ? null : ms + (Date.now() - state.receivedAt);
   };
+  const frozen = room.frozenBy !== null && !g.over;
   /** The open-auction clock: when everyone still in becomes done. */
   const bidClock =
     room.bidMsLeft !== null && room.bidMsWindow !== null
-      ? { deadline: state.receivedAt + room.bidMsLeft, total: room.bidMsWindow }
+      ? {
+          deadline: state.receivedAt + room.bidMsLeft,
+          total: room.bidMsWindow,
+          stands: frozen ? room.bidMsLeft : null,
+        }
       : null;
 
   // ---- chrome ----
@@ -610,6 +616,9 @@ export function Table({ state, send, theme }: Props) {
   const openSeats = room.seats.flatMap((s, i) => (s.open ? [i] : []));
   const { body, bar } = stage();
   const isAdmin = me !== null && room.admin === me;
+  const canFreeze = me !== null && !g.over && (isAdmin || room.settings.freeze === "anyone");
+  const canUnfreeze = frozen && me !== null && (isAdmin || me === room.frozenBy);
+  const freeze = (on: boolean) => send({ type: "freeze", on });
 
   // Phones dock the action bar to the bottom edge while you owe a move. Its height varies (bid box,
   // two buttons, a sentence), so measure it: the hand sits right above it and the page ends clear of it.
@@ -646,7 +655,7 @@ export function Table({ state, send, theme }: Props) {
     .filter((x) => x.cards.length > 0);
 
   return (
-    <div ref={tableEl} className={`table ${docked ? "acting" : ""}`}>
+    <div ref={tableEl} className={`table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}>
       <header className="topbar">
         <Brand />
         <span className="round">
@@ -668,6 +677,16 @@ export function Table({ state, send, theme }: Props) {
             aria-label="Last results"
           >
             🏆 <span className="lbl">Last results</span>
+          </button>
+        )}
+        {canFreeze && !frozen && (
+          <button
+            className="icon-btn"
+            onClick={() => freeze(true)}
+            title="Freeze the game: the clock, the bots and all moves wait"
+            aria-label="Freeze the game"
+          >
+            <FreezeIcon /> <span className="lbl">Freeze</span>
           </button>
         )}
         <button className="icon-btn" onClick={() => setLogOpen(true)} title="Auction log" aria-label="Auction log">
@@ -707,6 +726,20 @@ export function Table({ state, send, theme }: Props) {
       </header>
 
       <div className="notices">
+        {frozen && room.frozenBy !== null && (
+          <div className="notice frozen-notice">
+            <FreezeIcon />
+            <span>
+              {room.frozenBy === me ? "You" : <b>{names[room.frozenBy]}</b>} froze the game. The clock, the bots and all
+              moves wait.
+            </span>
+            {canUnfreeze && (
+              <button className="btn primary small" onClick={() => freeze(false)}>
+                <ResumeIcon /> Unfreeze
+              </button>
+            )}
+          </div>
+        )}
         {me === null && <Spectator openSeats={openSeats} left={state.left} names={names} send={send} />}
         <AdminAway state={state} send={send} />
         {me !== null && openSeats.length > 0 && (

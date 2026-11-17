@@ -22,8 +22,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::bot::choose_action;
 use crate::protocol::{
-    Cast, ClientMsg, ErrorCode, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey, ServerMsg,
-    ThemeId, Watcher,
+    Cast, ClientMsg, ErrorCode, FreezeBy, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo, SeatKey,
+    ServerMsg, ThemeId, Watcher,
 };
 
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -97,6 +97,13 @@ struct BidClock {
     /// When the current stretch started, and when it runs out.
     from: u64,
     due: u64,
+}
+
+/// A frozen game: who froze it, and when. The bid clock reads `at` as the time until it runs again.
+#[derive(Clone, Copy)]
+struct Frozen {
+    by: Seat,
+    at: u64,
 }
 
 pub type ClientId = u64;
@@ -226,6 +233,8 @@ struct Room {
     bid_extend_s: u16,
     settings: RoomSettings,
     banned: Vec<Ban>,
+    /// The game is frozen (saved as who froze it; a loaded room counts as frozen since loading).
+    frozen: Option<Frozen>,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
@@ -312,6 +321,9 @@ impl Room {
         if game.over && !self.game.as_ref().is_some_and(|g| g.over) {
             info!(room = %self.code, "Game over");
         }
+        if game.over {
+            self.frozen = None;
+        }
         self.game = Some(game);
         self.version += 1;
     }
@@ -319,6 +331,8 @@ impl Room {
     /// Starts the open-auction clock when a lot goes up or a call is undone, and tops it up to
     /// `bid_extend_s` when someone bids; stops it when no open auction runs or the timer is off.
     fn sync_bid_clock(&mut self, now: u64) {
+        // A frozen clock stands at the moment it froze.
+        let now = self.frozen.map_or(now, |f| f.at);
         let marks = self
             .game
             .as_ref()
@@ -346,6 +360,25 @@ impl Room {
 
     fn game(&self) -> Result<&GameState, Fail> {
         self.game.as_ref().ok_or_else(|| Fail::new("The game has not started"))
+    }
+
+    /// The game, for a move: refused while it is frozen.
+    fn game_to_move(&self) -> Result<&GameState, Fail> {
+        match self.frozen {
+            Some(f) => fail(format!("{} froze the game; wait until it runs again", self.name(f.by))),
+            None => self.game(),
+        }
+    }
+
+    /// Unfreezes the game: the bid clock goes on with the time it had left.
+    fn unfreeze(&mut self, now: u64) {
+        let Some(f) = self.frozen.take() else { return };
+        let paused = now.saturating_sub(f.at);
+        if let Some(c) = &mut self.bid_clock {
+            c.from += paused;
+            c.due += paused;
+        }
+        self.bot_due = None;
     }
 
     fn has_seat(&self, seat: Seat) -> bool {
@@ -410,6 +443,8 @@ struct SavedRef<'a> {
     settings: &'a RoomSettings,
     #[serde(skip_serializing_if = "<[Ban]>::is_empty")]
     banned: &'a [Ban],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frozen_by: Option<Seat>,
 }
 
 #[derive(Deserialize)]
@@ -432,6 +467,8 @@ struct Saved {
     settings: RoomSettings,
     #[serde(default)]
     banned: Vec<Ban>,
+    #[serde(default)]
+    frozen_by: Option<Seat>,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -678,6 +715,10 @@ impl Rooms {
                 promoted.push((room.code.clone(), p, was));
             }
             room.sync_bid_clock(now);
+            if room.frozen.is_some() {
+                room.bot_due = None;
+                continue;
+            }
             if !room.clients.is_empty()
                 && room.bid_clock.is_some_and(|c| c.due <= now)
                 && let Some(game) = &room.game
@@ -1117,7 +1158,7 @@ impl Rooms {
                 }
             }
             ClientMsg::Action { action } => {
-                let before = room.game()?;
+                let before = room.game_to_move()?;
                 if action == Action::Unknown {
                     return fail("Unknown move");
                 }
@@ -1126,7 +1167,7 @@ impl Rooms {
                 room.set_game(game);
             }
             ClientMsg::Skip { seat } => {
-                let before = room.game()?;
+                let before = room.game_to_move()?;
                 room.require_admin(me, "skip a move")?;
                 require_away(room, seat)?;
                 let game = apply_skip(before, seat)?;
@@ -1134,7 +1175,7 @@ impl Rooms {
                 room.set_game(game);
             }
             ClientMsg::Rule { winner, price } => {
-                let before = room.game()?;
+                let before = room.game_to_move()?;
                 if me != room.admin {
                     return fail("Only the room admin can call a result");
                 }
@@ -1155,6 +1196,7 @@ impl Rooms {
                 if me != room.admin {
                     return fail("Only the room admin can undo a call");
                 }
+                room.game_to_move()?;
                 let (Some(call), Some(after)) = (&room.last_call, &room.game) else {
                     return fail("Nothing to undo: someone has moved since the call");
                 };
@@ -1220,6 +1262,30 @@ impl Rooms {
                 room.require_admin(me, "change the room settings")?;
                 info!(room = %code, seat = me, "Settings: {settings:?}");
                 room.settings = settings;
+            }
+            ClientMsg::Freeze { on } => {
+                if room.game()?.over {
+                    return fail("The game is over");
+                }
+                match (on, room.frozen) {
+                    (true, Some(f)) => return fail(format!("{} already froze the game", room.name(f.by))),
+                    (true, None) => {
+                        if me != room.admin && room.settings.freeze == FreezeBy::Admin {
+                            return fail("Only the room admin can freeze the game");
+                        }
+                        room.frozen = Some(Frozen { by: me, at: now });
+                        room.bot_due = None;
+                        info!(room = %code, seat = me, "Game frozen");
+                    }
+                    (false, None) => return fail("The game is not frozen"),
+                    (false, Some(f)) => {
+                        if me != room.admin && me != f.by {
+                            return fail(format!("Only {} or the room admin can unfreeze", room.name(f.by)));
+                        }
+                        room.unfreeze(now);
+                        info!(room = %code, seat = me, "Game unfrozen");
+                    }
+                }
             }
             ClientMsg::Remove { watcher } => {
                 room.require_admin(me, "remove a watcher")?;
@@ -1395,6 +1461,7 @@ impl Rooms {
                 bid_extend_s,
                 settings: prefs.settings.unwrap_or_default(),
                 banned: Vec::new(),
+                frozen: None,
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -1780,8 +1847,9 @@ impl Rooms {
             admin_auto_ms: ADMIN_AUTO_MS,
             bid_timer_s: room.bid_timer_s,
             bid_extend_s: room.bid_extend_s,
-            bid_ms_left: room.bid_clock.map(|c| c.due.saturating_sub(now)),
+            bid_ms_left: (room.bid_clock).map(|c| c.due.saturating_sub(room.frozen.map_or(now, |f| f.at))),
             bid_ms_window: room.bid_clock.map(|c| c.due - c.from),
+            frozen_by: room.frozen.map(|f| f.by),
             settings: room.settings.clone(),
             watchers: self.watchers(room),
         }
@@ -1895,6 +1963,9 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         .and_then(|a| u8::try_from(a).ok())
         .filter(|&a| usize::from(a) < saved.seats.len())
         .unwrap_or(0);
+    let frozen = (saved.frozen_by)
+        .filter(|_| saved.game.as_ref().is_some_and(|g| !g.over))
+        .map(|by| Frozen { by, at: now });
     Ok(Some(Room {
         code: code.to_owned(),
         theme: saved.theme,
@@ -1909,6 +1980,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         bid_extend_s: saved.bid_extend_s.clamp(MIN_BID_EXTEND_S, MAX_BID_EXTEND_S),
         settings: saved.settings,
         banned: saved.banned,
+        frozen,
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -2029,6 +2101,7 @@ impl Store {
             bid_extend_s: room.bid_extend_s,
             settings: &room.settings,
             banned: &room.banned,
+            frozen_by: room.frozen.map(|f| f.by),
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {

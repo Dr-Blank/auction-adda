@@ -26,6 +26,21 @@ export const LockIcon = () => (
   </svg>
 );
 
+/** Freeze: the game stands still. */
+export const FreezeIcon = () => (
+  <svg {...base} className="icon">
+    <path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9" />
+    <path d="M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5" />
+  </svg>
+);
+
+/** Play on after a freeze. */
+export const ResumeIcon = () => (
+  <svg {...base} className="icon">
+    <path d="M8 5.5v13l10.5-6.5z" />
+  </svg>
+);
+
 export const CheckIcon = () => (
   <svg {...base} className="icon">
     <path d="M5 12.5l4.5 4.5L19 7.5" />

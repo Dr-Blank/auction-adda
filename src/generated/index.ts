@@ -8,6 +8,7 @@ export type * from './Card.ts';
 export type * from './Cast.ts';
 export type * from './ClientMsg.ts';
 export type * from './ErrorCode.ts';
+export type * from './FreezeBy.ts';
 export type * from './LogEntry.ts';
 export type * from './MyRoom.ts';
 export type * from './PlayerView.ts';

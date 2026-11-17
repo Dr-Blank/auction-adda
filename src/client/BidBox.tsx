@@ -18,21 +18,34 @@ interface Props {
 
 /**
  * Time left on the open-auction clock: seconds, and a bar that drains to the end (the bar sits at
- * the bottom of a `.timed` button). The server makes everyone still in done when it runs out.
+ * the bottom of a `.timed` button). The server makes everyone still in done when it runs out. In a
+ * frozen game `stands` holds the time left, and the clock waits.
  */
-export function BidClock({ deadline, total }: { deadline: number; total: number }) {
+export function BidClock({ deadline, total, stands }: { deadline: number; total: number; stands: number | null }) {
+  const paused = stands !== null;
   const [, setTick] = useState(0);
   useEffect(() => {
+    if (paused) return;
     const timer = setInterval(() => setTick((x) => x + 1), 250);
     return () => clearInterval(timer);
-  }, []);
-  const left = Math.max(0, deadline - Date.now());
+  }, [paused]);
+  const left = stands ?? Math.max(0, deadline - Date.now());
   const secs = Math.ceil(left / 1000);
   return (
-    <span className={`bid-clock ${secs <= 5 ? "urgent" : ""}`} title="When this runs out, everyone still in is done">
+    <span
+      className={`bid-clock ${secs <= 5 && !paused ? "urgent" : ""} ${paused ? "paused" : ""}`}
+      title={paused ? "The game is frozen; the clock waits" : "When this runs out, everyone still in is done"}
+    >
       <span className="secs">{secs}s</span>
       <span className="drain" aria-hidden="true">
-        <span key={deadline} style={{ animationDuration: `${total}ms`, animationDelay: `${left - total}ms` }} />
+        <span
+          key={deadline}
+          style={{
+            animationDuration: `${total}ms`,
+            animationDelay: `${left - total}ms`,
+            animationPlayState: paused ? "paused" : "running",
+          }}
+        />
       </span>
     </span>
   );

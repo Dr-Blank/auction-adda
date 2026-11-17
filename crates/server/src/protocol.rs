@@ -66,6 +66,18 @@ pub struct RoomSettings {
     /// Nobody new takes a seat in the lobby; people opening the link can only watch. Seats the
     /// admin frees in a game can still be claimed.
     pub locked: bool,
+    /// Who may freeze a running game (`freeze`).
+    pub freeze: FreezeBy,
+}
+
+/// Who may freeze a running game. Whoever froze it, and the admin, may unfreeze it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum FreezeBy {
+    #[default]
+    Admin,
+    /// Any player with a seat.
+    Anyone,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -187,6 +199,13 @@ pub enum ClientMsg {
     Settings {
         settings: RoomSettings,
     },
+    /// In a game: `on` stops the bid clock, the bots and every move (calls and undo too) until
+    /// `on: false`. Freezing is
+    /// for the admin, or any player when `RoomSettings::freeze` is `anyone`; whoever froze the game
+    /// and the admin may unfreeze it.
+    Freeze {
+        on: bool,
+    },
     /// Admin only: send a watcher (`Watcher::id`) out of the room; they cannot come back to watch
     /// or take a seat until let back in.
     Remove {
@@ -232,6 +251,7 @@ impl ClientMsg {
             Self::Timer { .. } => "timer",
             Self::Cast { .. } => "cast",
             Self::Settings { .. } => "settings",
+            Self::Freeze { .. } => "freeze",
             Self::Remove { .. } => "remove",
             Self::Unban { .. } => "unban",
             Self::Unknown => "unknown",
@@ -286,6 +306,8 @@ pub struct RoomInfo {
     /// Length of the clock's current stretch (since the lot went up or a bid added time); null
     /// when none runs.
     pub bid_ms_window: Option<u64>,
+    /// The seat that froze the game; null while it runs. A frozen clock keeps `bid_ms_left`.
+    pub frozen_by: Option<Seat>,
     pub settings: RoomSettings,
     /// People here without a seat, then kicked or removed people who are not here.
     pub watchers: Vec<Watcher>,

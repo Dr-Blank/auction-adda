@@ -1,5 +1,6 @@
 // Screenshots of the room-management screens, as the admin: the lobby (theme picker, room
-// settings, Close room), the room menu in a game, a freed bot seat (and the same game as the
+// settings, Close room), the room menu in a game, a game a player froze (as the admin and as
+// them), a freed bot seat (and the same game as the
 // player who left it, and as a watcher), and the game over after "End game now".
 // Each step drives the room over the WebSocket, then takes one shot with page-shot.mjs.
 //
@@ -82,16 +83,23 @@ watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", room: code, v
 await until((s) => s.room.watchers.length > 0);
 
 shot("lobby");
-send({ type: "settings", settings: { locked: true } });
+send({ type: "settings", settings: { locked: true, freeze: "anyone" } });
 await until((s) => s.room.settings.locked);
 const openAdvanced = `document.querySelector("details.advanced").open = true`;
 shot("lobby-settings", openAdvanced);
 shot("lobby-locked-viewer", openAdvanced, null);
-send({ type: "settings", settings: { locked: false } });
+send({ type: "settings", settings: { locked: false, freeze: "anyone" } });
 send({ type: "start" });
 await until((s) => s.game);
 await sleep(4000);
 shot("menu", `document.querySelector("[aria-label='Room and rules']")?.click()`);
+// Ben freezes the game: the admin and Ben may unfreeze it.
+ben.send(JSON.stringify({ type: "freeze", on: true }));
+await until((s) => s.room.frozenBy === 3);
+shot("game-frozen");
+shot("game-frozen-ben", null, benKey);
+send({ type: "freeze", on: false });
+await until((s) => s.room.frozenBy === null);
 // Ben leaves to a bot; the admin frees bot seat 1 for whoever opens the link.
 ben.send(JSON.stringify({ type: "leave" }));
 await until((s) => s.room.seats[3].bot);

@@ -41,7 +41,11 @@ bidMsLeft: number | null,
  * Length of the clock's current stretch (since the lot went up or a bid added time); null
  * when none runs.
  */
-bidMsWindow: number | null, settings: RoomSettings, 
+bidMsWindow: number | null, 
+/**
+ * The seat that froze the game; null while it runs. A frozen clock keeps `bid_ms_left`.
+ */
+frozenBy: number | null, settings: RoomSettings, 
 /**
  * People here without a seat, then kicked or removed people who are not here.
  */

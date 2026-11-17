@@ -214,6 +214,13 @@ export function RoomSettingsPanel({
         admin={admin}
         onChange={(locked) => set({ locked })}
       />
+      <Toggle
+        label="Anyone may freeze"
+        hint="Every player can freeze the game, which stops the clock, the bots and all moves. Whoever froze it, or the admin, lets it run again."
+        on={room.settings.freeze === "anyone"}
+        admin={admin}
+        onChange={(on) => set({ freeze: on ? "anyone" : "admin" })}
+      />
     </div>
   );
 }
