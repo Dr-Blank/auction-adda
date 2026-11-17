@@ -1,0 +1,5 @@
+# Bulk formatting commits, skipped by `git blame` (GitHub reads this file by itself;
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+
+# chore: add prek hooks and Biome, format the codebase
+f4cb1c5548a24b00c55d9ff2e605de9bb68a2274
