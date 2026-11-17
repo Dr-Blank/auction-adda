@@ -90,7 +90,8 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
   ];
   const [info, setInfo] = useState(false);
   const names = room.seats.map((s, k) => (k === me ? "you" : s.name));
-  const adminAway = me !== null && room.admin === i && away !== null && away >= room.skipAfterMs;
+  // The banner above the table offers the role to everyone; the seat sheet does too.
+  const adminAway = me !== null && me !== i && room.admin === i && away !== null && away >= room.adminClaimMs;
 
   // Everything the seat says through icons and tooltips, as sentences (for the info sheet).
   const { card, cards, round } = theme.nouns;
@@ -236,11 +237,6 @@ export function Seat({ g, room, theme, bubbles, awayFor, send, i, arc = 1 }: Sea
                 title="Lets someone else take over this seat from the room link"
               >
                 Free seat
-              </button>
-            )}
-            {adminAway && (
-              <button className="btn small" onClick={() => send({ type: "admin", seat: me! })}>
-                Become admin
               </button>
             )}
           </div>

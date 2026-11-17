@@ -578,8 +578,15 @@ legend {
   text-transform: uppercase;
   font-size: 1.1rem;
 }
-.notice {
+.notices {
   grid-area: notice;
+  display: grid;
+  gap: 8px;
+}
+.notices:empty {
+  display: none;
+}
+.notice {
   display: flex;
   gap: 10px;
   align-items: center;

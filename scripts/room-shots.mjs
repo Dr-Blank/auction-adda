@@ -106,6 +106,20 @@ shot("over");
 send({ type: "lobby" });
 await until((s) => !s.game);
 shot("lobby-after", click("Close room"));
+
+// The admin drops: after 20 s every player is offered the role.
+const cleo = new WebSocket(`ws://localhost:${port}/ws`);
+const cleoToken = new Promise((resolve) => {
+  cleo.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "joined" && m.token) resolve(m.token);
+  };
+});
+cleo.onopen = () => cleo.send(JSON.stringify({ type: "join", room: code, name: "Cleo" }));
+const cleoKey = await cleoToken;
+sock.close();
+await sleep(21_000);
+shot("lobby-admin-away", null, cleoKey);
 watcher.close();
 ben.close();
-sock.close();
+cleo.close();

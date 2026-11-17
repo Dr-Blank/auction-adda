@@ -358,6 +358,41 @@ export function CastPicker({
   );
 }
 
+/**
+ * The admin has been away a while: every player may take the role, and shortly after, the server
+ * hands it to the first player still here.
+ */
+export function AdminAway({ state, send }: { state: RoomState; send: (m: ClientMsg) => void }) {
+  const { room, you } = state;
+  const awayMs = room.seats[room.admin]?.awayMs ?? null;
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (awayMs === null) return;
+    const timer = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(timer);
+  }, [awayMs === null]);
+  if (you === null || you === room.admin || awayMs === null) return null;
+  const away = awayMs + (Date.now() - state.receivedAt);
+  if (away < room.adminClaimMs) return null;
+  const left = Math.max(0, Math.ceil((room.adminAutoMs - away) / 1000));
+  const next = room.seats.findIndex((s) => !s.bot && s.connected);
+  return (
+    <div className="notice admin-away" role="status">
+      <span>
+        <span className="admin-mark">★</span> {room.seats[room.admin]?.name} (admin) is away.{" "}
+        {next >= 0 && (
+          <span className="muted">
+            {next === you ? "You get" : `${room.seats[next]?.name} gets`} the role in {left} s.
+          </span>
+        )}
+      </span>
+      <button className="btn primary small" onClick={() => send({ type: "admin", seat: you })}>
+        Become admin
+      </button>
+    </div>
+  );
+}
+
 export function Lobby({ state, send, join, theme }: Props) {
   const { room, you } = state;
   const [name, setName] = useState(savedName);
@@ -367,19 +402,6 @@ export function Lobby({ state, send, join, theme }: Props) {
   const empty = Array.from({ length: room.maxPlayers - count });
   const isAdmin = you !== null && room.admin === you;
   const adminName = room.seats[room.admin]?.name;
-  // An admin who has been away long enough can be replaced, or nobody could start the game.
-  const adminAwayMs = room.seats[room.admin]?.awayMs ?? null;
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (adminAwayMs === null) return;
-    const timer = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(timer);
-  }, [adminAwayMs === null]);
-  const adminAway =
-    you !== null &&
-    !isAdmin &&
-    adminAwayMs !== null &&
-    adminAwayMs + (Date.now() - state.receivedAt) >= room.skipAfterMs;
 
   return (
     <main className="center-card lobby">
@@ -388,6 +410,7 @@ export function Lobby({ state, send, join, theme }: Props) {
         {theme.title} · room <RoomCode code={room.code} />
       </p>
 
+      <AdminAway state={state} send={send} />
       <p>Paste this link in Discord. Everyone who opens it lands in this room.</p>
       <ShareLink code={room.code} />
 
@@ -447,11 +470,6 @@ export function Lobby({ state, send, join, theme }: Props) {
             {isAdmin && i !== you && (
               <button className="btn small" onClick={() => send({ type: "kick", seat: i })}>
                 {s.bot ? "Remove" : "Kick"}
-              </button>
-            )}
-            {adminAway && i === room.admin && (
-              <button className="btn small" onClick={() => send({ type: "admin", seat: you! })}>
-                Become admin
               </button>
             )}
           </li>

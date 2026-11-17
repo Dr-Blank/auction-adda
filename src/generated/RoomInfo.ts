@@ -18,6 +18,14 @@ canUndo: boolean, minPlayers: number, maxPlayers: number,
  */
 skipAfterMs: number, 
 /**
+ * The admin away this long: any player may take the role (`admin` with their own seat).
+ */
+adminClaimMs: number, 
+/**
+ * The admin away this long: the first connected player becomes admin.
+ */
+adminAutoMs: number, 
+/**
  * Open auctions: seconds from the lot going up until everyone still in is done. 0 = no clock.
  */
 bidTimerS: number, 

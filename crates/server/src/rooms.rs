@@ -35,6 +35,11 @@ const FILE_VERSION: u64 = 1;
 /// While the admin can still undo a call, bots wait at least this long, so their move does not
 /// take the undo away at once.
 const BOT_WAIT_AFTER_CALL_MS: u64 = 8_000;
+
+/// The admin away this long: any player may take the role.
+const ADMIN_CLAIM_MS: u64 = 20_000;
+/// The admin away this long and nobody took the role: the first player still here gets it.
+const ADMIN_AUTO_MS: u64 = 30_000;
 /// Open auctions: seconds after the lot goes up before everyone still in is done. Long enough to
 /// notice the lot at all.
 const DEFAULT_BID_TIMER_S: u16 = 30;
@@ -247,6 +252,13 @@ impl Room {
     fn ban_of(&self, token: Option<&str>) -> Option<usize> {
         let token = token.filter(|t| !t.is_empty())?;
         self.banned.iter().position(|b| b.token == token)
+    }
+
+    /// The first player (not a bot) who is connected.
+    fn first_here(&self) -> Option<Seat> {
+        let i = (0..self.seats.len())
+            .find(|&i| self.seats.get(i).is_some_and(|s| !s.bot) && self.away.get(i) == Some(&None))?;
+        u8::try_from(i).ok()
     }
 
     /// The seat `token`'s holder left to a bot in this game, which `back` returns to them.
@@ -645,7 +657,21 @@ impl Rooms {
         let now = (self.now)();
         let mut rng = rand::rng();
         let mut moved = Vec::new();
+        let mut promoted = Vec::new();
         for room in self.rooms.values_mut() {
+            if room
+                .away
+                .get(usize::from(room.admin))
+                .copied()
+                .flatten()
+                .is_some_and(|since| now.saturating_sub(since) >= ADMIN_AUTO_MS)
+                && let Some(p) = room.first_here()
+            {
+                info!(room = %room.code, "The admin was away; seat {p} is admin now");
+                promoted.push((room.code.clone(), p, room.name(room.admin)));
+                room.admin = p;
+                room.last_call = None;
+            }
             room.sync_bid_clock(now);
             if !room.clients.is_empty()
                 && room.bid_clock.is_some_and(|c| c.due <= now)
@@ -706,6 +732,25 @@ impl Rooms {
                     moved.push(room.code.clone());
                 }
                 Err(e) => error!(room = %room.code, seat, "Bot cannot move: {}", e.message),
+            }
+        }
+        for (code, seat, was) in promoted {
+            let message = format!("{was} was away, so you are the room admin now.");
+            let here: Vec<ClientId> = self.rooms.get(&code).map_or_default(|r| {
+                (r.clients.iter().copied())
+                    .filter(|c| self.clients.get(c).is_some_and(|c| c.seat == Some(seat)))
+                    .collect()
+            });
+            for id in here {
+                self.send(
+                    id,
+                    &ServerMsg::Notice {
+                        message: message.clone(),
+                    },
+                );
+            }
+            if !moved.contains(&code) {
+                moved.push(code);
             }
         }
         for code in moved {
@@ -856,9 +901,7 @@ impl Rooms {
                     }
                     // The role goes to the first player still here, if any.
                     if room.admin == seat
-                        && let Some(p) = (0..room.seats.len())
-                            .find(|&i| room.seats.get(i).is_some_and(|s| !s.bot) && room.away.get(i) == Some(&None))
-                            .and_then(|p| u8::try_from(p).ok())
+                        && let Some(p) = room.first_here()
                     {
                         room.admin = p;
                     }
@@ -1137,7 +1180,12 @@ impl Rooms {
                     if seat != me {
                         return fail("Only the admin can hand the role to someone else");
                     }
-                    require_away(room, room.admin)?;
+                    let Some(since) = room.away.get(usize::from(room.admin)).copied().flatten() else {
+                        return fail("The admin is connected");
+                    };
+                    if now.saturating_sub(since) < ADMIN_CLAIM_MS {
+                        return fail("Give the admin a little longer to reconnect");
+                    }
                 }
                 room.admin = seat;
                 room.last_call = None;
@@ -1723,6 +1771,8 @@ impl Rooms {
             min_players: cfg.min_players(),
             max_players: cfg.max_players(),
             skip_after_ms: self.skip_after_ms,
+            admin_claim_ms: ADMIN_CLAIM_MS,
+            admin_auto_ms: ADMIN_AUTO_MS,
             bid_timer_s: room.bid_timer_s,
             bid_extend_s: room.bid_extend_s,
             bid_ms_left: room.bid_clock.map(|c| c.due.saturating_sub(now)),

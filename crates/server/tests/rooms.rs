@@ -601,6 +601,33 @@ fn only_the_admin_removes_players_from_the_lobby_an_away_admin_can_be_replaced_t
 }
 
 #[test]
+fn anyone_may_take_the_role_after_the_admin_is_away_20_s_the_first_player_gets_it_at_30_s() {
+    let (now, opts) = clock(1_000_000);
+    let mut rooms = Rooms::new(opts).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    assert_eq!(state(&clients[1]).room.admin_claim_ms, 20_000);
+    rooms.disconnect(clients[0].id);
+    advance(&now, 19_000);
+    send(&mut rooms, &clients[2], json!({ "type": "admin", "seat": 2 }));
+    assert_error(&clients[2], "longer");
+    rooms.tick();
+    assert_eq!(state(&clients[1]).room.admin, 0);
+    advance(&now, 2_000);
+    send(&mut rooms, &clients[2], json!({ "type": "admin", "seat": 2 }));
+    assert_eq!(state(&clients[1]).room.admin, 2);
+
+    // Nobody takes it: at 30 s the first player still here gets it, and is told.
+    rooms.disconnect(clients[2].id);
+    advance(&now, 29_000);
+    rooms.tick();
+    assert_eq!(state(&clients[1]).room.admin, 2);
+    advance(&now, 1_000);
+    rooms.tick();
+    assert_eq!(state(&clients[1]).room.admin, 1);
+    assert_eq!(notices(&clients[1]), ["P2 was away, so you are the room admin now."]);
+}
+
+#[test]
 fn only_the_admin_adds_bots_starts_and_rematches_bots_play_their_seats() {
     let (now, opts) = clock(1_000_000);
     let mut rooms = Rooms::new(opts).unwrap();

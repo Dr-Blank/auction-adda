@@ -17,7 +17,7 @@ import { BidBox, BidClock } from "./BidBox.tsx";
 import { Brand } from "./Brand.tsx";
 import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
 import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink, WatcherList } from "./Lobby.tsx";
+import { AdminAway, BidTimer, ConfirmButton, RoomCode, RoomSettingsPanel, ShareLink, WatcherList } from "./Lobby.tsx";
 import type { RoomState } from "./net.ts";
 import { savedAvatar, savedName, saveName } from "./net.ts";
 import { Premiere } from "./Premiere.tsx";
@@ -706,13 +706,16 @@ export function Table({ state, send, theme }: Props) {
         )}
       </header>
 
-      {me === null && <Spectator openSeats={openSeats} left={state.left} names={names} send={send} />}
-      {me !== null && openSeats.length > 0 && (
-        <div className="notice">
-          <span>A seat is free. Send this link to whoever takes over:</span>
-          <ShareLink code={room.code} />
-        </div>
-      )}
+      <div className="notices">
+        {me === null && <Spectator openSeats={openSeats} left={state.left} names={names} send={send} />}
+        <AdminAway state={state} send={send} />
+        {me !== null && openSeats.length > 0 && (
+          <div className="notice">
+            <span>A seat is free. Send this link to whoever takes over:</span>
+            <ShareLink code={room.code} />
+          </div>
+        )}
+      </div>
 
       <Seats g={g} room={room} theme={theme} bubbles={bubbles} awayFor={awayFor} send={send} />
 

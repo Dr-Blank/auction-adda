@@ -273,6 +273,10 @@ pub struct RoomInfo {
     pub max_players: u8,
     /// How long a seat must be disconnected before it can be skipped or released.
     pub skip_after_ms: u64,
+    /// The admin away this long: any player may take the role (`admin` with their own seat).
+    pub admin_claim_ms: u64,
+    /// The admin away this long: the first connected player becomes admin.
+    pub admin_auto_ms: u64,
     /// Open auctions: seconds from the lot going up until everyone still in is done. 0 = no clock.
     pub bid_timer_s: u16,
     /// Open auctions: after a bid, everyone still in has at least this many seconds left.
