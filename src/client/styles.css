@@ -122,24 +122,34 @@ kbd {
 .room-code {
   white-space: nowrap;
 }
+.icon {
+  display: block;
+}
 .copy-code {
-  font: inherit;
-  font-size: 0.85em;
-  line-height: 1;
-  margin-left: 4px;
-  padding: 3px 5px;
-  border: 1px solid transparent;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.95em;
+  margin-left: 5px;
+  padding: 4px;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: transparent;
-  color: inherit;
+  background: var(--panel-2);
+  color: var(--gold);
   cursor: pointer;
-  vertical-align: 1px;
-  opacity: 0.75;
+  vertical-align: -0.2em;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
 }
 .copy-code:hover,
 .copy-code:focus-visible {
-  opacity: 1;
-  border-color: var(--line, currentColor);
+  border-color: var(--gold);
+  background: var(--raised);
+}
+.copy-code.done {
+  color: var(--ok);
+  border-color: var(--ok);
 }
 .brand-link {
   color: inherit;

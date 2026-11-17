@@ -6,6 +6,7 @@ import { getDef } from "../themes/index.ts";
 import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
+import { CheckIcon, CopyIcon } from "./Icons.tsx";
 import type { RoomState } from "./net.ts";
 import { savedName, saveGenres, saveName, saveTimer, useSavedLook } from "./net.ts";
 import { Rules } from "./Rules.tsx";
@@ -51,7 +52,7 @@ export function RoomCode({ code }: { code: string }) {
       <b className="code">{code}</b>
       <button
         type="button"
-        className="copy-code"
+        className={`copy-code ${copied ? "done" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
           copy();
@@ -59,7 +60,7 @@ export function RoomCode({ code }: { code: string }) {
         title={copied ? "Copied" : "Copy room code"}
         aria-label={copied ? "Room code copied" : "Copy room code"}
       >
-        {copied ? "✓" : "📋"}
+        {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
     </span>
   );
