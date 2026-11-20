@@ -1,7 +1,11 @@
+import type { PahunchOptions } from "../../generated/index.ts";
 import type { PahunchSkin } from "./skin.ts";
 
-/** The rules in this skin's words: short, in the order a first game needs them. */
-export function Rules({ skin, n }: { skin: PahunchSkin; n?: number }) {
+/**
+ * The rules in this skin's words: short, in the order a first game needs them. `options`: the
+ * running game's house rules; without them (the lobby) both ways are told.
+ */
+export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; options?: PahunchOptions }) {
   const { climber, climbers, points, neutral, neutrals, blocker, bribe } = skin.nouns;
   const top = skin.rooms.full?.at(-1)?.name ?? "the top room";
   return (
@@ -34,7 +38,14 @@ export function Rules({ skin, n }: { skin: PahunchSkin; n?: number }) {
         <li>
           The path with the {blocker} on it needs no vote at all, but whoever goes that way takes nothing from it.
         </li>
-        <li>If the vote fails, or you give up, your {climber} stays and your turn ends.</li>
+        <li>
+          If the vote fails, or you give up, your {climber} stays.{" "}
+          {options === undefined
+            ? "Then you choose another move, but not another vote out of that room; with the house rule “A failed vote ends the turn”, your turn ends instead."
+            : options.failEndsTurn
+              ? "Your turn ends."
+              : "Choose another move, but not another vote out of that room."}
+        </li>
       </ul>
       <h3>{points}</h3>
       <ul>
@@ -44,6 +55,30 @@ export function Rules({ skin, n }: { skin: PahunchSkin; n?: number }) {
         </li>
         <li>Give tokens to anyone, at any time. Deals are made on the call and nothing makes anyone keep them.</li>
       </ul>
+      {options?.favours !== false && (
+        <>
+          <h3>Favours</h3>
+          <ul>
+            <li>
+              Each player gets one favour, different for everyone, with two uses. Favours are public: each player’s
+              shows on their seat.
+            </li>
+            <li>
+              A favour helps only someone else’s move. On another player’s turn you may offer yours to them; deals for
+              it are made on the call. Each use earns you {points} and costs a use. An offer that is not used costs
+              nothing.
+            </li>
+            {Object.values(skin.favours).map((f) => (
+              <li key={f.name}>
+                <b>
+                  {f.glyph} {f.name}:
+                </b>{" "}
+                {f.effect}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h3>The end</h3>
       <p>
         The game ends the moment the {top} is full. Only players with a {climber} there can win: the most {points} wins,

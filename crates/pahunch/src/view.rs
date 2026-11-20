@@ -33,6 +33,9 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
         options: s.options,
         tried: s.tried.clone(),
         bonuses: s.bonuses,
+        moved: s.moved,
+        lent: s.lent.clone(),
+        used: s.used.clone(),
         layout: s.layout.clone(),
         rooms: s.rooms.clone(),
         tokens_on: s.tokens_on.clone(),
@@ -46,6 +49,8 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
             .map(|(i, p)| PlayerView {
                 hand: p.hand,
                 tokens: (s.over || Seat::try_from(i).is_ok_and(mine)).then(|| p.tokens.clone()),
+                favour: p.favour,
+                uses: p.uses,
             })
             .collect(),
         turn: s.turn,

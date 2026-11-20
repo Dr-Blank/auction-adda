@@ -387,3 +387,46 @@ button.ph-chip.on {
     animation: none;
   }
 }
+
+/* ---- favours ---- */
+.ph-fav .ph-uses {
+  letter-spacing: 1px;
+}
+.ph-uses {
+  color: var(--accent-soft);
+}
+.ph-offered {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ph-fav.offered {
+  color: var(--text);
+}
+.ph-my-favour {
+  align-items: center;
+}
+.ph-my-favour .btn {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+.ph-on-offer {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.ph-offer {
+  color: var(--accent-soft);
+}
+.ph-favour-picks label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ph-favour-picks select {
+  font-size: 1rem;
+  min-height: 40px;
+}

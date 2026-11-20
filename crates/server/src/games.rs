@@ -361,7 +361,7 @@ mod tests {
         let climb = serde_json::json!({ "type": "climb", "path": 3 });
         assert_eq!(
             GameId::Pahunch.action(&climb).ok(),
-            Some(AnyAction::Pahunch(pahunch::Action::Climb { path: 3 }))
+            Some(AnyAction::Pahunch(pahunch::Action::climb(3)))
         );
         // Another game's move is not one of this game's.
         assert_eq!(

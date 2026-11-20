@@ -21,6 +21,62 @@ pub enum Bonus {
     Favour,
 }
 
+/// A player's favour: a one-off help they lend to the mover, twice a game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchFavour")]
+pub enum FavourKind {
+    /// The mover also moves the blocker once, before or after the main move.
+    ExtraBlock,
+    /// A climb along the blocker's path takes the token under it anyway.
+    CoveredToken,
+    /// A climb takes another uncovered board token instead of its own.
+    SwapToken,
+    /// A climber the mover put into a 1-room climbs on, the same turn.
+    ClimbAgain,
+    /// One extra into a full room (not the top).
+    SqueezeIn,
+    /// Climbs and nudges along back paths, with no vote.
+    BackStairs,
+    /// A climb takes one more piece from the same room along.
+    Carry,
+}
+
+impl FavourKind {
+    pub const ALL: [Self; 7] = [
+        Self::ExtraBlock,
+        Self::CoveredToken,
+        Self::SwapToken,
+        Self::ClimbAgain,
+        Self::SqueezeIn,
+        Self::BackStairs,
+        Self::Carry,
+    ];
+}
+
+/// Uses a favour starts with, and the most it can hold.
+pub const USES: u8 = 2;
+
+/// The piece a [`FavourKind::Carry`] climb takes along.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "t", rename_all = "lowercase")]
+#[ts(rename = "PahunchCarry")]
+pub enum Carry {
+    Seat { seat: Seat },
+    Neutral,
+}
+
+impl Carry {
+    /// Who the piece belongs to, as the rooms list it (`None` = a neutral).
+    #[must_use]
+    pub const fn who(self) -> Option<Seat> {
+        match self {
+            Self::Seat { seat } => Some(seat),
+            Self::Neutral => None,
+        }
+    }
+}
+
 /// A point token out of the bag. Board coins lie face up, so their bonus is public; in a hand
 /// only the value counts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
@@ -59,8 +115,7 @@ impl<'de> Deserialize<'de> for Coin {
     }
 }
 
-/// Extra moves the mover has left this turn, after the main move. While any is left the turn
-/// stays with them, until they use it or end the turn.
+/// Extra moves the mover has from special coins this turn, after the main move.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "PahunchBonuses")]
@@ -69,13 +124,11 @@ pub struct Bonuses {
     pub block: u8,
     /// Neutral nudges left.
     pub nudge: u8,
-}
-
-impl Bonuses {
-    #[must_use]
-    pub const fn any(&self) -> bool {
-        self.block > 0 || self.nudge > 0
-    }
+    /// The room a climber of the mover's just reached, when a lent climb-again favour lets it
+    /// climb on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub climb_again: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,6 +137,12 @@ pub struct Player {
     pub hand: u8,
     /// Point tokens by value; hidden from the others until the end.
     pub tokens: Vec<u8>,
+    /// Dealt at the start when favours are on; public.
+    #[serde(default)]
+    pub favour: Option<FavourKind>,
+    /// Uses left of the favour.
+    #[serde(default)]
+    pub uses: u8,
 }
 
 /// A climb that waits for votes: the mover's climber leaves `room` by `path` once `need` yes
@@ -102,6 +161,13 @@ pub struct Vote {
     pub bribed: u8,
     /// Log line that asked: the vote clock starts there.
     pub start: u32,
+    /// Favour parts of the climb, made once the vote passes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub swap: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub carry: Option<Carry>,
 }
 
 impl Vote {
@@ -176,6 +242,18 @@ pub enum LogEntry {
     Done {
         p: Seat,
     },
+    /// `user`, the mover, used `owner`'s favour.
+    Favour {
+        owner: Seat,
+        user: Seat,
+        kind: FavourKind,
+    },
+    /// The climb up `path` took `who`'s piece along (`null` = a neutral); it takes no token.
+    Carry {
+        p: Seat,
+        who: Option<Seat>,
+        path: u8,
+    },
     /// A gift of tokens; their values stay between the two.
     Gift {
         from: Seat,
@@ -239,6 +317,16 @@ pub struct State {
     /// Bonus moves the mover has left this turn.
     #[serde(default)]
     pub bonuses: Bonuses,
+    /// The mover made the main move; the turn stays for extra moves (bonuses or lent favours)
+    /// until they end it.
+    #[serde(default)]
+    pub moved: bool,
+    /// Favours on offer to the mover this turn, by owner.
+    #[serde(default)]
+    pub lent: Vec<Seat>,
+    /// Favours the mover used this turn, by owner: not lent again until the turn passes.
+    #[serde(default)]
+    pub used: Vec<Seat>,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
@@ -265,8 +353,17 @@ pub struct State {
 pub enum Action {
     /// A climber from your hand into a bottom room.
     Enter { room: u8 },
-    /// One of your climbers up `path`.
-    Climb { path: u8 },
+    /// One of your climbers up `path`. With lent favours: `swap` takes the token on that path
+    /// instead, `carry` takes one more piece along.
+    Climb {
+        path: u8,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        swap: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        carry: Option<Carry>,
+    },
     /// Your answer to the running vote: how many of your climbers there say yes.
     Vote { yes: u8 },
     /// The mover pays a neutral in the room one token of this value for its yes.
@@ -277,14 +374,28 @@ pub enum Action {
     Nudge { path: u8 },
     /// The blocker onto `path`.
     Block { path: u8 },
-    /// The mover ends the turn with bonus moves left.
+    /// The mover ends the turn with extra moves left.
     Done,
+    /// Offer your favour to the mover (`on`), or take back an unused offer. Any time, like a gift.
+    Lend { on: bool },
     /// Tokens (by value) to another player, at any time.
     Give { to: Seat, tokens: Vec<u8> },
     /// Any other `type`: answered with "Unknown move".
     #[serde(other)]
     #[ts(skip)]
     Unknown,
+}
+
+impl Action {
+    /// A plain climb.
+    #[must_use]
+    pub const fn climb(path: u8) -> Self {
+        Self::Climb {
+            path,
+            swap: None,
+            carry: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -294,6 +405,8 @@ pub struct PlayerView {
     pub hand: u8,
     /// `null` = hidden: own tokens always show; everyone's show at the end.
     pub tokens: Option<Vec<u8>>,
+    pub favour: Option<FavourKind>,
+    pub uses: u8,
 }
 
 /// What one seat (or a spectator, `you: null`) may know.
@@ -308,6 +421,12 @@ pub struct View {
     pub tried: Vec<u8>,
     /// Bonus moves the mover has left this turn.
     pub bonuses: Bonuses,
+    /// The mover made the main move and has extra moves left.
+    pub moved: bool,
+    /// Favours on offer to the mover, by owner.
+    pub lent: Vec<Seat>,
+    /// Favours the mover used this turn, by owner.
+    pub used: Vec<Seat>,
     pub layout: Layout,
     pub rooms: Rooms,
     pub tokens_on: Vec<Option<Coin>>,

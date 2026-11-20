@@ -17,7 +17,8 @@
 )]
 
 use pahunch::{
-    Action, Bonus, Coin, LogEntry, Pahunch, State, apply_action, apply_skip, boards, end_early, reseat, view_for,
+    Action, Bonus, Carry, Coin, FavourKind, LogEntry, Options, Pahunch, State, apply_action, apply_skip, boards,
+    end_early, favour_pay, reseat, view_for,
 };
 
 use game::Game;
@@ -110,7 +111,7 @@ fn enough_own_climbers_leave_without_a_vote_and_take_the_token() {
     let mut s = fresh(5);
     s.rooms[3] = vec![Some(0), Some(0), Some(1)];
     let token = s.tokens_on[11].unwrap();
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert_eq!(t.rooms[3], vec![Some(0), Some(1)]);
     assert_eq!(t.rooms[9], vec![Some(0)]);
     assert!(t.players[0].tokens.contains(&token.value));
@@ -127,7 +128,7 @@ fn enough_own_climbers_leave_without_a_vote_and_take_the_token() {
 fn a_vote_passes_and_pays_the_needed_yes() {
     let mut s = fresh(5);
     s.rooms[3] = vec![Some(0), Some(1)];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     let v = t.vote.clone().unwrap();
     assert_eq!((v.room, v.need, v.answers[0]), (3, 2, Some(1)));
     assert_eq!(Pahunch::pending(&t), vec![1]);
@@ -150,18 +151,15 @@ fn a_no_keeps_the_climber_and_the_mover_moves_again() {
     let mut s = fresh(5);
     s.rooms[3] = vec![Some(0), Some(1)];
     s.rooms[8] = vec![Some(0), Some(0)];
-    let t = act(&act(&s, 0, Action::Climb { path: 11 }), 1, Action::Vote { yes: 0 });
+    let t = act(&act(&s, 0, Action::climb(11)), 1, Action::Vote { yes: 0 });
     assert_eq!(t.rooms[3], vec![Some(0), Some(1)]);
     assert!(t.vote.is_none());
     assert_eq!(t.log.last(), Some(&LogEntry::Fail { p: 0 }));
     assert_eq!((t.turn, t.tried.clone()), (0, vec![3]));
     assert_eq!(Pahunch::pending(&t), vec![0]);
-    assert_eq!(
-        refused(&t, 0, Action::Climb { path: 12 }),
-        "That room already said no this turn"
-    );
+    assert_eq!(refused(&t, 0, Action::climb(12)), "That room already said no this turn");
     // Another room, or a climb that needs no vote, is fine; the next turn forgets.
-    let u = act(&t, 0, Action::Climb { path: 4 });
+    let u = act(&t, 0, Action::climb(4));
     assert_eq!((u.turn, u.tried.clone()), (1, vec![]));
 }
 
@@ -170,7 +168,7 @@ fn with_the_setting_on_a_no_ends_the_turn() {
     let mut s = fresh(5);
     s.options.fail_ends_turn = true;
     s.rooms[3] = vec![Some(0), Some(1)];
-    let t = act(&act(&s, 0, Action::Climb { path: 11 }), 1, Action::Vote { yes: 0 });
+    let t = act(&act(&s, 0, Action::climb(11)), 1, Action::Vote { yes: 0 });
     assert_eq!((t.turn, t.tried.clone()), (1, vec![]));
 }
 
@@ -180,7 +178,7 @@ fn a_bribe_stays_spent_when_the_vote_fails() {
     let mut s = fresh(5);
     s.rooms[1] = vec![None, Some(0), Some(1), Some(2)];
     s.players[0].tokens = vec![3];
-    let t = act(&s, 0, Action::Climb { path: 7 });
+    let t = act(&s, 0, Action::climb(7));
     let t = act(&t, 0, Action::Bribe { token: 3 });
     let t = act(&act(&t, 1, Action::Vote { yes: 0 }), 2, Action::Vote { yes: 0 });
     assert!(t.vote.is_none());
@@ -217,7 +215,7 @@ fn only_the_needed_yes_earn_a_token() {
     let mut s = fresh(5);
     // Room 1 seats 5: leaving takes 3.
     s.rooms[1] = vec![Some(0), Some(1), Some(1), Some(1), Some(2)];
-    let t = act(&s, 0, Action::Climb { path: 7 });
+    let t = act(&s, 0, Action::climb(7));
     let t = act(&t, 2, Action::Vote { yes: 0 });
     assert!(t.vote.is_some());
     let u = act(&t, 1, Action::Vote { yes: 3 });
@@ -231,12 +229,12 @@ fn a_climb_without_enough_voters_is_refused() {
     let mut s = fresh(5);
     s.rooms[1] = vec![Some(0), Some(1)];
     assert_eq!(
-        refused(&s, 0, Action::Climb { path: 7 }),
+        refused(&s, 0, Action::climb(7)),
         "Leaving takes 3 yes votes; there are not enough voters in the room"
     );
     s.rooms[9] = vec![Some(1); 3];
     s.rooms[3] = vec![Some(0), Some(0)];
-    assert_eq!(refused(&s, 0, Action::Climb { path: 11 }), "The room above is full");
+    assert_eq!(refused(&s, 0, Action::climb(11)), "The room above is full");
 }
 
 #[test]
@@ -246,9 +244,9 @@ fn a_neutral_takes_one_token_of_two_or_more_and_it_leaves_the_game() {
     // Only 1s: a neutral will not take them, two or more of them neither, so the climb cannot
     // pass.
     s.players[0].tokens = vec![1, 1, 1, 1];
-    assert!(apply_action(&s, 0, &Action::Climb { path: 7 }).is_err());
+    assert!(apply_action(&s, 0, &Action::climb(7)).is_err());
     s.players[0].tokens = vec![1, 3];
-    let t = act(&s, 0, Action::Climb { path: 7 });
+    let t = act(&s, 0, Action::climb(7));
     assert_eq!(Pahunch::pending(&t), vec![0], "only the neutral is left to ask");
     assert_eq!(
         refused(&t, 0, Action::Bribe { token: 1 }),
@@ -268,7 +266,7 @@ fn a_neutral_takes_one_token_of_two_or_more_and_it_leaves_the_game() {
 fn the_mover_can_give_up_the_climb() {
     let mut s = fresh(5);
     s.rooms[3] = vec![Some(0), Some(1)];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert_eq!(
         refused(&t, 1, Action::Withdraw),
         "Only the climber can give up the climb"
@@ -284,7 +282,7 @@ fn the_blockers_path_needs_no_vote_and_pays_nothing() {
     s.rooms[13] = vec![Some(0), Some(1)];
     assert_eq!(s.blocker, 20);
     let token = s.tokens_on[20];
-    let t = act(&s, 0, Action::Climb { path: 20 });
+    let t = act(&s, 0, Action::climb(20));
     assert_eq!(t.rooms[14], vec![Some(0)]);
     assert_eq!(t.tokens_on[20], token);
     assert_eq!(t.players[0].tokens, vec![1, 1]);
@@ -312,9 +310,9 @@ fn the_blocker_sits_only_on_a_token_path() {
 fn back_paths_are_locked() {
     let mut s = fresh(4);
     s.rooms[0] = vec![Some(0)];
-    assert_eq!(refused(&s, 0, Action::Climb { path: 1 }), "The back stairs are locked");
-    assert_eq!(refused(&s, 0, Action::Climb { path: 2 }), "The back stairs are locked");
-    act(&s, 0, Action::Climb { path: 0 });
+    assert_eq!(refused(&s, 0, Action::climb(1)), "The back stairs are locked");
+    assert_eq!(refused(&s, 0, Action::climb(2)), "The back stairs are locked");
+    act(&s, 0, Action::climb(0));
     s.rooms[8] = vec![None];
     assert_eq!(refused(&s, 0, Action::Nudge { path: 5 }), "The back stairs are locked");
 }
@@ -412,7 +410,7 @@ fn giving_away_the_bribe_ends_a_vote_that_cannot_pass() {
     let mut s = fresh(3);
     s.rooms[1] = vec![None, Some(0), Some(0)];
     s.players[0].tokens = vec![3];
-    let t = act(&s, 0, Action::Climb { path: 7 });
+    let t = act(&s, 0, Action::climb(7));
     let u = act(&t, 0, Action::Give { to: 1, tokens: vec![3] });
     assert!(u.vote.is_none());
     assert_eq!(u.log.last(), Some(&LogEntry::Fail { p: 0 }));
@@ -426,7 +424,7 @@ fn the_full_top_room_ends_the_game_and_the_first_of_the_best_wins() {
     s.players[1].tokens = vec![5];
     s.players[2].tokens = vec![2, 3];
     s.players[4].tokens = vec![50]; // not at the top: cannot win
-    let t = act(&s, 0, Action::Climb { path: 20 });
+    let t = act(&s, 0, Action::climb(20));
     assert!(t.over);
     assert_eq!(t.winners, vec![1]);
     assert!(Pahunch::pending(&t).is_empty());
@@ -451,7 +449,7 @@ fn ending_early_has_no_winner() {
 fn others_see_neither_tokens_nor_what_was_taken() {
     let mut s = fresh(5);
     s.rooms[3] = vec![Some(0), Some(0)];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     let took = |v: &pahunch::View| match v.log.last() {
         Some(LogEntry::Climb { took, token, .. }) => (*took, *token),
         e => panic!("{e:?}"),
@@ -474,7 +472,7 @@ fn the_vote_clock_runs_during_a_vote_and_silence_says_no() {
     let mut s = fresh(5);
     s.rooms[1] = vec![Some(0), Some(1), Some(2), Some(2), Some(3)];
     assert_eq!(Pahunch::clock(&s), None);
-    let t = act(&s, 0, Action::Climb { path: 7 });
+    let t = act(&s, 0, Action::climb(7));
     let (start, last) = Pahunch::clock(&t).unwrap();
     assert_eq!(start, last);
     let u = act(&t, 2, Action::Vote { yes: 1 });
@@ -507,7 +505,7 @@ fn reseating_moves_climbers_tokens_and_votes() {
     let mut s = fresh(3);
     s.rooms[3] = vec![Some(0), Some(1)];
     s.players[1].tokens = vec![4];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     let r = reseat(&t, &[2, 0, 1]).unwrap();
     assert_eq!(r.rooms[3], vec![Some(2), Some(0)]);
     assert_eq!(r.players[0].tokens, vec![4]);
@@ -532,7 +530,7 @@ fn on_a_special(bonus: Bonus) -> State {
 #[test]
 fn a_block_coin_gives_one_more_blocker_move() {
     let s = on_a_special(Bonus::Block);
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert_eq!(
         t.log.last(),
         Some(&LogEntry::Bonus {
@@ -545,11 +543,11 @@ fn a_block_coin_gives_one_more_blocker_move() {
     assert_eq!(t.bonuses.block, 1);
     assert_eq!(
         refused(&t, 0, Action::Enter { room: 0 }),
-        "Use a bonus move or end the turn"
+        "Use an extra move or end the turn"
     );
     assert_eq!(
         refused(&t, 0, Action::Nudge { path: 7 }),
-        "Use a bonus move or end the turn"
+        "Use an extra move or end the turn"
     );
     assert_eq!(
         refused(&t, 0, Action::Block { path: 0 }),
@@ -558,18 +556,18 @@ fn a_block_coin_gives_one_more_blocker_move() {
     assert_eq!(refused(&t, 1, Action::Done), "It is not your turn");
     let u = act(&t, 0, Action::Block { path: 4 });
     assert_eq!((u.blocker, u.turn), (4, 1));
-    assert!(!u.bonuses.any());
+    assert!(!u.moved);
 }
 
 #[test]
 fn a_nudge_coin_gives_one_free_nudge_or_the_turn_ends_on_done() {
     let mut s = on_a_special(Bonus::Nudge);
     s.rooms[1] = vec![None];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert_eq!(t.bonuses.nudge, 1);
     assert_eq!(
         refused(&t, 0, Action::Block { path: 4 }),
-        "Use a bonus move or end the turn"
+        "Use an extra move or end the turn"
     );
     let u = act(&t, 0, Action::Nudge { path: 7 });
     assert_eq!((u.rooms[8].clone(), u.turn), (vec![None], 1));
@@ -584,25 +582,25 @@ fn a_bonus_fires_only_when_the_coin_is_taken() {
     // Under the blocker the coin stays, and so does its bonus.
     let mut s = on_a_special(Bonus::Block);
     s.blocker = 11;
-    let t = act(&s, 0, Action::Climb { path: 11 });
-    assert_eq!((t.turn, t.bonuses.any()), (1, false));
+    let t = act(&s, 0, Action::climb(11));
+    assert_eq!((t.turn, t.moved), (1, false));
     assert_eq!(t.tokens_on[11], s.tokens_on[11]);
     // Taken after a vote, it fires as well.
     let mut s = on_a_special(Bonus::Block);
     s.rooms[3] = vec![Some(0), Some(1)];
-    let t = act(&act(&s, 0, Action::Climb { path: 11 }), 1, Action::Vote { yes: 1 });
+    let t = act(&act(&s, 0, Action::climb(11)), 1, Action::Vote { yes: 1 });
     assert_eq!((t.turn, t.bonuses.block), (0, 1));
     // Given away, it is a plain 2.
     let u = act(&act(&t, 0, Action::Done), 0, Action::Give { to: 2, tokens: vec![2] });
     assert_eq!(u.players[2].tokens, vec![1, 1, 2]);
-    assert_eq!((u.turn, u.bonuses.any()), (1, false));
+    assert_eq!((u.turn, u.moved), (1, false));
 }
 
 #[test]
 fn a_favour_coin_without_favours_is_a_plain_two() {
     let mut s = on_a_special(Bonus::Favour);
     s.options.favours = false;
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert!(!t.log.iter().any(|e| matches!(e, LogEntry::Bonus { .. })));
     assert_eq!(t.turn, 1);
 }
@@ -612,7 +610,7 @@ fn a_full_top_ends_the_game_even_with_a_bonus_left() {
     let mut s = on_a_special(Bonus::Nudge);
     s.rooms[14] = vec![Some(1), Some(1), Some(2), Some(2)];
     s.rooms[13] = vec![None, None];
-    let t = act(&s, 0, Action::Climb { path: 11 });
+    let t = act(&s, 0, Action::climb(11));
     assert_eq!(t.bonuses.nudge, 1);
     let u = act(&t, 0, Action::Nudge { path: 20 });
     assert!(u.over);
@@ -621,7 +619,7 @@ fn a_full_top_ends_the_game_even_with_a_bonus_left() {
 
 #[test]
 fn a_skipped_mover_with_a_bonus_makes_a_legal_bonus_move() {
-    let t = act(&on_a_special(Bonus::Block), 0, Action::Climb { path: 11 });
+    let t = act(&on_a_special(Bonus::Block), 0, Action::climb(11));
     let u = apply_skip(&t, 0).unwrap();
     assert!(matches!(
         u.log.last(),
@@ -642,20 +640,442 @@ fn a_game_saved_with_bare_number_tokens_loads() {
         .map(|t| serde_json::json!(t.map(|c| c.value)))
         .collect();
     o.insert("tokensOn".into(), on.into());
-    o.remove("bonuses");
+    for key in ["bonuses", "moved", "lent", "used"] {
+        o.remove(key);
+    }
+    for p in o["players"].as_array_mut().unwrap() {
+        let p = p.as_object_mut().unwrap();
+        p.remove("favour");
+        p.remove("uses");
+    }
     let old: State = serde_json::from_value(json).unwrap();
     assert_eq!(old.bag, vec![Coin::plain(2), Coin::plain(3), Coin::plain(5)]);
     assert_eq!(old.tokens_on, s.tokens_on);
-    assert!(!old.bonuses.any());
+    assert!(!old.moved && old.lent.is_empty());
+    assert!(old.players.iter().all(|p| p.favour.is_none() && p.uses == 0));
 }
 
 #[test]
 fn reseating_moves_bonus_lines() {
-    let t = act(&on_a_special(Bonus::Block), 0, Action::Climb { path: 11 });
+    let t = act(&on_a_special(Bonus::Block), 0, Action::climb(11));
     let r = reseat(&act(&t, 0, Action::Done), &[1, 2, 3, 4, 0]).unwrap();
     assert!(r.log.contains(&LogEntry::Bonus {
         p: 1,
         kind: Bonus::Block
     }));
     assert!(r.log.contains(&LogEntry::Done { p: 1 }));
+}
+
+// ---- favours ----
+
+/// `owner` holds the one favour in the game, `kind` with both uses, and offers it to the mover.
+fn lent(s: &State, owner: u8, kind: FavourKind) -> State {
+    let mut s = s.clone();
+    for p in &mut s.players {
+        p.favour = None;
+        p.uses = 0;
+    }
+    s.players[usize::from(owner)].favour = Some(kind);
+    s.players[usize::from(owner)].uses = 2;
+    act(&s, owner, Action::Lend { on: true })
+}
+
+fn used(owner: u8, kind: FavourKind) -> LogEntry {
+    LogEntry::Favour { owner, user: 0, kind }
+}
+
+#[test]
+fn every_player_is_dealt_a_different_favour_with_two_uses() {
+    for n in [3, 4, 5] {
+        let s = pahunch::new_game(n, 11, 0).unwrap();
+        let mut kinds: Vec<FavourKind> = s.players.iter().map(|p| p.favour.unwrap()).collect();
+        kinds.sort_unstable();
+        kinds.dedup();
+        assert_eq!(kinds.len(), usize::from(n));
+        assert!(s.players.iter().all(|p| p.uses == 2));
+        let off = Options {
+            favours: false,
+            ..Options::default()
+        };
+        let plain = pahunch::new_game_with(n, 11, 0, off).unwrap();
+        assert!(plain.players.iter().all(|p| p.favour.is_none() && p.uses == 0));
+        assert_eq!(
+            (plain.turn, &plain.tokens_on),
+            (s.turn, &s.tokens_on),
+            "favours draw last"
+        );
+    }
+    for kind in FavourKind::ALL {
+        assert!(favour_pay().contains_key(&kind), "{kind:?} has a pay");
+    }
+    let view = view_for(&pahunch::new_game(3, 11, 0).unwrap(), None);
+    assert!(
+        view.players.iter().all(|p| p.favour.is_some() && p.uses == 2),
+        "favours are public"
+    );
+}
+
+#[test]
+fn a_favour_is_offered_on_another_players_turn_and_can_be_taken_back() {
+    let s = fresh(4);
+    let mut mine = s.clone();
+    mine.players[0].favour = Some(FavourKind::BackStairs);
+    assert_eq!(
+        refused(&mine, 0, Action::Lend { on: true }),
+        "A favour helps another player's move"
+    );
+    let t = lent(&s, 2, FavourKind::BackStairs);
+    assert_eq!(t.lent, vec![2]);
+    assert_eq!(view_for(&t, Some(1)).lent, vec![2], "offers are public");
+    assert_eq!(
+        refused(&t, 2, Action::Lend { on: true }),
+        "Your favour is on offer already"
+    );
+    let back = act(&t, 2, Action::Lend { on: false });
+    assert!(back.lent.is_empty());
+    assert_eq!(
+        refused(&back, 2, Action::Lend { on: false }),
+        "Your favour is not on offer"
+    );
+    // An offer the mover does not use costs nothing and ends with the turn.
+    let u = act(&t, 0, Action::Enter { room: 1 });
+    assert_eq!((u.turn, u.lent.clone(), u.players[2].uses), (1, vec![], 2));
+    let mut spent = t.clone();
+    spent.lent.clear();
+    spent.players[2].uses = 0;
+    assert_eq!(refused(&spent, 2, Action::Lend { on: true }), "Your favour is used up");
+    let mut off = s.clone();
+    off.options.favours = false;
+    assert_eq!(refused(&off, 2, Action::Lend { on: true }), "Favours are off this game");
+}
+
+#[test]
+fn the_back_gate_key_opens_back_paths_for_climbs_and_nudges() {
+    let mut s = fresh(4);
+    s.rooms[0] = vec![Some(0)];
+    s.rooms[1] = vec![None];
+    assert_eq!(refused(&s, 0, Action::climb(1)), "The back stairs are locked");
+    let t = lent(&s, 3, FavourKind::BackStairs);
+    let u = act(&t, 0, Action::climb(1));
+    assert_eq!((u.rooms[8].clone(), u.turn), (vec![Some(0)], 1));
+    assert!(u.log.contains(&used(3, FavourKind::BackStairs)));
+    assert_eq!(u.players[3].uses, 1);
+    assert_eq!(u.players[3].tokens, vec![1, 1], "it pays nothing");
+    let n = act(&t, 0, Action::Nudge { path: 9 });
+    assert_eq!(n.rooms[9], vec![None]);
+    assert_eq!(n.players[3].uses, 1);
+}
+
+#[test]
+fn the_extra_block_moves_the_blocker_before_or_after_the_main_move() {
+    let s = lent(&fresh(4), 1, FavourKind::ExtraBlock);
+    // Before: the blocker moves and the turn stays for the main move.
+    let t = act(&s, 0, Action::Block { path: 4 });
+    assert_eq!((t.blocker, t.turn, t.moved), (4, 0, false));
+    assert_eq!(t.players[1].uses, 1);
+    assert!(t.log.contains(&LogEntry::Reward { p: 1, ones: 1 }));
+    assert_eq!(
+        refused(&t, 1, Action::Lend { on: true }),
+        "Your favour was used this turn"
+    );
+    assert_eq!(act(&t, 0, Action::Enter { room: 1 }).turn, 1);
+    // After: the turn stays for it, until it is used or the turn ends.
+    let after = act(&s, 0, Action::Enter { room: 1 });
+    assert_eq!((after.turn, after.moved, Pahunch::pending(&after)), (0, true, vec![0]));
+    assert_eq!(
+        refused(&after, 0, Action::Nudge { path: 7 }),
+        "Use an extra move or end the turn"
+    );
+    let block = act(&after, 0, Action::Block { path: 6 });
+    assert_eq!((block.blocker, block.turn, block.players[1].uses), (6, 1, 1));
+    let d = act(&after, 0, Action::Done);
+    assert_eq!((d.turn, d.players[1].uses), (1, 2));
+    // Taken back before the main move, the turn passes on that move.
+    let back = act(&act(&s, 1, Action::Lend { on: false }), 0, Action::Enter { room: 1 });
+    assert_eq!(back.turn, 1);
+}
+
+#[test]
+fn the_covered_token_is_taken_from_under_the_blocker() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(0)];
+    s.blocker = 11;
+    let coin = s.tokens_on[11].unwrap();
+    let refill = *s.bag.last().unwrap();
+    let t = act(&lent(&s, 2, FavourKind::CoveredToken), 0, Action::climb(11));
+    assert_eq!((t.blocker, t.tokens_on[11]), (11, Some(refill)));
+    assert!(t.players[0].tokens.contains(&coin.value));
+    assert!(t.log.contains(&LogEntry::Reward { p: 2, ones: 2 }));
+    // Off the blocker's path it is not used.
+    let u = act(&lent(&s, 2, FavourKind::CoveredToken), 0, Action::climb(12));
+    assert_eq!(u.players[2].uses, 2);
+}
+
+#[test]
+fn the_token_swap_takes_another_board_token_instead() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(0)];
+    s.rooms[0] = vec![Some(0)];
+    let swap = |path, to| Action::Climb {
+        path,
+        swap: Some(to),
+        carry: None,
+    };
+    assert_eq!(refused(&s, 0, swap(11, 4)), "Nobody offers a token swap");
+    let s = lent(&s, 1, FavourKind::SwapToken);
+    assert_eq!(refused(&s, 0, swap(0, 4)), "That climb takes no token to swap");
+    assert_eq!(
+        refused(&s, 0, swap(11, 20)),
+        "Swap for another uncovered token on the board"
+    );
+    assert_eq!(
+        refused(&s, 0, swap(11, 11)),
+        "Swap for another uncovered token on the board"
+    );
+    let (own, other, refill) = (s.tokens_on[11], s.tokens_on[4].unwrap(), *s.bag.last().unwrap());
+    let t = act(&s, 0, swap(11, 4));
+    assert_eq!((t.tokens_on[11], t.tokens_on[4]), (own, Some(refill)));
+    assert!(t.players[0].tokens.contains(&other.value));
+    assert!(t.log.contains(&used(1, FavourKind::SwapToken)));
+}
+
+#[test]
+fn climb_again_lets_a_climber_in_a_one_room_go_on() {
+    let s = lent(&fresh(4), 1, FavourKind::ClimbAgain);
+    let t = act(&s, 0, Action::Enter { room: 2 });
+    assert_eq!((t.turn, t.bonuses.climb_again), (0, Some(2)));
+    assert_eq!(t.players[1].uses, 2, "used only when the climber goes on");
+    assert_eq!(
+        refused(&t, 0, Action::climb(11)),
+        "Climb on with the climber that just arrived"
+    );
+    let u = act(&t, 0, Action::climb(10));
+    assert_eq!((u.rooms[9].clone(), u.turn, u.players[1].uses), (vec![Some(0)], 1, 1));
+    assert!(u.log.contains(&used(1, FavourKind::ClimbAgain)));
+    let d = act(&t, 0, Action::Done);
+    assert_eq!((d.turn, d.players[1].uses), (1, 2));
+    // Into a room of 3 there is nothing to offer.
+    assert_eq!(act(&s, 0, Action::Enter { room: 3 }).turn, 1);
+}
+
+#[test]
+fn squeezing_in_puts_one_extra_into_a_full_room_but_never_the_top() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(1), Some(2), Some(3)];
+    assert_eq!(refused(&s, 0, Action::Enter { room: 3 }), "That room is full");
+    let t = act(&lent(&s, 1, FavourKind::SqueezeIn), 0, Action::Enter { room: 3 });
+    assert_eq!(t.rooms[3].len(), 4);
+    assert!(t.log.contains(&LogEntry::Reward { p: 1, ones: 2 }));
+    // One extra at most.
+    let mut u = lent(&t, 2, FavourKind::SqueezeIn);
+    u.turn = 1;
+    u.lent = vec![2];
+    u.used.clear();
+    assert_eq!(refused(&u, 1, Action::Enter { room: 3 }), "That room is full");
+    // Leaving still takes the votes of a room of 3.
+    let mut v = fresh(4);
+    v.rooms[3] = vec![Some(0), Some(0), Some(1), Some(2)];
+    assert_eq!(act(&v, 0, Action::climb(11)).turn, 1, "2 own climbers are enough");
+}
+
+#[test]
+fn a_carry_takes_one_more_piece_along_without_a_token() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(0), Some(1)];
+    let carry = |c| Action::Climb {
+        path: 11,
+        swap: None,
+        carry: Some(c),
+    };
+    assert_eq!(
+        refused(&s, 0, carry(Carry::Seat { seat: 1 })),
+        "Nobody offers to take a piece along"
+    );
+    let s = lent(&s, 2, FavourKind::Carry);
+    assert_eq!(refused(&s, 0, carry(Carry::Neutral)), "That piece is not in the room");
+    let t = act(&s, 0, carry(Carry::Seat { seat: 1 }));
+    assert_eq!(t.rooms[9], vec![Some(0), Some(1)]);
+    assert_eq!(t.rooms[3], vec![Some(0)]);
+    assert_eq!(t.players[1].tokens, vec![1, 1], "the carried piece takes no token");
+    assert!(t.log.contains(&LogEntry::Carry {
+        p: 0,
+        who: Some(1),
+        path: 11
+    }));
+    let own = act(&s, 0, carry(Carry::Seat { seat: 0 }));
+    assert_eq!(own.rooms[9], vec![Some(0), Some(0)]);
+    // It needs two places above; a squeeze can give one.
+    let mut full = s.clone();
+    full.rooms[9] = vec![Some(3), Some(3)];
+    assert_eq!(
+        refused(&full, 0, carry(Carry::Seat { seat: 1 })),
+        "The room above is full"
+    );
+    let mut both = full.clone();
+    both.players[3].favour = Some(FavourKind::SqueezeIn);
+    both.players[3].uses = 2;
+    let both = act(&both, 3, Action::Lend { on: true });
+    let u = act(&both, 0, carry(Carry::Seat { seat: 1 }));
+    assert_eq!(u.rooms[9].len(), 4);
+    assert_eq!((u.players[2].uses, u.players[3].uses), (1, 1));
+}
+
+#[test]
+fn a_carry_after_a_vote_waits_for_the_vote() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(1), Some(2)];
+    let s = lent(&s, 3, FavourKind::Carry);
+    let t = act(
+        &s,
+        0,
+        Action::Climb {
+            path: 11,
+            swap: None,
+            carry: Some(Carry::Seat { seat: 2 }),
+        },
+    );
+    assert!(t.vote.is_some());
+    assert_eq!(
+        refused(&t, 3, Action::Lend { on: false }),
+        "Wait for the vote to finish"
+    );
+    let failed = act(&act(&t, 1, Action::Vote { yes: 0 }), 2, Action::Vote { yes: 0 });
+    assert_eq!((failed.players[3].uses, failed.rooms[3].len()), (2, 3));
+    let passed = act(&t, 1, Action::Vote { yes: 1 });
+    assert_eq!(passed.rooms[9], vec![Some(0), Some(2)]);
+    assert_eq!(passed.players[3].uses, 1);
+}
+
+#[test]
+fn a_favour_coin_gives_a_use_back() {
+    let mut s = on_a_special(Bonus::Favour);
+    s.players[0].favour = Some(FavourKind::Carry);
+    s.players[0].uses = 1;
+    let t = act(&s, 0, Action::climb(11));
+    assert_eq!(t.players[0].uses, 2);
+    assert!(t.log.contains(&LogEntry::Bonus {
+        p: 0,
+        kind: Bonus::Favour
+    }));
+    s.players[0].uses = 2;
+    let full = act(&s, 0, Action::climb(11));
+    assert_eq!(full.players[0].uses, 2);
+    assert!(!full.log.iter().any(|e| matches!(e, LogEntry::Bonus { .. })));
+}
+
+#[test]
+fn reseating_moves_favours_offers_and_carries() {
+    let mut s = fresh(3);
+    s.rooms[3] = vec![Some(0), Some(1), Some(2)];
+    let s = lent(&s, 1, FavourKind::Carry);
+    let t = act(
+        &s,
+        0,
+        Action::Climb {
+            path: 11,
+            swap: None,
+            carry: Some(Carry::Seat { seat: 2 }),
+        },
+    );
+    let r = reseat(&t, &[1, 2, 0]).unwrap();
+    assert_eq!(r.lent, vec![2]);
+    assert_eq!(r.players[2].favour, Some(FavourKind::Carry));
+    assert_eq!(r.vote.as_ref().unwrap().carry, Some(Carry::Seat { seat: 0 }));
+    let done = act(&t, 1, Action::Vote { yes: 1 });
+    let r = reseat(&done, &[1, 2, 0]).unwrap();
+    assert!(r.log.contains(&LogEntry::Favour {
+        owner: 2,
+        user: 1,
+        kind: FavourKind::Carry
+    }));
+    assert!(r.log.contains(&LogEntry::Carry {
+        p: 1,
+        who: Some(0),
+        path: 11
+    }));
+}
+
+/// Random games where the other players lend whenever they like and the mover now and then asks
+/// for a swap or a carry: the board stays sound and every game ends.
+#[test]
+fn random_games_with_favours_lent_keep_the_board_sound() {
+    use rand::rngs::StdRng;
+    use rand::{RngExt, SeedableRng};
+    let mut seen = std::collections::BTreeSet::new();
+    for n in [3_u8, 4, 5] {
+        for seed in 0..40_u32 {
+            let mut rng = StdRng::seed_from_u64(u64::from(seed));
+            let mut s = pahunch::new_game(n, seed, 0).unwrap();
+            let pieces = s.rooms.iter().flatten().filter(|x| x.is_none()).count();
+            let mut steps = 0;
+            while !s.over {
+                steps += 1;
+                assert!(steps < 5000, "{n} seats, seed {seed}: no end");
+                let other = rng.random_range(0..n);
+                if let Ok(t) = apply_action(
+                    &s,
+                    other,
+                    &Action::Lend {
+                        on: rng.random_bool(0.8),
+                    },
+                ) {
+                    s = t;
+                }
+                let seat = Pahunch::pending(&s)[0];
+                let mut a = pahunch::choose_action(&view_for(&s, Some(seat)), &mut rng).unwrap();
+                if let Action::Climb { path, .. } = a {
+                    let pick = rng.random_range(0..10_u8);
+                    let tweak = match pick {
+                        0..2 => Action::Climb {
+                            path,
+                            swap: Some(rng.random_range(0..24)),
+                            carry: None,
+                        },
+                        2..4 => Action::Climb {
+                            path,
+                            swap: None,
+                            carry: Some(if pick == 2 {
+                                Carry::Neutral
+                            } else {
+                                Carry::Seat {
+                                    seat: rng.random_range(0..n),
+                                }
+                            }),
+                        },
+                        _ => a.clone(),
+                    };
+                    if apply_action(&s, seat, &tweak).is_ok() {
+                        a = tweak;
+                    }
+                }
+                s = act(&s, seat, a);
+                for (r, room) in s.rooms.iter().enumerate() {
+                    let r = u8::try_from(r).unwrap();
+                    let cap = usize::from(s.layout.cap(r));
+                    let most = if r == s.layout.summit { cap } else { cap + 1 };
+                    assert!(
+                        room.len() <= most,
+                        "{n} seats, seed {seed}: room {r} holds {}",
+                        room.len()
+                    );
+                }
+                for seat in 0..n {
+                    let on = s.rooms.iter().flatten().filter(|&&x| x == Some(seat)).count();
+                    assert_eq!(on + usize::from(s.players[usize::from(seat)].hand), 6);
+                }
+                assert_eq!(s.rooms.iter().flatten().filter(|x| x.is_none()).count(), pieces);
+                assert!(s.players.iter().all(|p| p.uses <= 2));
+                assert!(!s.lent.contains(&s.turn) || s.over);
+            }
+            seen.extend(s.log.iter().filter_map(|e| match e {
+                LogEntry::Favour { kind, .. } => Some(*kind),
+                _ => None,
+            }));
+        }
+    }
+    assert_eq!(
+        seen.into_iter().collect::<Vec<_>>(),
+        FavourKind::ALL,
+        "every favour got used"
+    );
 }

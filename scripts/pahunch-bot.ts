@@ -1,5 +1,5 @@
 // Random legal Pahunch moves from one seat's view, for socket bots and the state capture. Same
-// choices as the server's bot (crates/pahunch/src/bot.rs): no thinking, no gifts.
+// choices as the server's bot (crates/pahunch/src/bot.rs): no thinking, no gifts, no lending.
 
 import {
   blockTargets,
@@ -7,6 +7,7 @@ import {
   climbs,
   count,
   enterRooms,
+  extraMoves,
   nudges,
   votersLeft,
 } from "../src/games/pahunch/derive.ts";
@@ -29,13 +30,21 @@ export function choosePahunch(v: PahunchView, random: () => number): PahunchActi
     return bribes.length > 0 && random() < 0.7 ? { type: "bribe", token: bribes[0] } : { type: "withdraw" };
   }
 
-  // Bonus moves: mostly end the turn, now and then use one.
-  const { block: blocks, nudge: pushes } = v.bonuses;
-  if (blocks > 0 || pushes > 0) {
+  // Extra moves: mostly end the turn, now and then use one.
+  if (v.moved) {
+    const extra = extraMoves(v, me);
     const r = random() * 10;
-    const p = r < 3 && pushes > 0 ? pick(nudges(v)) : r >= 3 && r < 5 && blocks > 0 ? pick(blockTargets(v)) : undefined;
-    if (p === undefined) return { type: "done" };
-    return r < 3 ? { type: "nudge", path: p } : { type: "block", path: p };
+    if (r < 3 && extra.nudge) {
+      const p = pick(nudges(v));
+      if (p !== undefined) return { type: "nudge", path: p };
+    } else if (r >= 3 && r < 5 && extra.block) {
+      const p = pick(blockTargets(v));
+      if (p !== undefined) return { type: "block", path: p };
+    } else if (r >= 5 && r < 8) {
+      const c = pick(extra.again);
+      if (c) return { type: "climb", path: c.path };
+    }
+    return { type: "done" };
   }
 
   const ups = climbs(v, me);

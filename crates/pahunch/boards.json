@@ -1,4 +1,13 @@
 {
+  "favours": {
+    "extraBlock": 1,
+    "coveredToken": 2,
+    "swapToken": 1,
+    "climbAgain": 1,
+    "squeezeIn": 2,
+    "backStairs": 0,
+    "carry": 1
+  },
   "boards": [
     {
       "id": "full",

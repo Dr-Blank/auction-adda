@@ -1,7 +1,7 @@
 // What a Pahunch theme names and colours. The rules know rooms, paths, climbers, neutrals, a
 // blocker and point tokens by number; a skin turns them into a housing society, a film set…
 
-import type { PahunchBonus } from "../../generated/index.ts";
+import type { PahunchBonus, PahunchFavour } from "../../generated/index.ts";
 import type { Skin } from "../types.ts";
 
 export interface PahunchNouns {
@@ -34,6 +34,8 @@ export interface PahunchSkin extends Skin {
   story: string;
   /** What each special coin is called. */
   bonuses: Record<PahunchBonus, string>;
+  /** Each favour: its name, a mark for small places, and what it lets the mover do, in one sentence. */
+  favours: Record<PahunchFavour, { name: string; glyph: string; effect: string }>;
 }
 
 export const societyCommittee: PahunchSkin = {
@@ -109,6 +111,44 @@ export const societyCommittee: PahunchSkin = {
   neutralGlyph: "A",
   blockerGlyph: "D",
   bonuses: { block: "Chai with Daddu", nudge: "Kitty party invite", favour: "Favour returned" },
+  favours: {
+    extraBlock: {
+      name: "Daddu’s chess partner",
+      glyph: "♞",
+      effect: "The mover also sends Daddu to another staircase, before or after their move.",
+    },
+    coveredToken: {
+      name: "Daddu’s favourite",
+      glyph: "♥",
+      effect: "Walking past Daddu, the mover still takes the izzat he sits on.",
+    },
+    swapToken: {
+      name: "Kitty party host",
+      glyph: "⇄",
+      effect: "Moving up, the mover takes any other izzat lying on the board instead of the one on their staircase.",
+    },
+    climbAgain: {
+      name: "Fast-track",
+      glyph: "⏩",
+      effect: "A resident the mover puts into a one-seat post moves up again at once.",
+    },
+    squeezeIn: {
+      name: "Builder’s relative",
+      glyph: "+1",
+      effect: "The mover fits one extra into a full committee (never the Chairman’s cabin).",
+    },
+    backStairs: {
+      name: "Back-gate key",
+      glyph: "🔑",
+      effect: "The mover may use a back staircase, with no vote.",
+    },
+    carry: {
+      name: "Car-pool uncle",
+      glyph: "🚗",
+      effect:
+        "Moving up, the mover brings one more resident or aunty from the same room along. It takes no izzat, and its owner has no say.",
+    },
+  },
   story:
     "Everyone in the society wants the Chairman’s cabin. Committees only let a resident move up when most of their members agree, so votes are traded for izzat, promises are made on the call, and the aunties can always be persuaded with a box of kaju katli. Daddu, the senior citizen, sits on one staircase: anyone may walk past him without a vote, but he sits on the izzat there, so nobody takes it.",
 };

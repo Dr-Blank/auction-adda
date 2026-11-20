@@ -18,7 +18,19 @@ tried: Array<number>,
 /**
  * Bonus moves the mover has left this turn.
  */
-bonuses: PahunchBonuses, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
+bonuses: PahunchBonuses, 
+/**
+ * The mover made the main move and has extra moves left.
+ */
+moved: boolean, 
+/**
+ * Favours on offer to the mover, by owner.
+ */
+lent: Array<number>, 
+/**
+ * Favours the mover used this turn, by owner.
+ */
+used: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
 /**
  * Tokens left in the bag.
  */

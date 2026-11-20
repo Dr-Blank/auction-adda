@@ -6,7 +6,8 @@
 // Four socket players in a Society Committee room play random legal moves
 // (scripts/pahunch-bot.ts); a fifth tab watches. The script keeps the first state seat 0 receives
 // at each moment the render tests need (lobby, your move, their move, a vote as voter and as the
-// climber, a bonus move, the final result, a game the admin ended early, a spectator) and writes them to
+// climber, an extra move, a favour on offer to you, the final result, a game the admin ended early,
+// a spectator) and writes them to
 // test/fixtures/pahunch/. The clock fields are fixed, as in scripts/capture-states.ts.
 
 import fs from "node:fs";
@@ -106,7 +107,8 @@ players[0].onState((s) => {
   // Seats are drawn at the start: seat 0's player sits wherever `you` says.
   const me = g.you ?? -1;
   if (g.vote) keep(g.turn === me ? "vote-climber" : g.pending.includes(me) ? "vote-voter" : "vote-watching", s);
-  else if (g.turn === me && (g.bonuses.block > 0 || g.bonuses.nudge > 0)) keep("your-bonus", s);
+  else if (g.turn === me && g.moved) keep("your-bonus", s);
+  else if (g.turn === me && g.lent.length > 0) keep("favour-offered", s);
   else keep(g.turn === me ? "your-move" : "their-move", s);
 });
 watcher.onState((s) => {
@@ -115,6 +117,22 @@ watcher.onState((s) => {
 
 const play = async (until_: () => boolean) => {
   for (let step = 0; step < 20000 && !until_(); step++) {
+    // Now and then a player offers their favour to the mover, as a deal on the call would; the
+    // offer lands before the mover moves.
+    let lent = false;
+    for (const p of players) {
+      const v = p.latest()?.game;
+      const you = v?.you ?? null;
+      const mine = v && you !== null ? v.players[you] : undefined;
+      if (!v || you === null || !mine?.favour || v.over || v.turn === you || mine.uses === 0) continue;
+      if (v.lent.includes(you) || v.used.includes(you) || random() >= 0.1) continue;
+      p.send({ type: "action", action: { type: "lend", on: true } });
+      lent = true;
+    }
+    if (lent) {
+      await sleep(25);
+      continue;
+    }
     let moved = false;
     for (const p of players) {
       const v = p.latest()?.game;

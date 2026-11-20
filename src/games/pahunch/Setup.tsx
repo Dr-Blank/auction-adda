@@ -103,6 +103,8 @@ const OPTIONS = ((GAMES_JSON as { options?: Record<string, { id: string; label: 
 const HINTS: Record<string, string> = {
   failEndsTurn:
     "Off: after a vote fails you choose another move, but not a second vote out of that room. On: the turn passes at once.",
+  favours:
+    "On: every player gets a different favour with two uses, to offer the mover on their turn; its owner earns points each time it is used. Off: a simpler first game, with no favours.",
 };
 
 /** The game's own switches: the admin flips them in the lobby, everyone sees them. */

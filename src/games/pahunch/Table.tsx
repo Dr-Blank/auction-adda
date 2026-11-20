@@ -27,7 +27,8 @@ import { play } from "../../client/sound.ts";
 import type {
   ClientMsg,
   PahunchAction,
-  PahunchBonuses,
+  PahunchCarry,
+  PahunchFavour,
   PahunchLog,
   PahunchView,
   PahunchVote,
@@ -35,16 +36,21 @@ import type {
 } from "../../generated/index.ts";
 import type { TableProps } from "../types.ts";
 import { Board } from "./Board.tsx";
-import type { ClimbOption } from "./derive.ts";
+import type { ClimbOption, Extras } from "./derive.ts";
 import {
   atTop,
   blockTargets,
   bribeChoices,
+  carryTargets,
   climbs,
   count,
   enterRooms,
+  extraMoves,
   nudges,
+  offers,
+  onOffer,
   score,
+  swapTargets,
   votersLeft,
   yesSoFar,
 } from "./derive.ts";
@@ -120,17 +126,21 @@ export function Table({ state, send, reactions }: TableProps) {
     else if (fresh.some((e) => e.t === "climb")) play("bid");
     if (fresh.some((e) => e.t === "end")) play("fanfare");
   }, [v.log, v.logStart, me]);
-  const moment = `${v.turn}:${v.vote === null}`;
+  const [extras, setExtras] = useState<Extras>({});
+  const moment = `${v.turn}:${v.vote === null}:${v.moved}`;
   useEffect(() => {
-    if (moment) setSel(null);
+    if (moment) {
+      setSel(null);
+      setExtras({});
+    }
   }, [moment]);
 
   const myTurn = me !== null && !v.over && v.vote === null && v.turn === me;
-  // After the main move, only bonus moves are left (or ending the turn).
-  const bonus = v.bonuses.block > 0 || v.bonuses.nudge > 0 ? v.bonuses : null;
-  const myClimbs = myTurn && !bonus ? climbs(v, me) : [];
-  const myEnters = myTurn && !bonus ? enterRooms(v, me) : [];
-  const myNudges = myTurn && (!bonus || bonus.nudge > 0) ? nudges(v) : [];
+  // After the main move, only extra moves are left (or ending the turn).
+  const extra = myTurn && v.moved ? extraMoves(v, me) : null;
+  const myClimbs = myTurn ? (extra ? extra.again : climbs(v, me, extras)) : [];
+  const myEnters = myTurn && !extra ? enterRooms(v, me) : [];
+  const myNudges = myTurn && (!extra || extra.nudge) ? nudges(v) : [];
   const liveRooms = new Set<number>([
     ...myEnters,
     ...myClimbs.map((c) => v.layout.paths[c.path].from),
@@ -150,7 +160,9 @@ export function Table({ state, send, reactions }: TableProps) {
           climbs={myClimbs}
           enters={myEnters}
           nudges={myNudges}
-          bonus={bonus}
+          extra={extra}
+          extras={extras}
+          setExtras={setExtras}
           act={act}
         />
       );
@@ -200,7 +212,7 @@ export function Table({ state, send, reactions }: TableProps) {
             adminHint="Can skip an away player (a random move is made for them) and set the vote clock."
             endAsk="End the game for everyone? Nobody wins a game ended early."
             settings={<VoteClock room={room} me={me} send={send} />}
-            rules={<Rules skin={skin} n={v.n} />}
+            rules={<Rules skin={skin} n={v.n} options={v.options} />}
           />
         )}
       </header>
@@ -231,6 +243,7 @@ export function Table({ state, send, reactions }: TableProps) {
               onRoom={(r) => myTurn && setSel(sel?.room === r ? null : { room: r })}
               onPath={(p) => myTurn && setSel(sel?.path === p ? null : { path: p })}
             />
+            {me !== null && v.players[me]?.favour && <MyFavour ctx={ctx} act={act} />}
             {!myTurn && !v.vote && (
               <p className="muted ph-wait">
                 {v.turn === me ? "" : `${names[v.turn]} is choosing a move.`} Deals happen on the call; gifts of{" "}
@@ -342,6 +355,8 @@ function PlayerChip({
   const winner = v.over && v.winners.includes(i);
   const mark = owing ? (v.vote && i !== v.turn ? "votes" : "to move") : null;
   const { climber, climbers, points } = skin.nouns;
+  const favour = p.favour ? skin.favours[p.favour] : null;
+  const offered = v.lent.includes(i);
   const facts = [
     winner ? `👑 ${name} won the game.` : null,
     owing ? `${name} ${i === me ? "owe" : "owes"} a move now (${mark}).` : null,
@@ -350,6 +365,9 @@ function PlayerChip({
     p.tokens
       ? `${i === me ? "Your" : `${seat.name}’s`} ${points}: ${score(p.tokens)} (${p.tokens.length} tokens)${i === me && !v.over ? ". Only you can see it." : "."}`
       : `${points} stays hidden until the game ends.`,
+    favour
+      ? `Favour: ${favour.glyph} ${favour.name}, ${p.uses} of 2 uses left. ${favour.effect}${offered ? ` On offer to ${ctx.who(v.turn)} now.` : v.used.includes(i) ? ` Used by ${ctx.who(v.turn)} this turn.` : ""}`
+      : null,
     connectionFact(room, i, name, away, rights),
   ].filter((f): f is string => f !== null);
 
@@ -391,6 +409,14 @@ function PlayerChip({
             </b>
           )}
         </div>
+        {favour && (
+          <div className={`seat-line ph-counts ph-fav ${offered ? "offered" : ""}`}>
+            <span>
+              {favour.glyph} <Uses n={p.uses} />
+            </span>
+            {offered && <span className="ph-offered">on offer</span>}
+          </div>
+        )}
         <SeatAwayRow room={room} i={i} owing={owing} rights={rights} send={send} />
       </div>
       {info && (
@@ -432,17 +458,47 @@ function PlayerChip({
 
 // ---- your move ----
 
+/** Two dots for a favour's uses: filled ones are left. */
+function Uses({ n }: { n: number }) {
+  return (
+    <span className="ph-uses" role="img" aria-label={`${n} of 2 uses left`}>
+      {"●".repeat(n)}
+      {"○".repeat(Math.max(0, 2 - n))}
+    </span>
+  );
+}
+
 function climbNote(ctx: Ctx, c: ClimbOption): string {
   const { v, skin } = ctx;
-  const token = v.tokensOn[c.path];
-  if (c.kind === "blocked") return `the ${skin.nouns.blocker} lets you through, no ${skin.nouns.points}`;
-  const gain =
-    token !== null && (v.layout.rooms[v.layout.paths[c.path].from]?.cap ?? 0) > 1
-      ? ` · +${token.value}${token.bonus ? ` ${skin.bonuses[token.bonus]}` : ""}`
-      : "";
-  if (c.kind === "own") return `your ${skin.nouns.climbers} carry the vote${gain}`;
-  return `needs ${c.need} votes, you have ${c.own}${gain}`;
+  const token = c.takes === null ? null : v.tokensOn[c.takes];
+  const gain = token ? ` · +${token.value}${token.bonus ? ` ${skin.bonuses[token.bonus]}` : ""}` : "";
+  const favours = c.uses.map((k) => skin.favours[k].glyph).join(" ");
+  const lent = favours ? ` · ${favours}` : "";
+  if (c.kind === "blocked")
+    return `the ${skin.nouns.blocker} lets you through${token ? gain : `, no ${skin.nouns.points}`}${lent}`;
+  if (c.kind === "back") return `back stairs, no vote${lent}`;
+  if (c.kind === "own") return `your ${skin.nouns.climbers} carry the vote${gain}${lent}`;
+  return `needs ${c.need} votes, you have ${c.own}${gain}${lent}`;
 }
+
+/** The favours on offer to the mover, by owner. */
+function OnOffer({ ctx }: { ctx: Ctx }) {
+  const { v, skin } = ctx;
+  const list = onOffer(v);
+  if (list.length === 0) return null;
+  return (
+    <p className="ph-on-offer">
+      <span className="ph-act-label">On offer</span>{" "}
+      {list.map(({ owner, kind }) => (
+        <span key={owner} className="ph-offer">
+          {skin.favours[kind].glyph} {skin.favours[kind].name} ({ctx.names[owner]})
+        </span>
+      ))}
+    </p>
+  );
+}
+
+const carryKey = (c: PahunchCarry | undefined) => (c === undefined ? "" : c.t === "seat" ? `s${c.seat}` : "n");
 
 function MoveBar(props: {
   ctx: Ctx;
@@ -451,11 +507,14 @@ function MoveBar(props: {
   climbs: ClimbOption[];
   enters: number[];
   nudges: number[];
-  /** Bonus moves left after the main move; `null` before it. */
-  bonus: PahunchBonuses | null;
+  /** Extra moves left after the main move; `null` before it. */
+  extra: ReturnType<typeof extraMoves> | null;
+  /** Favour parts asked for the next climb (a swap, a carry). */
+  extras: Extras;
+  setExtras: (e: Extras) => void;
   act: (a: PahunchAction) => void;
 }) {
-  const { ctx, sel, act, bonus } = props;
+  const { ctx, sel, act, extra, extras, setExtras } = props;
   const { v, skin } = ctx;
   const paths = v.layout.paths;
   const inSel = (path: number) =>
@@ -467,9 +526,14 @@ function MoveBar(props: {
   const blockAt = sel?.path !== undefined && targets.includes(sel.path) ? sel.path : null;
   const [blockTo, setBlockTo] = useState<number>(() => targets[0] ?? 0);
   const route = (path: number) => `${ctx.room(paths[path].from)} → ${ctx.room(paths[path].to)}`;
-  const canBlock = !bonus || bonus.block > 0;
+  const canBlock = !extra || extra.block;
+  // Before the main move, a lent favour moves the blocker without ending the turn.
+  const blockFavour = !extra && offers(v, "extraBlock");
   const nothing = enters.length + ups.length + nudge.length === 0 && (blockAt === null || !canBlock);
-  const { climber } = skin.nouns;
+  const { climber, points, neutral } = skin.nouns;
+  const me = ctx.me ?? 0;
+  const swaps = !extra && offers(v, "swapToken") ? swapTargets(v) : [];
+  const carries = !extra && offers(v, "carry") ? carryTargets(v, me) : [];
   // On a phone the full list would cover the board: it stays folded until you tap the board or ask for it.
   const [unfolded, setUnfolded] = useState(false);
   const folded = !sel && !unfolded;
@@ -477,8 +541,8 @@ function MoveBar(props: {
   return (
     <div className={`ph-moves ${folded ? "folded" : ""}`}>
       <p className="status">
-        <b>{bonus ? "Bonus move." : "Your move."}</b>{" "}
-        {bonus && !sel
+        <b>{extra ? "Extra move." : "Your move."}</b>{" "}
+        {extra && !sel
           ? "Use it, or end your turn."
           : sel
             ? nothing
@@ -497,7 +561,50 @@ function MoveBar(props: {
           </button>
         )}
       </p>
-      {bonus && (
+      <OnOffer ctx={ctx} />
+      {(swaps.length > 0 || carries.length > 0) && (
+        <div className="act-row ph-favour-picks">
+          {swaps.length > 0 && (
+            <label>
+              <span className="ph-act-label">{skin.favours.swapToken.glyph} Take</span>
+              <select
+                value={extras.swap ?? ""}
+                onChange={(e) =>
+                  setExtras({ ...extras, swap: e.target.value === "" ? undefined : Number(e.target.value) })
+                }
+              >
+                <option value="">the {points} on the way</option>
+                {swaps.map((p) => (
+                  <option key={p} value={p}>
+                    {v.tokensOn[p]?.value} from {route(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {carries.length > 0 && (
+            <label>
+              <span className="ph-act-label">{skin.favours.carry.glyph} Bring along</span>
+              <select
+                value={carryKey(extras.carry)}
+                onChange={(e) => setExtras({ ...extras, carry: carries.find((c) => carryKey(c) === e.target.value) })}
+              >
+                <option value="">nobody</option>
+                {carries.map((c) => (
+                  <option key={carryKey(c)} value={carryKey(c)}>
+                    {c.t === "seat"
+                      ? c.seat === ctx.me
+                        ? `another of your ${skin.nouns.climbers}`
+                        : ctx.names[c.seat]
+                      : `an ${neutral}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+      {extra && (
         <div className="act-row">
           <button type="button" className="btn primary" onClick={() => act({ type: "done" })}>
             End turn
@@ -521,12 +628,25 @@ function MoveBar(props: {
       )}
       {ups.length > 0 && (
         <div className="act-row" role="group" aria-label="Move up">
-          <span className="ph-act-label">Move up</span>
+          <span className="ph-act-label">
+            {extra ? `${skin.favours.climbAgain.glyph} Move on (${skin.favours.climbAgain.name})` : "Move up"}
+          </span>
           {ups.map((c) => (
             <button
               key={c.path}
               className={`btn ${c.kind === "ask" ? "" : "primary"}`}
-              onClick={() => act({ type: "climb", path: c.path })}
+              onClick={() =>
+                act(
+                  extra
+                    ? { type: "climb", path: c.path }
+                    : {
+                        type: "climb",
+                        path: c.path,
+                        ...(extras.swap !== undefined && { swap: extras.swap }),
+                        ...(extras.carry && { carry: extras.carry }),
+                      },
+                )
+              }
             >
               {route(c.path)} <small>({climbNote(ctx, c)})</small>
             </button>
@@ -549,11 +669,15 @@ function MoveBar(props: {
         {!canBlock ? null : blockAt !== null ? (
           <button className="btn" onClick={() => act({ type: "block", path: blockAt })}>
             Send the {skin.nouns.blocker} to {route(blockAt)}
+            {blockFavour && <small> ({skin.favours.extraBlock.glyph} then your move)</small>}
           </button>
         ) : (
           !sel && (
             <>
-              <span className="ph-act-label">Send the {skin.nouns.blocker} to</span>
+              <span className="ph-act-label">
+                Send the {skin.nouns.blocker} to
+                {blockFavour && ` (${skin.favours.extraBlock.glyph} ${skin.favours.extraBlock.name}: then your move)`}
+              </span>
               <select value={blockTo} onChange={(e) => setBlockTo(Number(e.target.value))} aria-label="Path">
                 {targets.map((p) => (
                   <option key={p} value={p}>
@@ -568,6 +692,57 @@ function MoveBar(props: {
           )
         )}
       </div>
+    </div>
+  );
+}
+
+// ---- your favour ----
+
+/** Your favour: what it is, its uses, and on another player's turn the offer to them. */
+function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
+  const { v, skin, me } = ctx;
+  const [info, setInfo] = useState(false);
+  if (me === null || v.over) return null;
+  const p = v.players[me];
+  const kind: PahunchFavour | null = p?.favour ?? null;
+  if (!p || !kind) return null;
+  const f = skin.favours[kind];
+  const pay = v.layout.pay[kind] ?? 0;
+  const theirs = v.turn !== me;
+  const offered = v.lent.includes(me);
+  const spent = v.used.includes(me);
+  const mover = ctx.names[v.turn];
+  const toggle = theirs && !spent && (offered || p.uses > 0);
+  return (
+    <div className="ph-my-favour act-row">
+      <button type="button" className="btn ghost ph-fav-name" onClick={() => setInfo(true)} aria-haspopup="dialog">
+        {f.glyph} {f.name} <Uses n={p.uses} />
+      </button>
+      {toggle && (
+        <button
+          type="button"
+          className={`btn ${offered ? "" : "primary"}`}
+          aria-pressed={offered}
+          disabled={offered && v.vote !== null}
+          onClick={() => act({ type: "lend", on: !offered })}
+        >
+          {offered ? "Take back offer" : `Offer to ${mover}`}
+        </button>
+      )}
+      {spent && <span className="muted small">Used by {mover} this turn</span>}
+      {info && (
+        <Sheet title={`${f.glyph} ${f.name}`} onClose={() => setInfo(false)}>
+          <p>{f.effect}</p>
+          <ul className="seat-facts">
+            <li>{p.uses} of 2 uses left. It works only on another player’s move.</li>
+            <li>
+              On someone else’s turn, offer it to them. Each time they use it you earn {pay} {skin.nouns.points}, and it
+              loses a use. An offer they do not use costs nothing and ends with their turn.
+            </li>
+            <li>What they give you for it is agreed on the call, and paid with gifts.</li>
+          </ul>
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -861,6 +1036,10 @@ export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {
     }
     case "done":
       return `${who(e.p)} ended the turn.`;
+    case "favour":
+      return `${who(e.user)} used ${e.owner === ctx.me ? "your" : `${ctx.names[e.owner]}’s`} ${skin.favours[e.kind].name}.`;
+    case "carry":
+      return `${who(e.p)} brought ${e.who === null ? `an ${skin.nouns.neutral}` : e.who === e.p ? `another ${skin.nouns.climber}` : e.who === ctx.me ? "you" : ctx.names[e.who]} along, from ${route(e.path)}.`;
     case "gift":
       return `${who(e.from)} gave ${e.to === ctx.me ? "you" : ctx.names[e.to]} ${e.count} ${e.count === 1 ? "token" : "tokens"}.`;
     case "skip":

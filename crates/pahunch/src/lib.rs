@@ -26,7 +26,7 @@ const OPTIONS: [GameOption; 2] = [
 ];
 use rand::Rng;
 
-pub use board::{Board, Layout, PathDef, RoomDef, Rooms, Seating, boards};
+pub use board::{Board, Layout, PathDef, RoomDef, Rooms, Seating, boards, favour_pay};
 pub use bot::choose_action;
 pub use rules::{apply_action, apply_skip, end_early, new_game, new_game_with, pending, reseat, score};
 pub use types::*;

@@ -6,16 +6,20 @@
 //! your own climbers there say yes, every other player answers for theirs, and a neutral says
 //! yes when the mover pays it a token. A climb by the blocker's path needs no vote but takes no
 //! token. Back paths are locked. A special coin taken on a climb gives a bonus: one more move
-//! after the main one, before the turn passes. The game ends when the top room is full (neutrals count): of the
-//! players with a climber there, the one with the most points wins (a tie goes to whoever arrived
-//! first); with none there, nobody wins.
+//! after the main one, before the turn passes. With favours on, every player holds one favour
+//! with two uses: they offer it to the mover, and earn 1s from the supply when it is used. The
+//! game ends when the top room is full (neutrals count): of the players with a climber there, the
+//! one with the most points wins (a tie goes to whoever arrived first); with none there, nobody
+//! wins.
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use crate::board::{Layout, Rooms, boards};
 use crate::bot::choose_action;
-use crate::types::{Action, Bonus, Bonuses, LogEntry, Options, Player, RuleError, Seat, State, Vote};
+use crate::types::{
+    Action, Bonus, Bonuses, Carry, Coin, FavourKind, LogEntry, Options, Player, RuleError, Seat, State, USES, Vote,
+};
 use crate::view::view_for;
 
 const LOCKED: &str = "The back stairs are locked";
@@ -58,22 +62,36 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         rooms.get_mut(usize::from(r)).ok_or_else(damaged)?.push(None);
     }
     let turn = u8::try_from(game::index(random(), n.into())).map_err(|_| damaged())?;
+    // Drawn after the rest, so a game without favours sets up as before.
+    let favours = if options.favours {
+        game::shuffle(FavourKind::ALL.to_vec(), &mut random)
+    } else {
+        Vec::new()
+    };
     Ok(State {
         n,
         seed,
         options,
         tried: Vec::new(),
         bonuses: Bonuses::default(),
+        moved: false,
+        lent: Vec::new(),
+        used: Vec::new(),
         layout,
         rooms,
         tokens_on,
         blocker: board.blocker,
         bag,
         supply: board.supply.saturating_sub(u16::from(n) * u16::from(board.start_ones)),
-        players: (0..n)
-            .map(|_| Player {
-                hand: seating.climbers,
-                tokens: vec![1; usize::from(board.start_ones)],
+        players: (0..usize::from(n))
+            .map(|i| {
+                let favour = favours.get(i).copied();
+                Player {
+                    hand: seating.climbers,
+                    tokens: vec![1; usize::from(board.start_ones)],
+                    favour,
+                    uses: if favour.is_some() { USES } else { 0 },
+                }
             })
             .collect(),
         turn,
@@ -99,8 +117,37 @@ fn held(rooms: &Rooms, room: u8) -> usize {
     rooms.get(usize::from(room)).map_or(0, Vec::len)
 }
 
-fn has_space(layout: &Layout, rooms: &Rooms, room: u8) -> bool {
-    held(rooms, room) < usize::from(layout.cap(room))
+/// Whether `pieces` more fit into `room`: `Some(false)` as it is, `Some(true)` only with one
+/// squeezed in by a lent favour (one extra at most, never at the top).
+fn room_for(layout: &Layout, rooms: &Rooms, room: u8, pieces: usize, lent: &[FavourKind]) -> Option<bool> {
+    let after = held(rooms, room) + pieces;
+    let cap = usize::from(layout.cap(room));
+    if after <= cap {
+        Some(false)
+    } else if room != layout.summit && lent.contains(&FavourKind::SqueezeIn) && after <= cap + 1 {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// The favours on offer to the mover: those lent with a use left.
+pub(crate) fn offered(lent: &[Seat], favour_of: impl Fn(Seat) -> Option<(FavourKind, u8)>) -> Vec<FavourKind> {
+    lent.iter()
+        .filter_map(|&o| favour_of(o).filter(|&(_, uses)| uses > 0).map(|(k, _)| k))
+        .collect()
+}
+
+fn offered_in(s: &State) -> Vec<FavourKind> {
+    offered(&s.lent, |o| {
+        s.players
+            .get(usize::from(o))
+            .and_then(|p| p.favour.map(|k| (k, p.uses)))
+    })
+}
+
+fn on_offer(s: &State, kind: FavourKind) -> bool {
+    offered_in(s).contains(&kind)
 }
 
 /// Tokens the mover could pay a neutral with.
@@ -111,58 +158,131 @@ fn bribe_tokens(layout: &Layout, tokens: &[u8]) -> usize {
 /// How a climb goes, if it may start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Climb {
-    /// The blocker is on the path: no vote, no token.
+    /// The blocker is on the path: no vote, no token (unless a lent favour takes it).
     Blocked,
+    /// A back path, opened by a lent favour: no vote, no token.
+    Back,
     /// Enough of the mover's own climbers are there.
     Own,
     /// A vote decides.
     Ask { need: u8, own: u8 },
 }
 
-pub(crate) fn check_enter(layout: &Layout, rooms: &Rooms, hand: u8, room: u8) -> Result<(), RuleError> {
+/// A new climber into `room`; `true` when it squeezes in by a lent favour.
+pub(crate) fn check_enter(
+    layout: &Layout,
+    rooms: &Rooms,
+    hand: u8,
+    room: u8,
+    lent: &[FavourKind],
+) -> Result<bool, RuleError> {
     if hand == 0 {
         return fail("All your climbers are on the board");
     }
     if !layout.entry(room) {
         return fail("New climbers go into a bottom room");
     }
-    if !has_space(layout, rooms, room) {
-        return fail("That room is full");
-    }
-    Ok(())
+    room_for(layout, rooms, room, 1, lent).ok_or_else(|| RuleError::new("That room is full"))
 }
 
-/// Where a climb starts from: the board, and what this turn has already tried.
+/// Where a climb starts from: the board, what this turn has already tried, and the favours on
+/// offer.
 pub(crate) struct Board<'a> {
     pub layout: &'a Layout,
     pub rooms: &'a Rooms,
+    pub tokens_on: &'a [Option<Coin>],
     pub blocker: u8,
     pub tried: &'a [u8],
+    pub lent: &'a [FavourKind],
 }
 
-pub(crate) fn check_climb(b: &Board<'_>, seat: Seat, tokens: &[u8], path: u8) -> Result<Climb, RuleError> {
-    let Board {
-        layout,
-        rooms,
-        blocker,
-        tried,
-    } = *b;
-    let Some(p) = layout.path(path) else {
+impl Board<'_> {
+    fn has(&self, kind: FavourKind) -> bool {
+        self.lent.contains(&kind)
+    }
+
+    /// A coin lies on `path` where a climb could take it.
+    fn coin(&self, path: u8) -> bool {
+        self.layout.slot(path) && self.tokens_on.get(usize::from(path)).is_some_and(Option::is_some)
+    }
+}
+
+/// What a climb asks for, the vote aside.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Ask {
+    pub path: u8,
+    pub swap: Option<u8>,
+    pub carry: Option<Carry>,
+}
+
+/// The parts of a climb the board decides: the path is open, the pieces fit above, and the
+/// favours it would use are on offer.
+fn climb_parts(b: &Board<'_>, seat: Seat, ask: Ask) -> Result<Vec<FavourKind>, RuleError> {
+    let Ask { path, swap, carry } = ask;
+    let Some(p) = b.layout.path(path) else {
         return fail("No such path");
     };
+    let mut uses = Vec::new();
     if p.back {
-        return fail(LOCKED);
+        if !b.has(FavourKind::BackStairs) {
+            return fail(LOCKED);
+        }
+        uses.push(FavourKind::BackStairs);
     }
-    let own = count(rooms, p.from, Some(seat));
+    let own = count(b.rooms, p.from, Some(seat));
     if own == 0 {
         return fail("You have no climber at the foot of that path");
     }
-    if !has_space(layout, rooms, p.to) {
-        return fail("The room above is full");
+    if let Some(c) = carry {
+        if !b.has(FavourKind::Carry) {
+            return fail("Nobody offers to take a piece along");
+        }
+        let here = count(b.rooms, p.from, c.who());
+        if here < if c.who() == Some(seat) { 2 } else { 1 } {
+            return fail("That piece is not in the room");
+        }
+        uses.push(FavourKind::Carry);
     }
-    if path == blocker {
+    let pieces = 1 + usize::from(carry.is_some());
+    match room_for(b.layout, b.rooms, p.to, pieces, b.lent) {
+        None => return fail("The room above is full"),
+        Some(true) => uses.push(FavourKind::SqueezeIn),
+        Some(false) => {}
+    }
+    let covered = path == b.blocker && b.coin(path) && b.has(FavourKind::CoveredToken);
+    let takes = b.coin(path) && (path != b.blocker || covered);
+    if let Some(other) = swap {
+        if !b.has(FavourKind::SwapToken) {
+            return fail("Nobody offers a token swap");
+        }
+        if !takes {
+            return fail("That climb takes no token to swap");
+        }
+        if other == path || other == b.blocker || !b.coin(other) {
+            return fail("Swap for another uncovered token on the board");
+        }
+        uses.push(FavourKind::SwapToken);
+    } else if covered {
+        uses.push(FavourKind::CoveredToken);
+    }
+    Ok(uses)
+}
+
+/// How the climb goes, if it may start.
+pub(crate) fn check_climb(b: &Board<'_>, seat: Seat, tokens: &[u8], ask: Ask) -> Result<Climb, RuleError> {
+    climb_parts(b, seat, ask)?;
+    let Board {
+        layout, rooms, tried, ..
+    } = *b;
+    let path = ask.path;
+    let p = layout.path(path).ok_or_else(damaged)?;
+    if p.back {
+        return Ok(Climb::Back);
+    }
+    if path == b.blocker {
         return Ok(Climb::Blocked);
     }
+    let own = count(rooms, p.from, Some(seat));
     let need = layout.need(p.from);
     if own >= need {
         return Ok(Climb::Own);
@@ -182,20 +302,32 @@ pub(crate) fn check_climb(b: &Board<'_>, seat: Seat, tokens: &[u8], path: u8) ->
     Ok(Climb::Ask { need, own })
 }
 
-pub(crate) fn check_nudge(layout: &Layout, rooms: &Rooms, path: u8) -> Result<(), RuleError> {
+/// A neutral up `path`: the favours it would use.
+pub(crate) fn check_nudge(
+    layout: &Layout,
+    rooms: &Rooms,
+    path: u8,
+    lent: &[FavourKind],
+) -> Result<Vec<FavourKind>, RuleError> {
     let Some(p) = layout.path(path) else {
         return fail("No such path");
     };
+    let mut uses = Vec::new();
     if p.back {
-        return fail(LOCKED);
+        if !lent.contains(&FavourKind::BackStairs) {
+            return fail(LOCKED);
+        }
+        uses.push(FavourKind::BackStairs);
     }
     if count(rooms, p.from, None) == 0 {
         return fail("No neutral at the foot of that path");
     }
-    if !has_space(layout, rooms, p.to) {
-        return fail("The room above is full");
+    match room_for(layout, rooms, p.to, 1, lent) {
+        None => return fail("The room above is full"),
+        Some(true) => uses.push(FavourKind::SqueezeIn),
+        Some(false) => {}
     }
-    Ok(())
+    Ok(uses)
 }
 
 pub(crate) fn check_block(layout: &Layout, blocker: u8, path: u8) -> Result<(), RuleError> {
@@ -253,9 +385,16 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         return fail("No such seat");
     }
     let mut s = prev.clone();
-    if let Action::Give { to, tokens } = action {
-        give(&mut s, seat, *to, tokens)?;
-        return Ok(s);
+    match action {
+        Action::Give { to, tokens } => {
+            give(&mut s, seat, *to, tokens)?;
+            return Ok(s);
+        }
+        &Action::Lend { on } => {
+            lend(&mut s, seat, on)?;
+            return Ok(s);
+        }
+        _ => {}
     }
     if s.vote.is_some() {
         match *action {
@@ -275,32 +414,31 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
     if seat != s.turn {
         return fail("It is not your turn");
     }
-    if s.bonuses.any() {
-        bonus_move(&mut s, seat, action)?;
+    if s.moved {
+        extra_move(&mut s, seat, action)?;
         return Ok(s);
     }
     let me = usize::from(seat);
     match *action {
         Action::Enter { room } => {
             let hand = s.players.get(me).ok_or_else(damaged)?.hand;
-            check_enter(&s.layout, &s.rooms, hand, room)?;
+            if check_enter(&s.layout, &s.rooms, hand, room, &offered_in(&s))? {
+                spend(&mut s, FavourKind::SqueezeIn)?;
+            }
             s.rooms.get_mut(usize::from(room)).ok_or_else(damaged)?.push(Some(seat));
             if let Some(p) = s.players.get_mut(me) {
                 p.hand -= 1;
             }
             s.log.push(LogEntry::Enter { p: seat, room });
+            arrive(&mut s, room);
             end_move(&mut s);
         }
-        Action::Climb { path } => {
+        Action::Climb { path, swap, carry } => {
+            let ask = Ask { path, swap, carry };
             let tokens = &s.players.get(me).ok_or_else(damaged)?.tokens;
-            let board = Board {
-                layout: &s.layout,
-                rooms: &s.rooms,
-                blocker: s.blocker,
-                tried: &s.tried,
-            };
-            match check_climb(&board, seat, tokens, path)? {
-                Climb::Blocked | Climb::Own => climb(&mut s, seat, path, true)?,
+            let lent = offered_in(&s);
+            match check_climb(&board(&s, &lent), seat, tokens, ask)? {
+                Climb::Blocked | Climb::Own | Climb::Back => climb(&mut s, seat, ask, true)?,
                 Climb::Ask { need, own } => {
                     let room = s.layout.path(path).ok_or_else(damaged)?.from;
                     let mut answers = vec![None; usize::from(s.n)];
@@ -314,6 +452,8 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
                         answers,
                         bribed: 0,
                         start: u32::try_from(s.log.len()).unwrap_or(u32::MAX),
+                        swap,
+                        carry,
                     });
                     s.log.push(LogEntry::Ask { p: seat, path, need });
                 }
@@ -325,18 +465,104 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         }
         Action::Block { path } => {
             block(&mut s, seat, path)?;
-            end_move(&mut s);
+            // A lent favour moves the blocker on top of the main move.
+            if on_offer(&s, FavourKind::ExtraBlock) {
+                spend(&mut s, FavourKind::ExtraBlock)?;
+            } else {
+                end_move(&mut s);
+            }
         }
         Action::Done => return fail("Make your move first"),
         Action::Vote { .. } | Action::Bribe { .. } | Action::Withdraw => return fail("No vote is running"),
         Action::Unknown => return fail("Unknown move"),
-        Action::Give { .. } => {}
+        Action::Give { .. } | Action::Lend { .. } => {}
     }
     Ok(s)
 }
 
+fn board<'a>(s: &'a State, lent: &'a [FavourKind]) -> Board<'a> {
+    Board {
+        layout: &s.layout,
+        rooms: &s.rooms,
+        tokens_on: &s.tokens_on,
+        blocker: s.blocker,
+        tried: &s.tried,
+        lent,
+    }
+}
+
+/// The mover uses the lent favour of `kind`: its owner loses a use and earns its pay.
+fn spend(s: &mut State, kind: FavourKind) -> Result<(), RuleError> {
+    let owner = *s
+        .lent
+        .iter()
+        .find(|&&o| {
+            s.players
+                .get(usize::from(o))
+                .is_some_and(|p| p.favour == Some(kind) && p.uses > 0)
+        })
+        .ok_or_else(damaged)?;
+    s.lent.retain(|&o| o != owner);
+    s.used.push(owner);
+    if let Some(p) = s.players.get_mut(usize::from(owner)) {
+        p.uses -= 1;
+    }
+    s.log.push(LogEntry::Favour {
+        owner,
+        user: s.turn,
+        kind,
+    });
+    let pay = s.layout.pay(kind);
+    reward(s, owner, pay);
+    Ok(())
+}
+
+/// Offer `seat`'s favour to the mover, or take an unused offer back.
+fn lend(s: &mut State, seat: Seat, on: bool) -> Result<(), RuleError> {
+    if !s.options.favours {
+        return fail("Favours are off this game");
+    }
+    let p = s.players.get(usize::from(seat)).ok_or_else(damaged)?;
+    if p.favour.is_none() {
+        return fail("You have no favour");
+    }
+    if on {
+        if seat == s.turn {
+            return fail("A favour helps another player's move");
+        }
+        if s.lent.contains(&seat) {
+            return fail("Your favour is on offer already");
+        }
+        if s.used.contains(&seat) {
+            return fail("Your favour was used this turn");
+        }
+        if p.uses == 0 {
+            return fail("Your favour is used up");
+        }
+        s.lent.push(seat);
+    } else {
+        if !s.lent.contains(&seat) {
+            return fail("Your favour is not on offer");
+        }
+        if s.vote.is_some() {
+            return fail("Wait for the vote to finish");
+        }
+        s.lent.retain(|&o| o != seat);
+    }
+    Ok(())
+}
+
+/// A climber of the mover's reached `room`: a lent favour lets it climb on from a 1-room.
+fn arrive(s: &mut State, room: u8) {
+    if room != s.layout.summit && s.layout.cap(room) == 1 && on_offer(s, FavourKind::ClimbAgain) {
+        s.bonuses.climb_again = Some(room);
+    }
+}
+
 fn nudge(s: &mut State, seat: Seat, path: u8) -> Result<(), RuleError> {
-    check_nudge(&s.layout, &s.rooms, path)?;
+    for kind in check_nudge(&s.layout, &s.rooms, path, &offered_in(s))? {
+        spend(s, kind)?;
+    }
     let p = s.layout.path(path).ok_or_else(damaged)?;
     move_piece(&mut s.rooms, p.from, p.to, None)?;
     s.log.push(LogEntry::Nudge { p: seat, path });
@@ -351,26 +577,58 @@ fn block(s: &mut State, seat: Seat, path: u8) -> Result<(), RuleError> {
     Ok(())
 }
 
-/// A move after the main one: a bonus, or the end of the turn.
-fn bonus_move(s: &mut State, seat: Seat, action: &Action) -> Result<(), RuleError> {
+/// A move after the main one: a bonus, a lent favour, or the end of the turn.
+fn extra_move(s: &mut State, seat: Seat, action: &Action) -> Result<(), RuleError> {
     match *action {
         Action::Block { path } if s.bonuses.block > 0 => {
             block(s, seat, path)?;
             s.bonuses.block -= 1;
         }
+        Action::Block { path } if on_offer(s, FavourKind::ExtraBlock) => {
+            block(s, seat, path)?;
+            spend(s, FavourKind::ExtraBlock)?;
+        }
         Action::Nudge { path } if s.bonuses.nudge > 0 => {
             nudge(s, seat, path)?;
             s.bonuses.nudge -= 1;
         }
+        Action::Climb { path, swap, carry } if climbs_again(s) => {
+            let room = s.bonuses.climb_again.ok_or_else(damaged)?;
+            if carry.is_some() {
+                return fail("A climb on takes nobody along");
+            }
+            if s.layout.path(path).is_none_or(|p| p.from != room) {
+                return fail("Climb on with the climber that just arrived");
+            }
+            let ask = Ask { path, swap, carry };
+            let tokens = &s.players.get(usize::from(seat)).ok_or_else(damaged)?.tokens;
+            let lent = offered_in(s);
+            if let Climb::Ask { .. } = check_climb(&board(s, &lent), seat, tokens, ask)? {
+                return fail("That climb needs a vote");
+            }
+            s.bonuses.climb_again = None;
+            spend(s, FavourKind::ClimbAgain)?;
+            return climb(s, seat, ask, true);
+        }
         Action::Done => {
             s.log.push(LogEntry::Done { p: seat });
-            s.bonuses = Bonuses::default();
+            next_turn(s);
+            return Ok(());
         }
         Action::Unknown => return fail("Unknown move"),
-        _ => return fail("Use a bonus move or end the turn"),
+        _ => return fail("Use an extra move or end the turn"),
     }
     end_move(s);
     Ok(())
+}
+
+fn climbs_again(s: &State) -> bool {
+    s.bonuses.climb_again.is_some() && on_offer(s, FavourKind::ClimbAgain)
+}
+
+/// The mover has extra moves left after the main one.
+fn extras(s: &State) -> bool {
+    s.bonuses.block > 0 || s.bonuses.nudge > 0 || climbs_again(s) || on_offer(s, FavourKind::ExtraBlock)
 }
 
 fn give(s: &mut State, from: Seat, to: Seat, tokens: &[u8]) -> Result<(), RuleError> {
@@ -468,7 +726,12 @@ fn settle(s: &mut State, last: Option<Seat>) -> Result<(), RuleError> {
             }
         }
         s.vote = None;
-        return climb(s, mover, vote.path, false);
+        let ask = Ask {
+            path: vote.path,
+            swap: vote.swap,
+            carry: vote.carry,
+        };
+        return climb(s, mover, ask, false);
     }
     let tokens = &s.players.get(usize::from(mover)).ok_or_else(damaged)?.tokens;
     if voters_left(&s.rooms, &vote, mover).is_empty() && !can_bribe(&s.layout, &s.rooms, &vote, tokens) {
@@ -512,20 +775,34 @@ fn move_piece(rooms: &mut Rooms, from: u8, to: u8, who: Option<Seat>) -> Result<
     Ok(())
 }
 
-/// The mover's climber goes up `path`, taking its token unless the blocker covers it. A special
-/// coin's bonus is the mover's, this turn only; in the hand it is a plain token.
-fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleError> {
+/// The mover's climber goes up the path, taking its token unless the blocker covers it, with
+/// whatever lent favours the climb asks for. A special coin's bonus is the mover's, this turn
+/// only; in the hand it is a plain token.
+fn climb(s: &mut State, seat: Seat, ask: Ask, free: bool) -> Result<(), RuleError> {
+    let Ask { path, swap, carry } = ask;
+    let lent = offered_in(s);
+    let uses = climb_parts(&board(s, &lent), seat, ask)?;
+    for &kind in &uses {
+        spend(s, kind)?;
+    }
     let p = s.layout.path(path).ok_or_else(damaged)?;
     move_piece(&mut s.rooms, p.from, p.to, Some(seat))?;
-    let took = if s.layout.slot(path) && path != s.blocker {
-        let slot = s.tokens_on.get_mut(usize::from(path)).ok_or_else(damaged)?;
-        let took = slot.take();
-        if took.is_some() {
-            *slot = s.bag.pop();
+    if let Some(c) = carry {
+        move_piece(&mut s.rooms, p.from, p.to, c.who())?;
+    }
+    let from = swap.or_else(|| {
+        (s.layout.slot(path) && (path != s.blocker || uses.contains(&FavourKind::CoveredToken))).then_some(path)
+    });
+    let took = match from {
+        Some(at) => {
+            let slot = s.tokens_on.get_mut(usize::from(at)).ok_or_else(damaged)?;
+            let took = slot.take();
+            if took.is_some() {
+                *slot = s.bag.pop();
+            }
+            took
         }
-        took
-    } else {
-        None
+        None => None,
     };
     if let (Some(t), Some(player)) = (took, s.players.get_mut(usize::from(seat))) {
         player.tokens.push(t.value);
@@ -538,6 +815,13 @@ fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleErro
         took: took.map(|t| t.value),
         free,
     });
+    if let Some(c) = carry {
+        s.log.push(LogEntry::Carry {
+            p: seat,
+            who: c.who(),
+            path,
+        });
+    }
     if let Some(kind) = took.and_then(|t| t.bonus) {
         let fired = match kind {
             Bonus::Block => {
@@ -548,31 +832,52 @@ fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleErro
                 s.bonuses.nudge += 1;
                 true
             }
-            // Gives a used favour one use back; without favours it is a plain token.
-            Bonus::Favour => false,
+            // A used favour gets a use back; without favours it is a plain token.
+            Bonus::Favour => {
+                let on = s.options.favours;
+                s.players.get_mut(usize::from(seat)).is_some_and(|p| {
+                    let back = on && p.favour.is_some() && p.uses < USES;
+                    if back {
+                        p.uses += 1;
+                    }
+                    back
+                })
+            }
         };
         if fired {
             s.log.push(LogEntry::Bonus { p: seat, kind });
         }
     }
+    arrive(s, p.to);
     end_move(s);
     Ok(())
 }
 
-/// After a move: a full top room ends the game; else the turn passes, unless bonus moves are
+/// After a move: a full top room ends the game; else the turn passes, unless extra moves are
 /// left.
 fn end_move(s: &mut State) {
     if held(&s.rooms, s.layout.summit) >= usize::from(s.layout.cap(s.layout.summit)) {
         finish(s, None);
-    } else if !s.bonuses.any() {
-        next_turn(s);
+    } else {
+        s.moved = true;
+        if !extras(s) {
+            next_turn(s);
+        }
     }
+}
+
+/// The turn passes, and with it what was lent and left over.
+fn clear_turn(s: &mut State) {
+    s.tried.clear();
+    s.bonuses = Bonuses::default();
+    s.moved = false;
+    s.lent.clear();
+    s.used.clear();
 }
 
 fn next_turn(s: &mut State) {
     s.turn = (s.turn + 1) % s.n;
-    s.tried.clear();
-    s.bonuses = Bonuses::default();
+    clear_turn(s);
 }
 
 /// A player's points.
@@ -586,7 +891,7 @@ pub fn score(p: &Player) -> u32 {
 fn finish(s: &mut State, by: Option<Seat>) {
     s.over = true;
     s.vote = None;
-    s.bonuses = Bonuses::default();
+    clear_turn(s);
     s.winners = if by.is_some() {
         Vec::new()
     } else {
@@ -687,7 +992,12 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
     s.turn = m(s.turn);
     if let Some(v) = &mut s.vote {
         v.answers = game::permuted(&v.answers, to);
+        if let Some(Carry::Seat { seat }) = &mut v.carry {
+            *seat = m(*seat);
+        }
     }
+    s.lent = s.lent.iter().map(|&o| m(o)).collect();
+    s.used = s.used.iter().map(|&o| m(o)).collect();
     s.winners = s.winners.iter().map(|&w| m(w)).collect();
     for e in &mut s.log {
         match e {
@@ -704,6 +1014,14 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
             | LogEntry::Bonus { p, .. }
             | LogEntry::Done { p }
             | LogEntry::Skip { p } => *p = m(*p),
+            LogEntry::Favour { owner, user, .. } => {
+                *owner = m(*owner);
+                *user = m(*user);
+            }
+            LogEntry::Carry { p, who, .. } => {
+                *p = m(*p);
+                *who = who.map(m);
+            }
             LogEntry::Gift { from, to, .. } => {
                 *from = m(*from);
                 *to = m(*to);

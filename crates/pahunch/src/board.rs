@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::types::{Bonus, Coin, Seat};
+use crate::types::{Bonus, Coin, FavourKind, Seat};
 
 /// What a special coin is worth.
 pub const SPECIAL: u8 = 2;
@@ -72,6 +72,8 @@ pub struct Board {
 #[derive(Debug, Deserialize)]
 struct BoardsFile {
     boards: Vec<Board>,
+    /// What a favour's owner earns, in 1s from the supply, each time it is used.
+    favours: BTreeMap<FavourKind, u8>,
 }
 
 /// The board one game plays on, for its seat count: kept in the game's state, so a saved game
@@ -88,6 +90,9 @@ pub struct Layout {
     /// The top room: no path leaves it.
     pub summit: u8,
     pub min_bribe: u8,
+    /// What a favour's owner earns, in 1s from the supply, each time it is used.
+    #[serde(default)]
+    pub pay: BTreeMap<FavourKind, u8>,
 }
 
 impl Board {
@@ -115,6 +120,7 @@ impl Board {
             paths: self.paths.clone(),
             summit,
             min_bribe: self.min_bribe,
+            pay: FILE.favours.clone(),
         }
     }
 
@@ -280,18 +286,30 @@ impl Layout {
     pub fn room_count(&self) -> usize {
         self.rooms.len()
     }
+
+    /// What a favour's owner earns for one use.
+    #[must_use]
+    pub fn pay(&self, kind: FavourKind) -> u8 {
+        self.pay.get(&kind).copied().unwrap_or(0)
+    }
 }
 
-static BOARDS: LazyLock<Vec<Board>> = LazyLock::new(|| {
+static FILE: LazyLock<BoardsFile> = LazyLock::new(|| {
     #[expect(clippy::expect_used, reason = "the file is compiled in; the boards test parses it")]
     let file: BoardsFile = serde_json::from_str(include_str!("../boards.json")).expect("boards.json is valid");
-    file.boards
+    file
 });
 
 /// Every board, the default first.
 #[must_use]
 pub fn boards() -> &'static [Board] {
-    &BOARDS
+    &FILE.boards
+}
+
+/// What each favour pays its owner per use; every kind is listed (the boards test).
+#[must_use]
+pub fn favour_pay() -> &'static BTreeMap<FavourKind, u8> {
+    &FILE.favours
 }
 
 /// The seats in room order of one board: who holds each place.
