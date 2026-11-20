@@ -3,4 +3,8 @@
 /**
  * A way up from one room to another (index into the board's rooms).
  */
-export type PahunchPath = { from: number, to: number, };
+export type PahunchPath = { from: number, to: number, 
+/**
+ * A back path: locked unless the mover has a key lent; it never holds a token.
+ */
+back: boolean, };

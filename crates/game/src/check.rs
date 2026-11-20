@@ -152,7 +152,7 @@ fn finished<G: Game>(s: &G::State) -> Result<(), String> {
         return Err("a finished game still waits for a move".into());
     }
     let winners = G::winners(s);
-    if winners.is_empty() || winners.iter().any(|&w| w >= n) {
+    if (winners.is_empty() && !G::may_end_without_winner()) || winners.iter().any(|&w| w >= n) {
         return Err(format!("winners {winners:?} of {n} seats"));
     }
     if G::end_early(s, 0).is_ok() {

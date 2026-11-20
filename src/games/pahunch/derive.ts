@@ -14,8 +14,15 @@ export const space = (v: PahunchView, room: number) => (v.rooms[room]?.length ??
 /** Yes votes it takes to leave `room`. */
 export const need = (layout: PahunchLayout, room: number) => Math.floor((layout.rooms[room]?.cap ?? 0) / 2) + 1;
 
-/** Leaving pays the path's token (a 1-seat room has none). */
-export const pays = (layout: PahunchLayout, room: number) => (layout.rooms[room]?.cap ?? 0) > 1;
+/** The path holds a token: it leaves a room of more than 1 seat and is not a back path. */
+export const slot = (layout: PahunchLayout, path: number) => {
+  const p = layout.paths[path];
+  return !!p && !p.back && (layout.rooms[p.from]?.cap ?? 0) > 1;
+};
+
+/** Paths the blocker may move to: another path with a token. */
+export const blockTargets = (v: PahunchView) =>
+  v.layout.paths.map((_, p) => p).filter((p) => p !== v.blocker && slot(v.layout, p));
 
 export const isEntry = (layout: PahunchLayout, room: number) =>
   room !== layout.summit && layout.paths.every((p) => p.to !== room);
@@ -43,7 +50,7 @@ export function climbs(v: PahunchView, me: number): ClimbOption[] {
   const tokens = v.players[me]?.tokens ?? [];
   return v.layout.paths.flatMap((p, path): ClimbOption[] => {
     const own = count(v.rooms, p.from, me);
-    if (own === 0 || !space(v, p.to)) return [];
+    if (p.back || own === 0 || !space(v, p.to)) return [];
     const n = need(v.layout, p.from);
     if (path === v.blocker) return [{ path, kind: "blocked", need: n, own }];
     if (own >= n) return [{ path, kind: "own", need: n, own }];
@@ -56,7 +63,7 @@ export function climbs(v: PahunchView, me: number): ClimbOption[] {
 /** Paths a neutral may be nudged up. */
 export function nudges(v: PahunchView): number[] {
   return v.layout.paths.flatMap((p, path) =>
-    count(v.rooms, p.from, null) > 0 && p.to !== v.layout.summit && space(v, p.to) ? [path] : [],
+    !p.back && count(v.rooms, p.from, null) > 0 && space(v, p.to) ? [path] : [],
   );
 }
 

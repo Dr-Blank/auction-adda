@@ -5,8 +5,9 @@
 //! neutral up, or move the blocker. Leaving a room takes more than half its seats in yes votes:
 //! your own climbers there say yes, every other player answers for theirs, and a neutral says
 //! yes when the mover pays it a token. A climb by the blocker's path needs no vote but takes no
-//! token. The game ends when the top room is full: of the players with a climber there, the one
-//! with the most points wins (a tie goes to whoever arrived first).
+//! token. Back paths are locked. The game ends when the top room is full (neutrals count): of the
+//! players with a climber there, the one with the most points wins (a tie goes to whoever arrived
+//! first); with none there, nobody wins.
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -15,6 +16,8 @@ use crate::board::{Layout, Rooms, boards};
 use crate::bot::choose_action;
 use crate::types::{Action, LogEntry, Player, RuleError, Seat, State, Vote};
 use crate::view::view_for;
+
+const LOCKED: &str = "The back stairs are locked";
 
 pub(crate) fn fail<T>(message: impl Into<String>) -> Result<T, RuleError> {
     Err(RuleError::new(message))
@@ -43,10 +46,8 @@ pub fn new_game(n: u8, seed: u32, variant: u8) -> Result<State, RuleError> {
         .flat_map(|(&value, &count)| std::iter::repeat_n(value, usize::from(count)))
         .collect();
     let mut bag = game::shuffle(bag, &mut random);
-    let tokens_on = layout
-        .paths
-        .iter()
-        .map(|p| if layout.pays(p.from) { bag.pop() } else { None })
+    let tokens_on = (0..u8::try_from(layout.paths.len()).unwrap_or(0))
+        .map(|p| if layout.slot(p) { bag.pop() } else { None })
         .collect();
     let mut rooms: Rooms = vec![Vec::new(); layout.room_count()];
     for &r in &seating.neutrals {
@@ -135,6 +136,9 @@ pub(crate) fn check_climb(
     let Some(p) = layout.path(path) else {
         return fail("No such path");
     };
+    if p.back {
+        return fail(LOCKED);
+    }
     let own = count(rooms, p.from, Some(seat));
     if own == 0 {
         return fail("You have no climber at the foot of that path");
@@ -165,11 +169,11 @@ pub(crate) fn check_nudge(layout: &Layout, rooms: &Rooms, path: u8) -> Result<()
     let Some(p) = layout.path(path) else {
         return fail("No such path");
     };
+    if p.back {
+        return fail(LOCKED);
+    }
     if count(rooms, p.from, None) == 0 {
         return fail("No neutral at the foot of that path");
-    }
-    if p.to == layout.summit {
-        return fail("Neutrals do not go to the top");
     }
     if !has_space(layout, rooms, p.to) {
         return fail("The room above is full");
@@ -183,6 +187,9 @@ pub(crate) fn check_block(layout: &Layout, blocker: u8, path: u8) -> Result<(), 
     }
     if path == blocker {
         return fail("The blocker is already there");
+    }
+    if !layout.slot(path) {
+        return fail("The blocker sits only on a path with a token");
     }
     Ok(())
 }
@@ -293,7 +300,7 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
             move_piece(&mut s.rooms, p.from, p.to, None)?;
             s.log.push(LogEntry::Nudge { p: seat, path });
             reward(&mut s, seat, 1);
-            next_turn(&mut s);
+            end_move(&mut s);
         }
         Action::Block { path } => {
             check_block(&s.layout, s.blocker, path)?;
@@ -440,7 +447,7 @@ fn move_piece(rooms: &mut Rooms, from: u8, to: u8, who: Option<Seat>) -> Result<
 fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleError> {
     let p = s.layout.path(path).ok_or_else(damaged)?;
     move_piece(&mut s.rooms, p.from, p.to, Some(seat))?;
-    let took = if s.layout.pays(p.from) && path != s.blocker {
+    let took = if s.layout.slot(path) && path != s.blocker {
         let slot = s.tokens_on.get_mut(usize::from(path)).ok_or_else(damaged)?;
         let took = slot.take();
         if took.is_some() {
@@ -461,12 +468,17 @@ fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleErro
         took,
         free,
     });
+    end_move(s);
+    Ok(())
+}
+
+/// After a move that put a piece somewhere: a full top room ends the game, else the turn passes.
+fn end_move(s: &mut State) {
     if held(&s.rooms, s.layout.summit) >= usize::from(s.layout.cap(s.layout.summit)) {
         finish(s, None);
     } else {
         next_turn(s);
     }
-    Ok(())
 }
 
 fn next_turn(s: &mut State) {

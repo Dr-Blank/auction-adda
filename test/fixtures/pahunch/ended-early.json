@@ -1,14 +1,34 @@
 {
   "type": "state",
   "room": {
-    "code": "ZVKXX3",
+    "code": "BQ444J",
     "theme": "society-committee",
     "cast": {
-      "seed": 383408234,
+      "seed": 1436832806,
       "genres": []
     },
     "started": true,
     "seats": [
+      {
+        "name": "Dev",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3a3b3c3d3e3f3g3h",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Asha",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3k9a1c0b2d4e5f6g",
+        "ready": false,
+        "wins": 1
+      },
       {
         "name": "Bilal",
         "connected": true,
@@ -27,30 +47,10 @@
         "bot": false,
         "avatar": "2a2b2c2d2e2f2g2h",
         "ready": false,
-        "wins": 1
-      },
-      {
-        "name": "Asha",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "3k9a1c0b2d4e5f6g",
-        "ready": false,
-        "wins": 0
-      },
-      {
-        "name": "Dev",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "3a3b3c3d3e3f3g3h",
-        "ready": false,
         "wins": 0
       }
     ],
-    "admin": 2,
+    "admin": 1,
     "canUndo": false,
     "minPlayers": 3,
     "maxPlayers": 5,
@@ -79,192 +79,292 @@
     "variant": 0,
     "watchers": [
       {
-        "id": 9,
+        "id": 4,
         "name": "Esha",
         "ban": null
       }
     ],
     "games": 1
   },
-  "you": 2,
+  "you": 1,
   "left": null,
   "game": {
     "n": 4,
-    "you": 2,
+    "you": 1,
     "layout": {
-      "board": "classic",
-      "name": "Classic",
+      "board": "full",
+      "name": "Full board",
       "rooms": [
         {
-          "cap": 7,
-          "x": 12,
-          "y": 88
-        },
-        {
-          "cap": 3,
-          "x": 37,
-          "y": 88
-        },
-        {
-          "cap": 3,
-          "x": 63,
-          "y": 88
+          "cap": 1,
+          "x": 10,
+          "y": 90
         },
         {
           "cap": 5,
+          "x": 35,
+          "y": 90
+        },
+        {
+          "cap": 1,
+          "x": 62,
+          "y": 90
+        },
+        {
+          "cap": 3,
           "x": 88,
-          "y": 88
-        },
-        {
-          "cap": 5,
-          "x": 22,
-          "y": 62
+          "y": 90
         },
         {
           "cap": 1,
-          "x": 50,
-          "y": 62
-        },
-        {
-          "cap": 3,
-          "x": 78,
-          "y": 62
-        },
-        {
-          "cap": 3,
-          "x": 34,
-          "y": 36
+          "x": 8,
+          "y": 70
         },
         {
           "cap": 1,
-          "x": 66,
-          "y": 36
+          "x": 30,
+          "y": 70
+        },
+        {
+          "cap": 1,
+          "x": 88,
+          "y": 70
+        },
+        {
+          "cap": 1,
+          "x": 85,
+          "y": 50
+        },
+        {
+          "cap": 3,
+          "x": 20,
+          "y": 50
+        },
+        {
+          "cap": 3,
+          "x": 60,
+          "y": 70
+        },
+        {
+          "cap": 3,
+          "x": 15,
+          "y": 30
+        },
+        {
+          "cap": 1,
+          "x": 58,
+          "y": 50
+        },
+        {
+          "cap": 3,
+          "x": 75,
+          "y": 30
+        },
+        {
+          "cap": 5,
+          "x": 45,
+          "y": 30
         },
         {
           "cap": 5,
           "x": 50,
-          "y": 10
+          "y": 8
         }
       ],
       "paths": [
         {
           "from": 0,
-          "to": 4
+          "to": 4,
+          "back": false
         },
         {
-          "from": 1,
-          "to": 4
+          "from": 0,
+          "to": 8,
+          "back": true
         },
         {
-          "from": 1,
-          "to": 5
-        },
-        {
-          "from": 2,
-          "to": 5
-        },
-        {
-          "from": 2,
-          "to": 6
-        },
-        {
-          "from": 3,
-          "to": 6
+          "from": 0,
+          "to": 5,
+          "back": true
         },
         {
           "from": 4,
-          "to": 7
-        },
-        {
-          "from": 5,
-          "to": 7
-        },
-        {
-          "from": 5,
-          "to": 8
-        },
-        {
-          "from": 6,
-          "to": 8
-        },
-        {
-          "from": 7,
-          "to": 9
+          "to": 8,
+          "back": false
         },
         {
           "from": 8,
-          "to": 9
+          "to": 10,
+          "back": false
+        },
+        {
+          "from": 8,
+          "to": 13,
+          "back": true
+        },
+        {
+          "from": 10,
+          "to": 14,
+          "back": false
+        },
+        {
+          "from": 1,
+          "to": 8,
+          "back": false
+        },
+        {
+          "from": 1,
+          "to": 5,
+          "back": false
+        },
+        {
+          "from": 1,
+          "to": 9,
+          "back": true
+        },
+        {
+          "from": 2,
+          "to": 9,
+          "back": false
+        },
+        {
+          "from": 3,
+          "to": 9,
+          "back": false
+        },
+        {
+          "from": 3,
+          "to": 6,
+          "back": false
+        },
+        {
+          "from": 3,
+          "to": 7,
+          "back": true
+        },
+        {
+          "from": 9,
+          "to": 13,
+          "back": false
+        },
+        {
+          "from": 9,
+          "to": 11,
+          "back": false
+        },
+        {
+          "from": 9,
+          "to": 12,
+          "back": true
+        },
+        {
+          "from": 5,
+          "to": 13,
+          "back": false
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "back": false
+        },
+        {
+          "from": 7,
+          "to": 12,
+          "back": false
+        },
+        {
+          "from": 13,
+          "to": 14,
+          "back": false
+        },
+        {
+          "from": 11,
+          "to": 12,
+          "back": false
+        },
+        {
+          "from": 11,
+          "to": 14,
+          "back": true
+        },
+        {
+          "from": 12,
+          "to": 14,
+          "back": false
         }
       ],
-      "summit": 9,
+      "summit": 14,
       "minBribe": 2
     },
     "rooms": [
+      [],
       [
-        2,
-        2,
+        null,
+        3,
         1,
-        0
-      ],
-      [
-        1,
-        2,
-        1
-      ],
-      [
-        0
-      ],
-      [
-        1,
-        0
-      ],
-      [
-        null
+        2
       ],
       [
         3
       ],
+      [
+        0,
+        0
+      ],
+      [
+        2
+      ],
       [],
+      [],
+      [],
+      [
+        null
+      ],
+      [
+        null
+      ],
+      [],
+      [
+        null
+      ],
       [],
       [],
       []
     ],
     "tokensOn": [
+      null,
+      null,
+      null,
+      null,
       5,
-      2,
+      null,
       4,
+      4,
+      4,
+      null,
+      null,
       3,
-      2,
-      5,
-      2,
-      null,
+      3,
       null,
       2,
+      3,
+      null,
+      null,
+      null,
+      null,
       4,
-      null
+      null,
+      null,
+      3
     ],
-    "blocker": 10,
-    "bag": 20,
-    "supply": 30,
+    "blocker": 20,
+    "bag": 21,
+    "supply": 50,
     "players": [
       {
-        "hand": 3,
+        "hand": 4,
         "tokens": [
           1,
-          1,
-          1
-        ]
-      },
-      {
-        "hand": 2,
-        "tokens": [
-          1,
-          1
-        ]
-      },
-      {
-        "hand": 3,
-        "tokens": [
           1,
           1
         ]
@@ -274,8 +374,21 @@
         "tokens": [
           1,
           1,
+          1
+        ]
+      },
+      {
+        "hand": 4,
+        "tokens": [
           1,
-          3
+          1
+        ]
+      },
+      {
+        "hand": 4,
+        "tokens": [
+          1,
+          1
         ]
       }
     ],
@@ -285,92 +398,47 @@
     "log": [
       {
         "t": "start",
-        "first": 1
-      },
-      {
-        "t": "enter",
-        "p": 1,
-        "room": 3
-      },
-      {
-        "t": "enter",
-        "p": 2,
-        "room": 0
+        "first": 3
       },
       {
         "t": "enter",
         "p": 3,
-        "room": 2
-      },
-      {
-        "t": "enter",
-        "p": 0,
-        "room": 2
-      },
-      {
-        "t": "enter",
-        "p": 1,
         "room": 1
-      },
-      {
-        "t": "enter",
-        "p": 2,
-        "room": 0
-      },
-      {
-        "t": "ask",
-        "p": 3,
-        "path": 3,
-        "need": 2
-      },
-      {
-        "t": "vote",
-        "p": 0,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "reward",
-        "p": 0,
-        "ones": 1
-      },
-      {
-        "t": "climb",
-        "p": 3,
-        "path": 3,
-        "token": true,
-        "took": 3,
-        "free": false
       },
       {
         "t": "enter",
         "p": 0,
         "room": 3
-      },
-      {
-        "t": "enter",
-        "p": 1,
-        "room": 0
-      },
-      {
-        "t": "enter",
-        "p": 2,
-        "room": 1
       },
       {
         "t": "nudge",
-        "p": 3,
-        "path": 0
+        "p": 1,
+        "path": 15
       },
       {
         "t": "reward",
-        "p": 3,
+        "p": 1,
         "ones": 1
       },
       {
         "t": "enter",
-        "p": 0,
+        "p": 2,
         "room": 0
+      },
+      {
+        "t": "enter",
+        "p": 3,
+        "room": 2
+      },
+      {
+        "t": "nudge",
+        "p": 0,
+        "path": 11
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
       },
       {
         "t": "enter",
@@ -378,31 +446,70 @@
         "room": 1
       },
       {
-        "t": "ask",
+        "t": "enter",
         "p": 2,
-        "path": 0,
-        "need": 4
+        "room": 1
+      },
+      {
+        "t": "ask",
+        "p": 3,
+        "path": 7,
+        "need": 3
       },
       {
         "t": "vote",
-        "p": 0,
+        "p": 1,
         "yes": 0,
         "of": 1
       },
       {
         "t": "vote",
-        "p": 1,
+        "p": 2,
         "yes": 1,
         "of": 1
       },
       {
         "t": "fail",
-        "p": 2
+        "p": 3
+      },
+      {
+        "t": "enter",
+        "p": 0,
+        "room": 3
+      },
+      {
+        "t": "ask",
+        "p": 1,
+        "path": 7,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 2,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 3,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "fail",
+        "p": 1
+      },
+      {
+        "t": "climb",
+        "p": 2,
+        "path": 0,
+        "token": false,
+        "free": true
       },
       {
         "t": "end",
         "winners": [],
-        "by": 2
+        "by": 1
       }
     ],
     "logStart": 0,

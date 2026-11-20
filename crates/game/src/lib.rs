@@ -98,6 +98,12 @@ pub trait Game {
     /// none (then the client shows no podium).
     fn winners(s: &Self::State) -> Vec<Seat>;
 
+    /// A game that can finish on its own with nobody winning (not only when the admin ends it).
+    #[must_use]
+    fn may_end_without_winner() -> bool {
+        false
+    }
+
     /// Seats that owe a move right now. Empty once the game is over.
     fn pending(s: &Self::State) -> Vec<Seat>;
 

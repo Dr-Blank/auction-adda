@@ -1,7 +1,15 @@
 // Random legal Pahunch moves from one seat's view, for socket bots and the state capture. Same
 // choices as the server's bot (crates/pahunch/src/bot.rs): no thinking, no gifts.
 
-import { bribeChoices, climbs, count, enterRooms, nudges, votersLeft } from "../src/games/pahunch/derive.ts";
+import {
+  blockTargets,
+  bribeChoices,
+  climbs,
+  count,
+  enterRooms,
+  nudges,
+  votersLeft,
+} from "../src/games/pahunch/derive.ts";
 import type { PahunchAction, PahunchView } from "../src/generated/index.ts";
 
 export function choosePahunch(v: PahunchView, random: () => number): PahunchAction | null {
@@ -31,7 +39,7 @@ export function choosePahunch(v: PahunchView, random: () => number): PahunchActi
   const push = (p: number | undefined): PahunchAction | null => (p === undefined ? null : { type: "nudge", path: p });
   const first =
     roll < 30 ? climb(pick(free)) : roll < 60 ? climb(pick(ups)) : roll < 90 ? enter(pick(enters)) : push(pick(nudge));
-  const block = pick(v.layout.paths.map((_, p) => p).filter((p) => p !== v.blocker));
+  const block = pick(blockTargets(v));
   return (
     first ??
     climb(pick(ups)) ??

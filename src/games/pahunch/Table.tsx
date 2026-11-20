@@ -35,7 +35,18 @@ import type {
 import type { TableProps } from "../types.ts";
 import { Board } from "./Board.tsx";
 import type { ClimbOption } from "./derive.ts";
-import { atTop, bribeChoices, climbs, count, enterRooms, nudges, score, votersLeft, yesSoFar } from "./derive.ts";
+import {
+  atTop,
+  blockTargets,
+  bribeChoices,
+  climbs,
+  count,
+  enterRooms,
+  nudges,
+  score,
+  votersLeft,
+  yesSoFar,
+} from "./derive.ts";
 import { Rules } from "./Rules.tsx";
 import { VoteClock } from "./Setup.tsx";
 import type { PahunchSkin } from "./skin.ts";
@@ -435,8 +446,9 @@ function MoveBar(props: {
   const enters = props.enters.filter((r) => !sel || sel.room === r);
   const ups = props.climbs.filter((c) => inSel(c.path));
   const nudge = props.nudges.filter(inSel);
-  const blockAt = sel?.path !== undefined && sel.path !== v.blocker ? sel.path : null;
-  const [blockTo, setBlockTo] = useState<number>(() => (v.blocker === 0 ? 1 : 0));
+  const targets = blockTargets(v);
+  const blockAt = sel?.path !== undefined && targets.includes(sel.path) ? sel.path : null;
+  const [blockTo, setBlockTo] = useState<number>(() => targets[0] ?? 0);
   const route = (path: number) => `${ctx.room(paths[path].from)} → ${ctx.room(paths[path].to)}`;
   const nothing = enters.length + ups.length + nudge.length === 0 && blockAt === null;
   const { climber } = skin.nouns;
@@ -516,13 +528,11 @@ function MoveBar(props: {
             <>
               <span className="ph-act-label">Send the {skin.nouns.blocker} to</span>
               <select value={blockTo} onChange={(e) => setBlockTo(Number(e.target.value))} aria-label="Path">
-                {paths.map((_, p) =>
-                  p === v.blocker ? null : (
-                    <option key={p} value={p}>
-                      {route(p)}
-                    </option>
-                  ),
-                )}
+                {targets.map((p) => (
+                  <option key={p} value={p}>
+                    {route(p)}
+                  </option>
+                ))}
               </select>
               <button className="btn" onClick={() => act({ type: "block", path: blockTo })}>
                 Send

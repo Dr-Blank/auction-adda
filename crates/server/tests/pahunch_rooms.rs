@@ -157,6 +157,9 @@ impl Table {
     }
 }
 
+/// The quick board's index: the vote tests below play on it.
+const QUICK: u8 = 1;
+
 #[test]
 fn a_society_committee_room_plays_pahunch() {
     let mut t = table(3, None);
@@ -165,7 +168,7 @@ fn a_society_committee_room_plays_pahunch() {
     assert_eq!(info.variant, Some(0));
     t.admin(json!({ "type": "start" }));
     let v = view(&t.clients[1]);
-    assert_eq!((v.n, v.you, v.layout.board.as_str()), (3, Some(1), "classic"));
+    assert_eq!((v.n, v.you, v.layout.board.as_str()), (3, Some(1), "full"));
     assert_eq!(v.players[1].tokens, Some(vec![1, 1]));
     assert_eq!(v.players[0].tokens, None, "others' points stay hidden");
 
@@ -196,6 +199,7 @@ fn a_society_committee_room_plays_pahunch() {
 #[test]
 fn a_vote_passes_on_a_yes_and_pays_the_voter() {
     let mut t = table(3, None);
+    t.admin(json!({ "type": "variant", "variant": QUICK }));
     t.admin(json!({ "type": "start" }));
     let (mover, voter) = t.start_a_vote();
     t.act(voter, json!({ "type": "vote", "yes": 1 }));
@@ -209,6 +213,7 @@ fn a_vote_passes_on_a_yes_and_pays_the_voter() {
 fn the_vote_clock_says_no_for_whoever_did_not_answer() {
     let mut t = table(3, None);
     t.admin(json!({ "type": "timer", "seconds": 20, "extend": 5 }));
+    t.admin(json!({ "type": "variant", "variant": QUICK }));
     t.admin(json!({ "type": "start" }));
     let (mover, voter) = t.start_a_vote();
     t.now.fetch_add(10_000, Ordering::SeqCst);
@@ -231,6 +236,7 @@ fn the_vote_clock_says_no_for_whoever_did_not_answer() {
 #[test]
 fn ending_early_shows_everything_and_crowns_nobody() {
     let mut t = table(3, None);
+    t.admin(json!({ "type": "variant", "variant": QUICK }));
     t.admin(json!({ "type": "start" }));
     t.admin(json!({ "type": "end" }));
     let v = view(&t.clients[2]);
@@ -245,11 +251,10 @@ fn ending_early_shows_everything_and_crowns_nobody() {
 #[test]
 fn the_admin_picks_the_board_in_the_lobby() {
     let mut t = table(3, None);
-    t.admin(json!({ "type": "variant", "variant": 1 }));
+    t.admin(json!({ "type": "variant", "variant": 2 }));
     assert_eq!(last_error(&t.clients[0]).as_deref(), Some("No such setup"));
-    // One board so far: nothing to draw at random from.
     t.admin(json!({ "type": "variant", "variant": null }));
-    assert_eq!(last_error(&t.clients[0]).as_deref(), Some("No such setup"));
+    assert_eq!(last_error(&t.clients[0]), None, "a random board each game");
     send(&mut t.rooms, &t.clients[1], json!({ "type": "variant", "variant": 0 }));
     assert!(last_error(&t.clients[1]).is_some_and(|e| e.contains("admin")));
     t.admin(json!({ "type": "variant", "variant": 0 }));
@@ -269,12 +274,13 @@ fn a_running_vote_survives_a_restart() {
     fs::create_dir_all(&dir).unwrap();
     let before = {
         let mut t = table(3, Some(dir.clone()));
+        t.admin(json!({ "type": "variant", "variant": QUICK }));
         t.admin(json!({ "type": "start" }));
         t.start_a_vote();
         t.rooms.flush();
         let file: Value = serde_json::from_slice(&fs::read(dir.join(format!("{}.json", t.code))).unwrap()).unwrap();
         assert_eq!(file["theme"], "society-committee");
-        assert!(file.get("variant").is_none(), "the default board is not written");
+        assert_eq!(file["variant"], QUICK, "the board pick is saved");
         assert!(file["game"]["vote"].is_object());
         view(&t.clients[0])
     };

@@ -72,10 +72,27 @@ export const societyCommittee: PahunchSkin = {
     neutral: "aunty",
     neutrals: "aunties",
     bribe: "a box of kaju katli",
-    blocker: "watchman",
+    blocker: "Daddu",
     board: "the society",
   },
   rooms: {
+    full: [
+      { name: "Notice board in-charge", short: "Notice board" },
+      { name: "Residents’ WhatsApp group", short: "WhatsApp" },
+      { name: "Gate pass desk", short: "Gate pass" },
+      { name: "Parking sub-committee", short: "Parking" },
+      { name: "Lift in-charge", short: "Lift" },
+      { name: "Cultural secretary", short: "Cultural" },
+      { name: "Sports in-charge", short: "Sports" },
+      { name: "Water tank in-charge", short: "Water tank" },
+      { name: "Festival committee", short: "Festival" },
+      { name: "Garden committee", short: "Garden" },
+      { name: "Security committee", short: "Security" },
+      { name: "Treasurer’s desk", short: "Treasurer" },
+      { name: "Maintenance committee", short: "Maintenance" },
+      { name: "Managing committee", short: "Managing" },
+      { name: "Chairman’s cabin", short: "Chairman" },
+    ],
     classic: [
       { name: "Parking sub-committee", short: "Parking" },
       { name: "Lift committee", short: "Lift" },
@@ -99,9 +116,9 @@ export const societyCommittee: PahunchSkin = {
     { color: "#f28fb1", ink: "#2a0b16" },
   ],
   neutralGlyph: "A",
-  blockerGlyph: "W",
+  blockerGlyph: "D",
   story:
-    "Everyone in the society wants the Chairman’s cabin. Committees only let a resident move up when most of their members agree, so votes are traded for izzat, promises are made on the call, and the aunties can always be persuaded with a box of kaju katli. The watchman lets anyone through his gate without a vote, but then nobody pays for it.",
+    "Everyone in the society wants the Chairman’s cabin. Committees only let a resident move up when most of their members agree, so votes are traded for izzat, promises are made on the call, and the aunties can always be persuaded with a box of kaju katli. Daddu, the senior citizen, sits on one staircase: anyone may walk past him without a vote, but he sits on the izzat there, so nobody takes it.",
 };
 
 /** Every Pahunch theme, by id; the default first. */

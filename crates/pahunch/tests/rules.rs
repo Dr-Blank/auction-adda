@@ -1,4 +1,4 @@
-//! The rules, move by move, on the classic board:
+//! The rules, move by move, on the quick board (id `classic`):
 //!
 //! ```text
 //! rooms  0:7 1:3 2:3 3:5 (bottom)  4:5 5:1 6:3  7:3 8:1  9: top
@@ -17,9 +17,18 @@ use pahunch::{Action, LogEntry, Pahunch, State, apply_action, apply_skip, boards
 
 use game::Game;
 
+/// The variant index of a board.
+fn board(id: &str) -> u8 {
+    u8::try_from(boards().iter().position(|b| b.id == id).unwrap()).unwrap()
+}
+
 /// A game for `n` with an empty board (no neutrals), seat 0 to move, two 1s each.
 fn fresh(n: u8) -> State {
-    let mut s = pahunch::new_game(n, 7, 0).unwrap();
+    fresh_on("classic", n)
+}
+
+fn fresh_on(id: &str, n: u8) -> State {
+    let mut s = pahunch::new_game(n, 7, board(id)).unwrap();
     for r in &mut s.rooms {
         r.clear();
     }
@@ -43,11 +52,12 @@ fn every_board_is_sound_and_seats_the_same_players() {
         assert_eq!(seats, Pahunch::players().collect::<Vec<_>>(), "board {}", b.id);
     }
     assert_eq!(Pahunch::variants().len(), boards().len());
+    assert_eq!(boards()[0].id, "full", "the full board is the default");
 }
 
 #[test]
 fn a_new_game_follows_the_board() {
-    let s = pahunch::new_game(3, 1, 0).unwrap();
+    let s = pahunch::new_game(3, 1, board("classic")).unwrap();
     assert_eq!(s.layout.cap(s.layout.summit), 5);
     assert_eq!(s.rooms[0], vec![None]);
     assert_eq!(s.rooms[3], vec![None]);
@@ -209,17 +219,32 @@ fn the_blockers_path_needs_no_vote_and_pays_nothing() {
 }
 
 #[test]
-fn a_nudged_neutral_climbs_free_but_never_to_the_top() {
+fn a_nudged_neutral_climbs_free_even_to_the_top() {
     let mut s = fresh(3);
     s.rooms[0] = vec![None];
     let t = act(&s, 0, Action::Nudge { path: 0 });
     assert_eq!((t.rooms[0].len(), t.rooms[4].clone()), (0, vec![None]));
     assert_eq!(t.players[0].tokens, vec![1, 1, 1]);
     s.rooms[7] = vec![None];
-    assert_eq!(
-        refused(&s, 0, Action::Nudge { path: 10 }),
-        "Neutrals do not go to the top"
-    );
+    let u = act(&s, 0, Action::Nudge { path: 10 });
+    assert_eq!(u.rooms[9], vec![None]);
+    assert!(!u.over);
+}
+
+#[test]
+fn a_neutral_can_fill_the_top_but_never_wins() {
+    let mut s = fresh(5);
+    s.rooms[9] = vec![Some(1), None, Some(2), Some(1), Some(2)];
+    s.rooms[7] = vec![None];
+    s.players[1].tokens = vec![3];
+    s.players[2].tokens = vec![3];
+    let t = act(&s, 0, Action::Nudge { path: 10 });
+    assert!(t.over);
+    assert_eq!(t.winners, vec![1], "a tie goes to the first seat to arrive");
+    s.rooms[9] = vec![None; 5];
+    let u = act(&s, 0, Action::Nudge { path: 10 });
+    assert!(u.over);
+    assert!(u.winners.is_empty(), "no player at the top: nobody wins");
 }
 
 #[test]
@@ -362,4 +387,62 @@ fn reseating_moves_climbers_tokens_and_votes() {
     assert_eq!(r.turn, 2);
     assert_eq!(r.vote.as_ref().unwrap().answers, vec![None, None, Some(1)]);
     assert_eq!(Pahunch::pending(&r), vec![0]);
+}
+
+// ---- the full board ----
+//
+// rooms  A0:1 E1:5 F2:1 G3:3 (bottom)  B4:1 I5:1 J6:1 K7:1  C8:3 H9:3 D10:3  M11:1 N12:3 L13:5  Z14: top
+// back paths 1:A→C 2:A→I 5:C→L 9:E→H 13:G→K 16:H→N 22:M→Z; token paths 4 6 7 8 11 12 14 15 20 23
+
+const BACK: [usize; 7] = [1, 2, 5, 9, 13, 16, 22];
+const SLOTS: [usize; 10] = [4, 6, 7, 8, 11, 12, 14, 15, 20, 23];
+
+#[test]
+fn the_full_board_deals_tokens_on_its_token_paths_only() {
+    for (n, neutrals) in [(3, 6), (4, 4), (5, 2)] {
+        let s = pahunch::new_game(n, 1, 0).unwrap();
+        assert_eq!(s.layout.board, "full");
+        assert_eq!(s.layout.cap(s.layout.summit), 5);
+        assert_eq!(s.rooms.iter().flatten().filter(|x| x.is_none()).count(), neutrals);
+        assert!(s.players.iter().all(|p| p.hand == 6 && p.tokens == vec![1, 1]));
+        assert_eq!(s.supply, 60 - 2 * u16::from(n));
+        assert_eq!(s.blocker, 20);
+        let on: Vec<usize> = (0..s.tokens_on.len()).filter(|&i| s.tokens_on[i].is_some()).collect();
+        assert_eq!(on, SLOTS);
+        assert_eq!(BACK.map(|i| s.layout.paths[i].back), [true; 7]);
+        assert_eq!(s.layout.paths.iter().filter(|p| p.back).count(), 7);
+    }
+    let s = pahunch::new_game(4, 1, 0).unwrap();
+    assert_eq!(s.rooms[8], vec![None]);
+    assert_eq!(s.rooms[1], vec![None]);
+}
+
+#[test]
+fn back_paths_are_locked() {
+    let mut s = fresh_on("full", 4);
+    s.rooms[0] = vec![Some(0)];
+    assert_eq!(refused(&s, 0, Action::Climb { path: 1 }), "The back stairs are locked");
+    assert_eq!(refused(&s, 0, Action::Climb { path: 2 }), "The back stairs are locked");
+    act(&s, 0, Action::Climb { path: 0 });
+    s.rooms[8] = vec![None];
+    assert_eq!(refused(&s, 0, Action::Nudge { path: 5 }), "The back stairs are locked");
+}
+
+#[test]
+fn the_blocker_sits_only_on_a_token_path() {
+    let s = fresh_on("full", 4);
+    assert_eq!(
+        refused(&s, 0, Action::Block { path: 0 }),
+        "The blocker sits only on a path with a token"
+    );
+    assert_eq!(
+        refused(&s, 0, Action::Block { path: 22 }),
+        "The blocker sits only on a path with a token"
+    );
+    assert_eq!(act(&s, 0, Action::Block { path: 4 }).blocker, 4);
+    let q = fresh(4);
+    assert_eq!(
+        refused(&q, 0, Action::Block { path: 7 }),
+        "The blocker sits only on a path with a token"
+    );
 }

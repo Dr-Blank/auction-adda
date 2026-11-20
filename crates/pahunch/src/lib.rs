@@ -65,6 +65,11 @@ impl Game for Pahunch {
         s.winners.clone()
     }
 
+    /// Neutrals can fill the top room with no player there.
+    fn may_end_without_winner() -> bool {
+        true
+    }
+
     fn pending(s: &State) -> Vec<Seat> {
         pending(s)
     }

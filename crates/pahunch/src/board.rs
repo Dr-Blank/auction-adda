@@ -27,6 +27,9 @@ pub struct RoomDef {
 pub struct PathDef {
     pub from: u8,
     pub to: u8,
+    /// A back path: locked unless the mover has a key lent; it never holds a token.
+    #[serde(default)]
+    pub back: bool,
 }
 
 /// What depends on the number of players.
@@ -135,8 +138,13 @@ impl Board {
                 return Err(format!("path {i} does not climb to a later room"));
             }
         }
-        if self.paths.len() < 2 || usize::from(self.blocker) >= self.paths.len() {
-            return Err("the blocker needs a path to start on and one to move to".into());
+        let slots = self.paths.iter().filter(|&&p| self.slot(p)).count();
+        if slots < 2 || !self.paths.get(usize::from(self.blocker)).is_some_and(|&p| self.slot(p)) {
+            return Err("the blocker needs a token path to start on and another to move to".into());
+        }
+        let bag: usize = self.bag.values().map(|&c| usize::from(c)).sum();
+        if bag < slots {
+            return Err(format!("{bag} bag tokens for {slots} token paths"));
         }
         for (i, r) in self.rooms.iter().enumerate() {
             if (i == usize::from(summit)) != (r.cap == 0) {
@@ -172,6 +180,11 @@ impl Board {
             }
         }
         Ok(())
+    }
+
+    /// The path holds a token: it leaves a room of more than 1 and is not a back path.
+    fn slot(&self, p: PathDef) -> bool {
+        !p.back && self.rooms.get(usize::from(p.from)).is_some_and(|r| r.cap > 1)
     }
 
     /// Players put new climbers into rooms no path climbs to.
@@ -226,10 +239,16 @@ impl Layout {
         self.cap(room) / 2 + 1
     }
 
-    /// Leaving a room this size takes the token on the path (a 1-seat room has none).
+    /// The path holds a token: it leaves a room of more than 1 seat and is not a back path.
     #[must_use]
-    pub fn pays(&self, room: u8) -> bool {
-        self.cap(room) > 1
+    pub fn slot(&self, path: u8) -> bool {
+        self.path(path).is_some_and(|p| !p.back && self.cap(p.from) > 1)
+    }
+
+    /// The path is a back path.
+    #[must_use]
+    pub fn back(&self, path: u8) -> bool {
+        self.path(path).is_some_and(|p| p.back)
     }
 
     #[must_use]
