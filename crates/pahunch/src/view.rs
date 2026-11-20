@@ -36,6 +36,7 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
         moved: s.moved,
         lent: s.lent.clone(),
         used: s.used.clone(),
+        asked: s.asked.clone(),
         layout: s.layout.clone(),
         rooms: s.rooms.clone(),
         tokens_on: s.tokens_on.clone(),

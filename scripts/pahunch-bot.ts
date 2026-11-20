@@ -1,5 +1,6 @@
 // Random legal Pahunch moves from one seat's view, for socket bots and the state capture. Same
-// choices as the server's bot (crates/pahunch/src/bot.rs): no thinking, no gifts, no lending.
+// choices as the server's bot (crates/pahunch/src/bot.rs): no thinking, no gifts, no lending
+// unasked; asked for its favour, yes or no at random.
 
 import {
   blockTargets,
@@ -18,6 +19,7 @@ export function choosePahunch(v: PahunchView, random: () => number): PahunchActi
   if (me === null || v.over || !v.pending.includes(me)) return null;
   const pick = <T>(xs: T[]): T | undefined => xs[Math.floor(random() * xs.length)];
   const tokens = v.players[me]?.tokens ?? [];
+  if (v.asked.includes(me)) return random() < 0.5 ? { type: "lend", on: true } : { type: "decline" };
 
   if (v.vote) {
     if (votersLeft(v, v.vote).includes(me)) {

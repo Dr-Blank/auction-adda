@@ -32,7 +32,7 @@ const pahunch = load("fixtures/pahunch");
 
 /** States also checked at phone width. */
 const PHONE_TOO = ["lobby-admin", "your-play", "open-buying-bid", "over"];
-const PAHUNCH_PHONE_TOO = ["your-move", "vote-voter", "over"];
+const PAHUNCH_PHONE_TOO = ["your-move", "vote-voter", "favour-asked", "over"];
 
 // React wants to know it runs inside act().
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -139,12 +139,56 @@ describe("pahunch pages", () => {
     act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
     // The board comes first: no move buttons until something on it is tapped.
     expect(el.querySelectorAll(".ph-pick .ph-move").length).toBe(0);
-    const live = el.querySelector(".ph-room.live") as SVGGElement;
-    act(() => live.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(el.querySelectorAll(".ph-pick .ph-move").length).toBeGreaterThan(0);
-    act(() => (el.querySelector(".ph-pick .ph-move") as HTMLButtonElement).click());
+    const tap = (e: Element) => act(() => e.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    // Room A, then a way up from it (a button, or room B on the board): the facts, then the move.
+    const from = [...el.querySelectorAll(".ph-room.live")].find((r) => {
+      tap(r);
+      const way = el.querySelector(".ph-pick .ph-then");
+      if (!way) tap(r);
+      return !!way;
+    });
+    expect(from, "a room with a way up").toBeDefined();
+    const target = el.querySelector(".ph-room.target") as SVGGElement;
+    tap(target);
+    expect(sent).toHaveLength(0);
+    expect(el.querySelectorAll(".ph-facts li").length).toBeGreaterThan(0);
+    act(() => (el.querySelector(".ph-pick .ph-move:not(.ph-then)") as HTMLButtonElement).click());
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ type: "action" });
+    act(() => root.unmount());
+  });
+
+  it("asks another player for their favour from their chip", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    const state = { ...Object.fromEntries(pahunch)["your-move"], receivedAt: NOW } as RoomState;
+    act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
+    const chip = el.querySelector(".ph-fav-btn.live") as HTMLButtonElement;
+    const owner = Number((chip.closest(".ph-seat-chip") as HTMLElement).dataset.seat);
+    act(() => chip.click());
+    const ask = [...document.querySelectorAll(".sheet .btn.primary")].find((b) => b.textContent?.startsWith("Ask"));
+    act(() => (ask as HTMLButtonElement).click());
+    expect(sent).toEqual([{ type: "action", action: { type: "request", owner, on: true } }]);
+    act(() => root.unmount());
+  });
+
+  it("answers a request for your favour from the bar", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    const state = { ...Object.fromEntries(pahunch)["favour-asked"], receivedAt: NOW } as RoomState;
+    act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
+    const buttons = el.querySelectorAll(".ph-request .ph-move");
+    expect(buttons).toHaveLength(2);
+    act(() => (buttons[1] as HTMLButtonElement).click());
+    act(() => (buttons[0] as HTMLButtonElement).click());
+    expect(sent).toEqual([
+      { type: "action", action: { type: "decline" } },
+      { type: "action", action: { type: "lend", on: true } },
+    ]);
     act(() => root.unmount());
   });
 });

@@ -114,7 +114,7 @@ export function climbs(v: PahunchView, me: number, extras: Extras = {}): ClimbOp
     if (p.back) return [{ ...base, kind: "back" }];
     if (path === v.blocker) return [{ ...base, kind: "blocked" }];
     if (own >= n) return [{ ...base, kind: "own" }];
-    if (v.tried.includes(p.from)) return [];
+    if (v.options.oneVotePerRoom && v.tried.includes(p.from)) return [];
     const others = (v.rooms[p.from] ?? []).filter((x) => x !== null && x !== me).length;
     const neutrals = Math.min(count(v.rooms, p.from, null), bribeTokens(v.layout, tokens));
     return own + others + neutrals >= n ? [{ ...base, kind: "ask" }] : [];
@@ -161,6 +161,23 @@ export function extraMoves(v: PahunchView, me: number) {
         ? climbs(v, me).filter((c) => c.kind !== "ask" && v.layout.paths[c.path].from === again)
         : [],
   };
+}
+
+/**
+ * Why the mover `me` cannot ask `owner` for their favour now, or `null` when they can (the rules'
+ * `request`). Already asked counts as "can't" with its own reason.
+ */
+export function askBlock(v: PahunchView, me: number | null, owner: number): string | null {
+  const p = v.players[owner];
+  if (!v.options.favours || !p?.favour) return "no favour";
+  if (me === null || v.over || v.turn !== me) return "not your turn";
+  if (owner === me) return "never on your own move";
+  if (v.vote !== null) return "wait for the vote";
+  if (v.asked.includes(owner)) return "asked";
+  if (v.lent.includes(owner)) return "on offer";
+  if (v.used.includes(owner)) return "used this turn";
+  if (p.uses === 0) return "used up";
+  return null;
 }
 
 /** Seats that still owe an answer to the vote. */

@@ -242,6 +242,15 @@ pub enum LogEntry {
     Done {
         p: Seat,
     },
+    /// The mover `p` asked `owner` for their favour.
+    Request {
+        p: Seat,
+        owner: Seat,
+    },
+    /// `p` said no to the mover's request for their favour.
+    Decline {
+        p: Seat,
+    },
     /// `user`, the mover, used `owner`'s favour.
     Favour {
         owner: Seat,
@@ -282,6 +291,10 @@ pub struct Options {
     pub fail_ends_turn: bool,
     /// Every player has a favour to lend.
     pub favours: bool,
+    /// Strict: a room that voted the mover down holds no second vote that turn. Off, the mover
+    /// may ask again. Games saved before this switch kept one vote per room.
+    #[serde(default = "Options::strict_before")]
+    pub one_vote_per_room: bool,
 }
 
 impl Default for Options {
@@ -289,6 +302,7 @@ impl Default for Options {
         Self {
             fail_ends_turn: false,
             favours: true,
+            one_vote_per_room: false,
         }
     }
 }
@@ -300,7 +314,12 @@ impl Options {
         Self {
             fail_ends_turn: true,
             favours: false,
+            one_vote_per_room: true,
         }
+    }
+
+    const fn strict_before() -> bool {
+        true
     }
 }
 
@@ -327,6 +346,9 @@ pub struct State {
     /// Favours the mover used this turn, by owner: not lent again until the turn passes.
     #[serde(default)]
     pub used: Vec<Seat>,
+    /// Owners the mover asked for their favour this turn, who have not answered yet.
+    #[serde(default)]
+    pub asked: Vec<Seat>,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
@@ -377,7 +399,12 @@ pub enum Action {
     /// The mover ends the turn with extra moves left.
     Done,
     /// Offer your favour to the mover (`on`), or take back an unused offer. Any time, like a gift.
+    /// It also answers yes to the mover's request for it.
     Lend { on: bool },
+    /// The mover asks `owner` for their favour (`on`), or takes the request back.
+    Request { owner: Seat, on: bool },
+    /// Say no to the mover's request for your favour.
+    Decline,
     /// Tokens (by value) to another player, at any time.
     Give { to: Seat, tokens: Vec<u8> },
     /// Any other `type`: answered with "Unknown move".
@@ -427,6 +454,8 @@ pub struct View {
     pub lent: Vec<Seat>,
     /// Favours the mover used this turn, by owner.
     pub used: Vec<Seat>,
+    /// Owners the mover asked for their favour, who have not answered yet.
+    pub asked: Vec<Seat>,
     pub layout: Layout,
     pub rooms: Rooms,
     pub tokens_on: Vec<Option<Coin>>,

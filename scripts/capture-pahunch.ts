@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
+import { askBlock } from "../src/games/pahunch/derive.ts";
 import type { ClientMsg, PahunchView, ServerMsg } from "../src/generated/index.ts";
 import { rng } from "../src/rng.ts";
 import { choosePahunch } from "./pahunch-bot.ts";
@@ -106,6 +107,8 @@ players[0].onState((s) => {
   if (g.logStart + g.log.length < 12) return;
   // Seats are drawn at the start: seat 0's player sits wherever `you` says.
   const me = g.you ?? -1;
+  if (g.asked.includes(me)) return keep("favour-asked", s);
+  if (g.turn === me && g.asked.length > 0 && !g.vote) return keep("favour-asking", s);
   if (g.vote) keep(g.turn === me ? "vote-climber" : g.pending.includes(me) ? "vote-voter" : "vote-watching", s);
   else if (g.turn === me && g.moved) keep("your-bonus", s);
   else if (g.turn === me && g.lent.length > 0) keep("favour-offered", s);
@@ -127,6 +130,17 @@ const play = async (until_: () => boolean) => {
       if (!v || you === null || !mine?.favour || v.over || v.turn === you || mine.uses === 0) continue;
       if (v.lent.includes(you) || v.used.includes(you) || random() >= 0.1) continue;
       p.send({ type: "action", action: { type: "lend", on: true } });
+      lent = true;
+    }
+    // Now and then the mover asks another player for their favour; the bots answer it.
+    for (const p of players) {
+      const v = p.latest()?.game;
+      const you = v?.you ?? null;
+      if (!v || you === null || v.turn !== you || v.vote || v.over || random() >= 0.08) continue;
+      const can = v.players.flatMap((_, o) => (askBlock(v, you, o) === null ? [o] : []));
+      if (can.length === 0) continue;
+      const owner = can[Math.floor(random() * can.length)];
+      p.send({ type: "action", action: { type: "request", owner, on: true } });
       lent = true;
     }
     if (lent) {

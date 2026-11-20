@@ -11,4 +11,9 @@ failEndsTurn: boolean,
 /**
  * Every player has a favour to lend.
  */
-favours: boolean, };
+favours: boolean, 
+/**
+ * Strict: a room that voted the mover down holds no second vote that turn. Off, the mover
+ * may ask again. Games saved before this switch kept one vote per room.
+ */
+oneVotePerRoom: boolean, };

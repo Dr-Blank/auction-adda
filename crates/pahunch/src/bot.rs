@@ -1,14 +1,16 @@
 //! Random legal moves, for bot seats and for absent players the admin skips. A bot sees only its
-//! own seat's view. It never gives tokens away or lends its favour; favours lent to it work where
-//! they apply by themselves (an open back path, a full room, a covered token).
+//! own seat's view. It never gives tokens away, offers its favour unasked or asks for one; asked,
+//! it says yes or no at random. Favours lent to it work where they apply by themselves (an open
+//! back path, a full room, a covered token).
 
 use rand::seq::IndexedRandom;
 use rand::{Rng, RngExt};
 
 use crate::rules::{
-    Ask, Board, Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, offered, voters_left,
+    Ask, Board, Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, offered, refused_rooms,
+    voters_left,
 };
-use crate::types::{Action, FavourKind, View};
+use crate::types::{Action, FavourKind, Seat, View, Vote};
 
 /// The move for the viewer of `v`, or `None` when it owes none.
 pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
@@ -16,26 +18,17 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
     if v.over || !v.pending.contains(&me) {
         return None;
     }
+    if v.asked.contains(&me) {
+        return Some(if rng.random_bool(0.5) {
+            Action::Lend { on: true }
+        } else {
+            Action::Decline
+        });
+    }
     let tokens = v.players.get(usize::from(me))?.tokens.clone().unwrap_or_default();
 
     if let Some(vote) = &v.vote {
-        if voters_left(&v.rooms, vote, v.turn).contains(&me) {
-            let of = count(&v.rooms, vote.room, Some(me));
-            let yes = match rng.random_range(0..10) {
-                0..5 => of,
-                5..7 => rng.random_range(0..=of),
-                _ => 0,
-            };
-            return Some(Action::Vote { yes });
-        }
-        // The mover, with only neutrals left to ask.
-        let bribe = tokens.iter().copied().filter(|&t| t >= v.layout.min_bribe).min();
-        return Some(match bribe {
-            Some(token) if can_bribe(&v.layout, &v.rooms, vote, &tokens) && rng.random_bool(0.7) => {
-                Action::Bribe { token }
-            }
-            _ => Action::Withdraw,
-        });
+        return Some(in_vote(v, vote, me, &tokens, rng));
     }
 
     let paths = || 0..u8::try_from(v.layout.paths.len()).unwrap_or(0);
@@ -50,7 +43,7 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
         rooms: &v.rooms,
         tokens_on: &v.tokens_on,
         blocker: v.blocker,
-        tried: &v.tried,
+        tried: refused_rooms(v.options, &v.tried),
         lent: &lent,
     };
     let plain = |path| Ask {
@@ -115,4 +108,23 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
         .or_else(|| pick(&enters, rng).map(|room| Action::Enter { room }))
         .or_else(|| pick(&nudges, rng).map(|path| Action::Nudge { path }))
         .or_else(|| pick(&blocks, rng).map(|path| Action::Block { path }))
+}
+
+/// While a vote runs: a voter's answer, or the mover's bribe or giving up.
+fn in_vote<R: Rng + ?Sized>(v: &View, vote: &Vote, me: Seat, tokens: &[u8], rng: &mut R) -> Action {
+    if voters_left(&v.rooms, vote, v.turn).contains(&me) {
+        let of = count(&v.rooms, vote.room, Some(me));
+        let yes = match rng.random_range(0..10) {
+            0..5 => of,
+            5..7 => rng.random_range(0..=of),
+            _ => 0,
+        };
+        return Action::Vote { yes };
+    }
+    // The mover, with only neutrals left to ask.
+    let bribe = tokens.iter().copied().filter(|&t| t >= v.layout.min_bribe).min();
+    match bribe {
+        Some(token) if can_bribe(&v.layout, &v.rooms, vote, tokens) && rng.random_bool(0.7) => Action::Bribe { token },
+        _ => Action::Withdraw,
+    }
 }

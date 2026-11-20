@@ -31,9 +31,12 @@ export interface PahunchSkin extends Skin {
   rooms: Record<string, { name: string; short: string }[]>;
   /** One colour per seat, and the ink that reads on it. */
   seats: { color: string; ink: string }[];
-  /** The letter on a neutral's disc and on the blocker's badge. */
+  /** The letter on a neutral's disc and on the blocker's badge, where a face does not fit. */
   neutralGlyph: string;
   blockerGlyph: string;
+  /** Fixed avatar looks (codes for client/Avatar.tsx) for the neutrals and the blocker, so they are easy to tell apart. */
+  neutralLook: string;
+  blockerLook: string;
   /** Short lines for the rules: what the game is about, in this skin's words. */
   story: string;
   /** Each special coin: its name, a mark drawn on the coin, and what taking it with your own climb does. */
@@ -116,6 +119,9 @@ export const societyCommittee: PahunchSkin = {
   ],
   neutralGlyph: "A",
   blockerGlyph: "D",
+  // An aunty: grey bun, glasses, pink. Daddu: white crop, glasses, moustache, white kurta.
+  neutralLook: "3248701110670",
+  blockerLook: "8321623212390",
   bonuses: {
     block: {
       name: "Chai with Daddu",

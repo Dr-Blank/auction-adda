@@ -77,6 +77,7 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         moved: false,
         lent: Vec::new(),
         used: Vec::new(),
+        asked: Vec::new(),
         layout,
         rooms,
         tokens_on,
@@ -359,18 +360,26 @@ pub(crate) fn can_bribe(layout: &Layout, rooms: &Rooms, vote: &Vote, tokens: &[u
 
 // ---- moves ----
 
+/// Seats that owe a move: the mover (or the voters while a vote runs), and the owners the mover
+/// asked for their favour.
 #[must_use]
 pub fn pending(s: &State) -> Vec<Seat> {
     if s.over {
         return Vec::new();
     }
-    match &s.vote {
+    let mut owe = match &s.vote {
         None => vec![s.turn],
         Some(v) => {
             let left = voters_left(&s.rooms, v, s.turn);
             if left.is_empty() { vec![s.turn] } else { left }
         }
+    };
+    for &o in &s.asked {
+        if !owe.contains(&o) {
+            owe.push(o);
+        }
     }
+    owe
 }
 
 /// One move by `seat`.
@@ -385,16 +394,8 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         return fail("No such seat");
     }
     let mut s = prev.clone();
-    match action {
-        Action::Give { to, tokens } => {
-            give(&mut s, seat, *to, tokens)?;
-            return Ok(s);
-        }
-        &Action::Lend { on } => {
-            lend(&mut s, seat, on)?;
-            return Ok(s);
-        }
-        _ => {}
+    if any_time(&mut s, seat, action)? {
+        return Ok(s);
     }
     if s.vote.is_some() {
         match *action {
@@ -475,9 +476,27 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         Action::Done => return fail("Make your move first"),
         Action::Vote { .. } | Action::Bribe { .. } | Action::Withdraw => return fail("No vote is running"),
         Action::Unknown => return fail("Unknown move"),
-        Action::Give { .. } | Action::Lend { .. } => {}
+        Action::Give { .. } | Action::Lend { .. } | Action::Request { .. } | Action::Decline => {}
     }
     Ok(s)
+}
+
+/// Moves that wait for nothing (gifts and favours): `true` when `action` was one.
+fn any_time(s: &mut State, seat: Seat, action: &Action) -> Result<bool, RuleError> {
+    match action {
+        Action::Give { to, tokens } => give(s, seat, *to, tokens)?,
+        &Action::Lend { on } => lend(s, seat, on)?,
+        &Action::Request { owner, on } => request(s, seat, owner, on)?,
+        Action::Decline => {
+            if !s.asked.contains(&seat) {
+                return fail("Nobody asked for your favour");
+            }
+            s.asked.retain(|&o| o != seat);
+            s.log.push(LogEntry::Decline { p: seat });
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
 }
 
 fn board<'a>(s: &'a State, lent: &'a [FavourKind]) -> Board<'a> {
@@ -486,9 +505,14 @@ fn board<'a>(s: &'a State, lent: &'a [FavourKind]) -> Board<'a> {
         rooms: &s.rooms,
         tokens_on: &s.tokens_on,
         blocker: s.blocker,
-        tried: &s.tried,
+        tried: refused_rooms(s.options, &s.tried),
         lent,
     }
+}
+
+/// Rooms that hold no second vote this turn: those that said no, in strict games only.
+pub(crate) fn refused_rooms(options: Options, tried: &[u8]) -> &[u8] {
+    if options.one_vote_per_room { tried } else { &[] }
 }
 
 /// The mover uses the lent favour of `kind`: its owner loses a use and earns its pay.
@@ -540,6 +564,8 @@ fn lend(s: &mut State, seat: Seat, on: bool) -> Result<(), RuleError> {
             return fail("Your favour is used up");
         }
         s.lent.push(seat);
+        // Offering it answers yes to the mover's request.
+        s.asked.retain(|&o| o != seat);
     } else {
         if !s.lent.contains(&seat) {
             return fail("Your favour is not on offer");
@@ -549,6 +575,51 @@ fn lend(s: &mut State, seat: Seat, on: bool) -> Result<(), RuleError> {
         }
         s.lent.retain(|&o| o != seat);
     }
+    Ok(())
+}
+
+/// The mover asks `owner` for their favour (`on`), or takes the request back. The owner answers
+/// by lending it or by declining; the mover's own move does not wait for the answer.
+fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleError> {
+    if !s.options.favours {
+        return fail("Favours are off this game");
+    }
+    if seat != s.turn {
+        return fail("Ask for a favour on your own turn");
+    }
+    if !on {
+        if !s.asked.contains(&owner) {
+            return fail("You did not ask for that favour");
+        }
+        s.asked.retain(|&o| o != owner);
+        return Ok(());
+    }
+    if s.vote.is_some() {
+        return fail("Wait for the vote to finish");
+    }
+    if owner == seat {
+        return fail("A favour helps another player's move");
+    }
+    let Some(p) = s.players.get(usize::from(owner)) else {
+        return fail("No such seat");
+    };
+    if p.favour.is_none() {
+        return fail("They have no favour");
+    }
+    if s.asked.contains(&owner) {
+        return fail("You asked already");
+    }
+    if s.lent.contains(&owner) {
+        return fail("Their favour is on offer already");
+    }
+    if s.used.contains(&owner) {
+        return fail("Their favour was used this turn");
+    }
+    if p.uses == 0 {
+        return fail("Their favour is used up");
+    }
+    s.asked.push(owner);
+    s.log.push(LogEntry::Request { p: seat, owner });
     Ok(())
 }
 
@@ -741,7 +812,7 @@ fn settle(s: &mut State, last: Option<Seat>) -> Result<(), RuleError> {
 }
 
 /// The running vote did not pass: the climber stays. The turn passes when the options say so;
-/// else the mover moves again, but not by another vote out of that room.
+/// else the mover moves again (in strict games, not by another vote out of that room).
 fn failed(s: &mut State) {
     s.log.push(LogEntry::Fail { p: s.turn });
     if let Some(v) = s.vote.take() {
@@ -873,6 +944,7 @@ fn clear_turn(s: &mut State) {
     s.moved = false;
     s.lent.clear();
     s.used.clear();
+    s.asked.clear();
 }
 
 fn next_turn(s: &mut State) {
@@ -920,7 +992,12 @@ pub fn apply_skip(prev: &State, seat: Seat) -> Result<State, RuleError> {
         return fail("That player does not owe a move");
     }
     let mut rng = StdRng::seed_from_u64((u64::from(prev.seed) << 32) | u64::from(prev.skips));
-    let action = choose_action(&view_for(prev, Some(seat)), &mut rng).ok_or_else(damaged)?;
+    // An absent owner says no to a request; any other move is a random one.
+    let action = if prev.asked.contains(&seat) {
+        Action::Decline
+    } else {
+        choose_action(&view_for(prev, Some(seat)), &mut rng).ok_or_else(damaged)?
+    };
     let mut s = prev.clone();
     s.skips = s.skips.wrapping_add(1);
     s.log.push(LogEntry::Skip { p: seat });
@@ -998,6 +1075,7 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
     }
     s.lent = s.lent.iter().map(|&o| m(o)).collect();
     s.used = s.used.iter().map(|&o| m(o)).collect();
+    s.asked = s.asked.iter().map(|&o| m(o)).collect();
     s.winners = s.winners.iter().map(|&w| m(w)).collect();
     for e in &mut s.log {
         match e {
@@ -1013,10 +1091,11 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
             | LogEntry::Block { p, .. }
             | LogEntry::Bonus { p, .. }
             | LogEntry::Done { p }
+            | LogEntry::Decline { p }
             | LogEntry::Skip { p } => *p = m(*p),
-            LogEntry::Favour { owner, user, .. } => {
+            LogEntry::Favour { owner, user: p, .. } | LogEntry::Request { p, owner } => {
                 *owner = m(*owner);
-                *user = m(*user);
+                *p = m(*p);
             }
             LogEntry::Carry { p, who, .. } => {
                 *p = m(*p);

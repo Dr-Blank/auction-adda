@@ -86,12 +86,52 @@
   color: var(--accent-soft);
   letter-spacing: 1px;
 }
-.ph-offered {
-  color: var(--accent);
-  font-weight: 600;
+/* Another player's favour: its own button on the chip. Glows when you, moving, can ask for it. */
+.ph-fav-btn {
+  appearance: none;
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
 }
-.ph-fav.offered {
-  color: var(--text);
+.ph-fav-btn .ph-fav-glyph {
+  font-size: 1.2rem;
+}
+.ph-fav-side {
+  display: grid;
+  line-height: 1.1;
+  text-align: left;
+}
+.ph-fav-side small {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ph-fav-btn.live {
+  border-color: var(--accent);
+  animation: ph-glow-box 1.8s ease-in-out infinite;
+}
+.ph-fav-btn.offered,
+.ph-fav-btn.asked {
+  border-color: var(--accent-line);
+}
+.ph-fav-btn.offered small,
+.ph-fav-btn.asked small {
+  color: var(--accent-soft);
+}
+.ph-fav-btn.used {
+  opacity: 0.6;
 }
 
 /* ---- the board ---- */
@@ -169,8 +209,9 @@
   stroke-width: 0.8;
 }
 
-/* Pieces: always full strength, they are what the board is about. */
-.ph-seat circle {
+/* Pieces: always full strength, they are what the board is about. A player's piece is their
+   colour: a disc with their initial, or a strong ring round their face. */
+.ph-piece-ring {
   stroke: var(--bg);
   stroke-width: 0.35;
 }
@@ -180,13 +221,10 @@
   stroke-width: 0.3;
   stroke-dasharray: 0.6 0.5;
 }
-.ph-seat.neutral circle {
+.ph-seat.neutral .ph-piece-ring {
   fill: var(--dim);
 }
-.ph-seat.neutral text {
-  fill: var(--text);
-}
-.ph-seat.mine circle {
+.ph-seat.mine .ph-piece-ring {
   stroke: var(--text);
   stroke-width: 0.55;
 }
@@ -375,6 +413,11 @@
     filter: drop-shadow(0 0 1.4px rgb(var(--accent-rgb) / 90%));
   }
 }
+@keyframes ph-glow-box {
+  50% {
+    box-shadow: 0 0 10px rgb(var(--accent-rgb) / 55%);
+  }
+}
 
 /* ---- the vote ---- */
 .ph-vote {
@@ -400,6 +443,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
+}
+.ph-voters .avatar.ph-dot-face {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 .ph-dot {
   display: inline-block;
@@ -588,18 +638,18 @@ button.ph-chip.on {
 .ph-pick-head > * {
   flex: none;
 }
-.ph-pick-head .ph-hint {
-  flex: 1 1 0;
-  min-width: 0;
+/* The label leads; the round buttons sit at the right; what is picked (or the hint) gets a line of its own. */
+.ph-pick-head .ph-turn {
+  margin-right: auto;
 }
+.ph-pick-head .ph-hint,
 .ph-pick-head .ph-pick-what {
-  flex: 1 1 0;
+  order: 5;
+  flex: 1 1 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .ph-pick-head > .ph-tip {
+  order: 6;
   flex: 1 1 100%;
 }
 .ph-info {
@@ -659,6 +709,27 @@ button.ph-chip.on {
   color: inherit;
   opacity: 0.8;
 }
+/* A picked way up: what the climb needs and gives, as short facts. */
+.ph-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ph-facts li {
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.ph-facts li:first-child {
+  border-color: var(--accent-line);
+  color: var(--accent-soft);
+  font-weight: 600;
+}
 .ph-done {
   width: 100%;
   min-height: 48px;
@@ -692,6 +763,37 @@ button.ph-chip.on {
 }
 .ph-offer small {
   color: var(--muted);
+}
+.ph-offer.asked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 0;
+  border-style: dashed;
+}
+.ph-offer-x {
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  margin: -6px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ph-request {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.ph-request:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.ph-request .ph-pick-what {
+  white-space: normal;
 }
 .ph-favour-picks {
   display: flex;
@@ -757,6 +859,7 @@ button.ph-chip.on {
 @media (max-width: 700px) {
   .ph-seat-chip {
     flex-basis: 100px;
+    flex-wrap: wrap;
     padding: 4px 6px 4px 4px;
   }
   .ph-board {
@@ -777,7 +880,8 @@ button.ph-chip.on {
   .ph-path.live .ph-path-line,
   .ph-blocker.live .ph-blocker-ring,
   .ph-path.selected .ph-path-line,
-  .ph-path.voting .ph-path-line {
+  .ph-path.voting .ph-path-line,
+  .ph-fav-btn.live {
     animation: none;
   }
 }

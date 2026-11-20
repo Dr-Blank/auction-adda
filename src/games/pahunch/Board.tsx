@@ -7,6 +7,7 @@
 // matters hides: room boxes, then the paths over them, then the pieces, then coins and the blocker.
 
 import type { KeyboardEvent } from "react";
+import { AvatarFace } from "../../client/Avatar.tsx";
 import type { PahunchLayout, PahunchView } from "../../generated/index.ts";
 import { offers, slot } from "./derive.ts";
 import type { PahunchSkin } from "./skin.ts";
@@ -84,6 +85,9 @@ export interface BoardProps {
   targets: Set<number>;
   blockerLive: boolean;
   selected: Pick | null;
+  /** Each seat's avatar look; drawn on its pieces when `faces` is on (an admin's display choice). */
+  looks: string[];
+  faces: boolean;
   onRoom: (room: number) => void;
   onPath: (path: number) => void;
   onBlocker: () => void;
@@ -101,7 +105,7 @@ function press(fn: () => void) {
 const ORDER = { back: 0, plain: 1, slot: 2 };
 
 export function Board(props: BoardProps) {
-  const { v, skin, names, acting, liveRooms, livePaths, focus, targets, blockerLive, selected } = props;
+  const { v, skin, names, acting, liveRooms, livePaths, focus, targets, blockerLive, selected, faces } = props;
   const { layout } = v;
   const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
   const ends = pathEnds(layout);
@@ -239,15 +243,26 @@ export function Board(props: BoardProps) {
                 const extra = k >= cap;
                 const x = extra ? left + b.w - 0.6 : cx;
                 const y = extra ? b.y - b.h / 2 + 0.6 : cy;
+                const cls = `ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${extra ? "extra" : ""}`;
+                // An aunty has her own face; a player is their colour, as a ring round their face
+                // (the admin's choice) or a disc with their initial.
+                if (s === null)
+                  return (
+                    <g key={k} className={cls}>
+                      <circle className="ph-piece-ring" cx={x} cy={y} r={R} />
+                      <AvatarFace code={skin.neutralLook} name={skin.nouns.neutral} x={x} y={y} r={R - 0.45} />
+                    </g>
+                  );
                 return (
-                  <g
-                    key={k}
-                    className={`ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${extra ? "extra" : ""}`}
-                  >
-                    <circle cx={x} cy={y} r={R} style={look ? { fill: look.color } : undefined} />
-                    <text x={x} y={y + 0.85} style={look ? { fill: look.ink } : undefined}>
-                      {s === null ? skin.neutralGlyph : (names[s]?.trim()[0] ?? "?").toUpperCase()}
-                    </text>
+                  <g key={k} className={`${cls} ${faces ? "face" : ""}`}>
+                    <circle className="ph-piece-ring" cx={x} cy={y} r={R} style={{ fill: look?.color }} />
+                    {faces ? (
+                      <AvatarFace code={props.looks[s] ?? ""} name={names[s] ?? ""} x={x} y={y} r={R - 0.6} />
+                    ) : (
+                      <text x={x} y={y + 0.85} style={{ fill: look?.ink }}>
+                        {(names[s]?.trim()[0] ?? "?").toUpperCase()}
+                      </text>
+                    )}
                   </g>
                 );
               })}
@@ -317,9 +332,7 @@ export function Board(props: BoardProps) {
                 <circle className="ph-blocker-hit" cx={x} cy={y} r={4.6} />
                 <circle className="ph-blocker-ring" cx={x} cy={y} r={3.7} />
                 <circle className="ph-blocker-disc" cx={x} cy={y} r={2.9} />
-                <text x={x} y={y + 1.05}>
-                  {skin.blockerGlyph}
-                </text>
+                <AvatarFace code={skin.blockerLook} name={skin.nouns.blocker} x={x} y={y} r={2.5} />
                 {covered && (
                   <g className="ph-under">
                     <circle cx={x + 2.5} cy={y + 2.3} r={1.35} />

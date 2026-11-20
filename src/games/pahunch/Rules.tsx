@@ -50,10 +50,12 @@ export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; opt
         <li>
           If the vote fails, or you give up, your {climber} stays.{" "}
           {options === undefined
-            ? "You then pick another move, but not a second vote out of that room. With the house rule “A failed vote ends the turn”, your turn ends instead."
+            ? "You then pick another move, or ask again. House rules can make it stricter: “A failed vote ends the turn”, or “one vote per room per turn”."
             : options.failEndsTurn
               ? "Your turn ends (house rule)."
-              : "Pick another move, but not a second vote out of that room."}{" "}
+              : options.oneVotePerRoom
+                ? "Pick another move, but not a second vote out of that room (house rule)."
+                : "Pick another move, or ask the same room again."}{" "}
           Anything paid to an {neutral} stays paid.
         </li>
       </ul>
@@ -104,9 +106,12 @@ export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; opt
               Each player gets one favour, different for everyone, with two uses. Everyone sees whose favour is whose.
             </li>
             <li>
-              A favour helps only someone else’s move, never your own. On another player’s turn, offer yours to them (or
-              they may ask you for it). Each use earns you {points} and costs a use. An offer that is not used costs
-              nothing.
+              A favour helps only someone else’s move, never your own. On another player’s turn, offer yours to them.
+              Each use earns you {points} and costs a use. An offer that is not used costs nothing.
+            </li>
+            <li>
+              On your turn, tap another player’s favour to ask for it. They answer yes (it is on offer to you) or no.
+              Your move does not wait for the answer.
             </li>
             <li>What the mover gives you for it is agreed on the call, and paid with gifts.</li>
             {Object.values(skin.favours).map((f) => (

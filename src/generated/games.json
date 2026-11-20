@@ -8,9 +8,19 @@
         "label": "A failed vote ends the turn"
       },
       {
+        "default": false,
+        "id": "oneVotePerRoom",
+        "label": "Strict: one vote per room per turn"
+      },
+      {
         "default": true,
         "id": "favours",
         "label": "Favours"
+      },
+      {
+        "default": false,
+        "id": "avatarsOnBoard",
+        "label": "Avatars on the board"
       }
     ]
   },

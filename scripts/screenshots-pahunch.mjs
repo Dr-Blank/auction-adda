@@ -40,14 +40,27 @@ const fail = (msg) => {
 
 // ---- a room with three server bots; this seat is the admin ----
 const sock = new WebSocket(WS);
+let settings;
 const { code, token } = await new Promise((resolve) => {
   sock.onopen = () => sock.send(JSON.stringify({ type: "create", theme: "society-committee", name: "tp" }));
   sock.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
+    if (m.type === "state") settings = m.room.settings;
     if (m.type === "joined") resolve({ code: m.room, token: m.token });
   };
 });
 console.log("room", code);
+// FACES=1: the admin turns on "Avatars on the board".
+if (process.env.FACES === "1") {
+  for (let i = 0; i < 20 && !settings; i++) await sleep(50);
+  sock.send(
+    JSON.stringify({
+      type: "settings",
+      settings: { ...settings, gameOptions: { ...settings.gameOptions, avatarsOnBoard: true } },
+    }),
+  );
+  await sleep(100);
+}
 for (let i = 0; i < 3; i++) {
   sock.send(JSON.stringify({ type: "bot" }));
   await sleep(100);
@@ -198,6 +211,17 @@ for (let tick = 0; tick < 4000; tick++) {
       await clickFirst('.ph-pick button[aria-label="Clear"]');
       await sleep(200);
     }
+    // Ask a bot for its favour from its chip: the sheet, then the request waiting in the bar.
+    if (!taken.has("favour-sheet") && !state.extra && (await clickFirst(".ph-fav-btn.live"))) {
+      await sleep(300);
+      await shot("favour-sheet");
+      const asked = await evaluate(
+        `(() => { const b = [...document.querySelectorAll('[role="dialog"] .btn.primary')].find((x) => x.textContent.startsWith('Ask')); if (!b) return false; b.click(); return true; })()`,
+      );
+      if (!asked) fail("a glowing favour opened no sheet with an Ask button");
+      await sleep(150);
+      await shot("favour-asked");
+    }
     if (!taken.has("tip") && (await clickFirst(".ph-pick .ph-tip-btn"))) {
       await sleep(300);
       await shot("tip");
@@ -213,7 +237,12 @@ for (let tick = 0; tick < 4000; tick++) {
     if (await clickFirst(".ph-room.live")) {
       await sleep(300);
       await shot("selected");
-      moved = await clickFirst(".ph-pick .ph-move.primary, .ph-pick .ph-move-grid .btn");
+      // A way up out of the room picks that way first (A, then B): its facts, then the move.
+      if (await clickFirst(".ph-pick .ph-move.ph-then")) {
+        await sleep(300);
+        await shot("confirm");
+        moved = await clickFirst(".ph-pick .ph-move.primary:not(.ph-then), .ph-pick .ph-move:not(.ph-then)");
+      } else moved = await clickFirst(".ph-pick .ph-move.primary, .ph-pick .ph-move-grid .btn");
     }
     if (!moved && (await clickFirst(".ph-blocker.live"))) {
       await sleep(200);
@@ -232,6 +261,8 @@ for (let tick = 0; tick < 4000; tick++) {
     await shot("vote-climber");
     await clickFirst('.action-bar [aria-label="Your climb"] .btn');
   } else if (!taken.has("their-move") && !state.voting) {
+    // The turn may have come round since the check above: then this is not their move.
+    if (await evaluate(`!!document.querySelector('.ph-pick, .ph-vote')`)) continue;
     await shot("their-move");
     // A tap on the board explains what was tapped.
     if (await clickFirst(".ph-room")) {

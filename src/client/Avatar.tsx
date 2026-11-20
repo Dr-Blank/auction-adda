@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Sheet } from "./Sheet.tsx";
 
 /**
@@ -698,6 +698,29 @@ export function Avatar(props: { code: string; name: string; className?: string; 
     >
       <Drawing look={look} viewBox={zoom ? "25 28 50 50" : "0 0 100 100"} />
     </span>
+  );
+}
+
+/**
+ * A seat's head, drawn inside another SVG (a game board): centred on (x, y) with radius `r`, cut
+ * round, on its background colour. Shows the head and hair, not the clothes.
+ */
+export function AvatarFace(props: { code: string; name: string; x: number; y: number; r: number }) {
+  const { code, name, x, y, r } = props;
+  const clip = `face${useId().replace(/[^\w-]/g, "")}`;
+  const look = decode(code || lookFromName(name));
+  return (
+    <g className="avatar-face">
+      <clipPath id={clip}>
+        <circle cx={x} cy={y} r={r} />
+      </clipPath>
+      <g clipPath={`url(#${clip})`}>
+        <circle cx={x} cy={y} r={r} fill={BG[look.bg][0]} />
+        <svg x={x - r} y={y - r} width={2 * r} height={2 * r} aria-hidden="true">
+          <Drawing look={look} viewBox="17 11 66 66" />
+        </svg>
+      </g>
+    </g>
   );
 }
 

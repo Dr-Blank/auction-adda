@@ -157,6 +157,20 @@ fn a_no_keeps_the_climber_and_the_mover_moves_again() {
     assert_eq!(t.log.last(), Some(&LogEntry::Fail { p: 0 }));
     assert_eq!((t.turn, t.tried.clone()), (0, vec![3]));
     assert_eq!(Pahunch::pending(&t), vec![0]);
+    // The same room may be asked again, as often as the mover likes.
+    let again = act(&t, 0, Action::climb(12));
+    assert_eq!(again.vote.as_ref().map(|v| v.room), Some(3));
+    let u = act(&t, 0, Action::climb(4));
+    assert_eq!((u.turn, u.tried.clone()), (1, vec![]));
+}
+
+#[test]
+fn in_a_strict_game_a_room_votes_once_a_turn() {
+    let mut s = fresh(5);
+    s.options.one_vote_per_room = true;
+    s.rooms[3] = vec![Some(0), Some(1)];
+    s.rooms[8] = vec![Some(0), Some(0)];
+    let t = act(&act(&s, 0, Action::climb(11)), 1, Action::Vote { yes: 0 });
     assert_eq!(refused(&t, 0, Action::climb(12)), "That room already said no this turn");
     // Another room, or a climb that needs no vote, is fine; the next turn forgets.
     let u = act(&t, 0, Action::climb(4));
@@ -193,10 +207,19 @@ fn a_game_saved_before_options_keeps_its_old_rules() {
     let o = json.as_object_mut().unwrap();
     o.remove("options");
     o.remove("tried");
-    let old: State = serde_json::from_value(json).unwrap();
+    let old: State = serde_json::from_value(json.clone()).unwrap();
     assert!(old.options.fail_ends_turn);
     assert!(!old.options.favours);
+    assert!(old.options.one_vote_per_room);
     assert!(old.tried.is_empty());
+    // Saved with options, before the strict switch: one vote per room, as then.
+    let mut json = serde_json::to_value(&s).unwrap();
+    let o = json.as_object_mut().unwrap();
+    o["options"].as_object_mut().unwrap().remove("oneVotePerRoom");
+    o.remove("asked");
+    let older: State = serde_json::from_value(json).unwrap();
+    assert!(older.options.one_vote_per_room && !older.options.fail_ends_turn);
+    assert!(older.asked.is_empty());
 }
 
 #[test]
@@ -204,10 +227,15 @@ fn the_admins_options_reach_the_game() {
     let none = game::Options::new();
     let s = Pahunch::new_game_with(3, 1, 0, &none).unwrap();
     assert_eq!(s.options, pahunch::Options::default());
-    let on: game::Options = [("failEndsTurn".to_owned(), true), ("favours".to_owned(), false)].into();
+    let on: game::Options = [
+        ("failEndsTurn".to_owned(), true),
+        ("favours".to_owned(), false),
+        ("oneVotePerRoom".to_owned(), true),
+    ]
+    .into();
     let t = Pahunch::new_game_with(3, 1, 0, &on).unwrap();
-    assert!(t.options.fail_ends_turn && !t.options.favours);
-    assert_eq!(Pahunch::options().len(), 2);
+    assert!(t.options.fail_ends_turn && !t.options.favours && t.options.one_vote_per_room);
+    assert_eq!(Pahunch::options().len(), 4);
 }
 
 #[test]
@@ -995,8 +1023,97 @@ fn reseating_moves_favours_offers_and_carries() {
     }));
 }
 
-/// Random games where the other players lend whenever they like and the mover now and then asks
-/// for a swap or a carry: the board stays sound and every game ends.
+fn ask(owner: u8) -> Action {
+    Action::Request { owner, on: true }
+}
+
+#[test]
+fn the_mover_asks_for_a_favour_and_the_owner_says_yes_or_no() {
+    let s = fresh(4);
+    assert_eq!(refused(&s, 0, ask(0)), "A favour helps another player's move");
+    assert_eq!(refused(&s, 1, ask(2)), "Ask for a favour on your own turn");
+    let t = act(&s, 0, ask(2));
+    assert_eq!(t.asked, vec![2]);
+    assert!(t.log.contains(&LogEntry::Request { p: 0, owner: 2 }));
+    assert_eq!(Pahunch::pending(&t), vec![0, 2], "the owner owes an answer");
+    assert_eq!(view_for(&t, Some(1)).asked, vec![2], "requests are public");
+    assert_eq!(refused(&t, 0, ask(2)), "You asked already");
+    assert_eq!(refused(&t, 1, Action::Decline), "Nobody asked for your favour");
+    // Yes: offering it answers.
+    let yes = act(&t, 2, Action::Lend { on: true });
+    assert_eq!((yes.lent.clone(), yes.asked.clone()), (vec![2], vec![]));
+    assert_eq!(Pahunch::pending(&yes), vec![0]);
+    // No.
+    let no = act(&t, 2, Action::Decline);
+    assert!(no.asked.is_empty() && no.lent.is_empty());
+    assert_eq!(no.log.last(), Some(&LogEntry::Decline { p: 2 }));
+    // Taken back by the mover.
+    let back = act(&t, 0, Action::Request { owner: 2, on: false });
+    assert!(back.asked.is_empty());
+    assert_eq!(
+        refused(&back, 0, Action::Request { owner: 2, on: false }),
+        "You did not ask for that favour"
+    );
+    // The mover's move does not wait for the answer; the turn's end clears it.
+    let moved = act(&t, 0, Action::Enter { room: 1 });
+    assert_eq!((moved.turn, moved.asked.clone()), (1, vec![]));
+}
+
+#[test]
+fn a_request_needs_a_favour_that_can_still_be_given() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(1)];
+    let vote = act(&s, 0, Action::climb(11));
+    assert_eq!(refused(&vote, 0, ask(2)), "Wait for the vote to finish");
+    let mut spent = s.clone();
+    spent.players[2].uses = 0;
+    assert_eq!(refused(&spent, 0, ask(2)), "Their favour is used up");
+    let offered = act(&s, 2, Action::Lend { on: true });
+    assert_eq!(refused(&offered, 0, ask(2)), "Their favour is on offer already");
+    let mut used = s.clone();
+    used.used = vec![2];
+    assert_eq!(refused(&used, 0, ask(2)), "Their favour was used this turn");
+    let mut none = s.clone();
+    none.players[2].favour = None;
+    assert_eq!(refused(&none, 0, ask(2)), "They have no favour");
+    let mut off = s.clone();
+    off.options.favours = false;
+    assert_eq!(refused(&off, 0, ask(2)), "Favours are off this game");
+    // A request made before a vote can be answered while it runs.
+    let during = act(&act(&s, 0, ask(2)), 0, Action::climb(11));
+    assert_eq!(Pahunch::pending(&during), vec![1, 2]);
+    assert!(act(&during, 2, Action::Decline).asked.is_empty());
+}
+
+#[test]
+fn a_bot_answers_a_request_either_way_and_a_skipped_owner_says_no() {
+    use rand::SeedableRng;
+    let t = act(&fresh(4), 0, ask(2));
+    let skipped = apply_skip(&t, 2).unwrap();
+    assert!(skipped.asked.is_empty() && skipped.lent.is_empty());
+    assert_eq!(skipped.log.last(), Some(&LogEntry::Decline { p: 2 }));
+    let mut answers = std::collections::BTreeSet::new();
+    for seed in 0..20 {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let a = pahunch::choose_action(&view_for(&t, Some(2)), &mut rng).unwrap();
+        assert!(act(&t, 2, a.clone()).asked.is_empty());
+        answers.insert(format!("{a:?}"));
+    }
+    assert_eq!(answers.len(), 2, "yes and no: {answers:?}");
+}
+
+#[test]
+fn reseating_moves_requests() {
+    let t = act(&fresh(3), 0, ask(1));
+    let r = reseat(&t, &[1, 2, 0]).unwrap();
+    assert_eq!(r.asked, vec![2]);
+    assert!(r.log.contains(&LogEntry::Request { p: 1, owner: 2 }));
+    let r = reseat(&act(&t, 1, Action::Decline), &[1, 2, 0]).unwrap();
+    assert!(r.log.contains(&LogEntry::Decline { p: 2 }));
+}
+
+/// Random games where the other players lend whenever they like, the mover asks for favours and
+/// now and then for a swap or a carry: the board stays sound and every game ends.
 #[test]
 fn random_games_with_favours_lent_keep_the_board_sound() {
     use rand::rngs::StdRng;
@@ -1021,7 +1138,17 @@ fn random_games_with_favours_lent_keep_the_board_sound() {
                 ) {
                     s = t;
                 }
-                let seat = Pahunch::pending(&s)[0];
+                let request = Action::Request {
+                    owner: rng.random_range(0..n),
+                    on: rng.random_bool(0.9),
+                };
+                if rng.random_bool(0.3)
+                    && let Ok(t) = apply_action(&s, s.turn, &request)
+                {
+                    s = t;
+                }
+                let owe = Pahunch::pending(&s);
+                let seat = owe[rng.random_range(0..owe.len())];
                 let mut a = pahunch::choose_action(&view_for(&s, Some(seat)), &mut rng).unwrap();
                 if let Action::Climb { path, .. } = a {
                     let pick = rng.random_range(0..10_u8);
@@ -1066,6 +1193,8 @@ fn random_games_with_favours_lent_keep_the_board_sound() {
                 assert_eq!(s.rooms.iter().flatten().filter(|x| x.is_none()).count(), pieces);
                 assert!(s.players.iter().all(|p| p.uses <= 2));
                 assert!(!s.lent.contains(&s.turn) || s.over);
+                assert!(!s.asked.contains(&s.turn));
+                assert!(s.asked.iter().all(|o| !s.lent.contains(o)));
             }
             seen.extend(s.log.iter().filter_map(|e| match e {
                 LogEntry::Favour { kind, .. } => Some(*kind),

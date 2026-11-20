@@ -11,17 +11,28 @@ use std::ops::RangeInclusive;
 
 use game::{Game, GameOption};
 
-/// The admin's switches, as the lobby lists them.
-const OPTIONS: [GameOption; 2] = [
+/// The admin's switches, as the lobby lists them. `avatarsOnBoard` is for the screen only: the
+/// rules never read it.
+const OPTIONS: [GameOption; 4] = [
     GameOption {
         id: "failEndsTurn",
         label: "A failed vote ends the turn",
         default: false,
     },
     GameOption {
+        id: "oneVotePerRoom",
+        label: "Strict: one vote per room per turn",
+        default: false,
+    },
+    GameOption {
         id: "favours",
         label: "Favours",
         default: true,
+    },
+    GameOption {
+        id: "avatarsOnBoard",
+        label: "Avatars on the board",
+        default: false,
     },
 ];
 use rand::Rng;
@@ -72,6 +83,7 @@ impl Game for Pahunch {
         let options = Options {
             fail_ends_turn: on("failEndsTurn"),
             favours: on("favours"),
+            one_vote_per_room: on("oneVotePerRoom"),
         };
         new_game_with(n, seed, variant, options)
     }

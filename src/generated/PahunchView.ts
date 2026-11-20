@@ -30,7 +30,11 @@ lent: Array<number>,
 /**
  * Favours the mover used this turn, by owner.
  */
-used: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
+used: Array<number>, 
+/**
+ * Owners the mover asked for their favour, who have not answered yet.
+ */
+asked: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
 /**
  * Tokens left in the bag.
  */
