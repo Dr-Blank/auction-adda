@@ -4,10 +4,11 @@
 import GAMES_JSON from "../generated/games.json" with { type: "json" };
 import type { Cast, GameId, ThemeId } from "../generated/index.ts";
 import { auction } from "./auction/index.tsx";
+import { pahunch } from "./pahunch/index.tsx";
 import type { GameClient, Skin } from "./types.ts";
 
 /** Every game, by id. `GameId` comes from the server: a game missing here does not compile. */
-export const GAMES: Record<GameId, GameClient> = { auction };
+export const GAMES: Record<GameId, GameClient> = { auction, pahunch };
 
 /** The games in the order Home and the theme picker show them. */
 export const GAME_LIST: GameClient[] = Object.values(GAMES);

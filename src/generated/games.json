@@ -3,10 +3,21 @@
     "auction": [
       3,
       5
+    ],
+    "pahunch": [
+      3,
+      5
     ]
   },
   "themes": {
     "box-office": "auction",
-    "leather-willow": "auction"
+    "leather-willow": "auction",
+    "society-committee": "pahunch"
+  },
+  "variants": {
+    "auction": [],
+    "pahunch": [
+      "Classic"
+    ]
   }
 }

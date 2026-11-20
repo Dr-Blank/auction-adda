@@ -52,4 +52,9 @@ export interface GameClient {
   adminNote: string;
   /** Where a running game stands, for the room list on Home ("Summer · season 2 of 4"). */
   stage(room: MyRoom, round: number): string;
+  /**
+   * The room clock (seconds, top-up seconds) a new room starts with when this browser never set
+   * one for the game; left out: the server's default.
+   */
+  clockDefault?: [number, number];
 }

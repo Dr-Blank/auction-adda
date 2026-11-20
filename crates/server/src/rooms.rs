@@ -263,6 +263,8 @@ struct Room {
     frozen: Option<Frozen>,
     /// Games played to the end in this room.
     games: u16,
+    /// The game's setup (board…) the next game plays on; `None` = a random one each game.
+    variant: Option<u8>,
     // Not saved:
     /// Goes up every time `game` changes.
     version: u64,
@@ -287,6 +289,13 @@ impl Room {
     /// The game this room plays, as its theme says.
     fn kind(&self) -> GameId {
         ThemeId::game_of(&self.theme)
+    }
+
+    /// The setup the next game plays on: the admin's pick, or one drawn at random.
+    fn next_variant(&self) -> u8 {
+        let count = u32::try_from(self.kind().variants().len().max(1)).unwrap_or(1);
+        let v = self.variant.map_or_else(|| new_seed() % count, u32::from);
+        u8::try_from(v).ok().filter(|&v| u32::from(v) < count).unwrap_or(0)
     }
 
     fn name(&self, seat: Seat) -> String {
@@ -377,10 +386,17 @@ impl Room {
                     };
                 }
             }
-            self.games = if won {
-                self.games.saturating_add(1)
+            // A game ended early without a winner is not part of the series.
+            let winners = if won {
+                game.winners()
             } else {
-                self.games.saturating_sub(1)
+                was_over.map_or_default(Match::winners)
+            };
+            let counted = !winners.is_empty();
+            self.games = match (won, counted) {
+                (true, true) => self.games.saturating_add(1),
+                (false, true) => self.games.saturating_sub(1),
+                _ => self.games,
             };
             if won {
                 info!(room = %self.code, "Game over ({} played)", self.games);
@@ -510,6 +526,23 @@ struct SavedRef<'a> {
     frozen_by: Option<Seat>,
     #[serde(skip_serializing_if = "is_zero")]
     games: u16,
+    /// Left out for the default setup, so files of one-setup games stay as they were.
+    #[serde(skip_serializing_if = "is_first")]
+    variant: Option<u8>,
+}
+
+#[expect(
+    clippy::ref_option,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "the signature serde's skip_serializing_if calls"
+)]
+fn is_first(v: &Option<u8>) -> bool {
+    *v == Some(0)
+}
+
+#[expect(clippy::unnecessary_wraps, reason = "serde's default for an Option field")]
+const fn first_variant() -> Option<u8> {
+    Some(0)
 }
 
 #[derive(Deserialize)]
@@ -537,6 +570,8 @@ struct Saved {
     frozen_by: Option<Seat>,
     #[serde(default)]
     games: u16,
+    #[serde(default = "first_variant")]
+    variant: Option<u8>,
 }
 
 /// A rejected message: the text goes back to the sender.
@@ -922,11 +957,15 @@ impl Rooms {
     )]
     fn dispatch(&mut self, id: ClientId, msg: ClientMsg) -> Result<(), Fail> {
         // A move that is no game's move is as bad as a message that does not parse, wherever it
-        // comes from; the room's game reads it later.
-        if let ClientMsg::Action { action } = &msg
-            && !GameId::ALL.iter().any(|g| g.action(action).is_ok())
-        {
-            return fail("Bad message");
+        // comes from; the room's game reads it later. A `type` no game knows is an unknown move,
+        // and a known `type` with broken fields a bad message (another game's catch-all would
+        // take it).
+        if let ClientMsg::Action { action } = &msg {
+            let read: Vec<_> = GameId::ALL.iter().map(|g| g.action(action)).collect();
+            let known = read.iter().any(|r| r.as_ref().is_ok_and(|a| !a.unknown()));
+            if !known && read.iter().any(Result::is_err) {
+                return fail("Bad message");
+            }
         }
         let msg = match msg {
             ClientMsg::Create {
@@ -1126,18 +1165,18 @@ impl Rooms {
                 if !(kind.min_players()..=kind.max_players()).contains(&n) {
                     return fail(format!("Needs {}–{} players", kind.min_players(), kind.max_players()));
                 }
-                let seed = new_seed();
-                room.new_game(kind.new_game(n, seed)?);
+                let (seed, variant) = (new_seed(), room.next_variant());
+                room.new_game(kind.new_game_on(n, seed, variant)?);
                 room.reshuffle = shuffle_seats;
-                info!(room = %code, seat = me, "Game started with {n} players (seed {seed})");
+                info!(room = %code, seat = me, "Game started with {n} players (seed {seed}, setup {variant})");
             }
             ClientMsg::Rematch => {
                 let Some(game) = room.game.as_ref().filter(|g| g.over()) else {
                     return fail("The game is not over yet");
                 };
                 room.require_admin(me, "start a rematch")?;
-                let (n, seed) = (game.seats(), new_seed());
-                room.new_game(game.id().new_game(n, seed)?);
+                let (n, seed, variant) = (game.seats(), new_seed(), room.next_variant());
+                room.new_game(game.id().new_game_on(n, seed, variant)?);
                 room.reshuffle = shuffle_seats;
                 // Same genres, new names.
                 room.cast.seed = new_seed();
@@ -1170,6 +1209,10 @@ impl Rooms {
                     return fail(format!("That game seats at most {max}; remove a seat first"));
                 }
                 if room.theme != id {
+                    if theme.game() != room.kind() {
+                        // A setup's number means another setup in another game.
+                        room.variant = Some(0);
+                    }
                     room.theme = id;
                     // A genre's number means another genre in another theme.
                     room.cast = Cast {
@@ -1367,6 +1410,19 @@ impl Rooms {
                     room.cast.seed = new_seed();
                 }
                 info!(room = %code, seat = me, "Cast set: genres {:?}, seed {}", room.cast.genres, room.cast.seed);
+            }
+            ClientMsg::Variant { variant } => {
+                room.require_admin(me, "pick the setup")?;
+                if room.game.is_some() {
+                    return fail("Pick the setup in the lobby");
+                }
+                let count = room.kind().variants().len();
+                if variant.is_none_or(|v| usize::from(v) < count.max(1)) && (variant.is_some() || count > 1) {
+                    room.variant = variant;
+                } else {
+                    return fail("No such setup");
+                }
+                info!(room = %code, seat = me, "Setup: {variant:?}");
             }
             ClientMsg::Settings { settings } => {
                 room.require_admin(me, "change the room settings")?;
@@ -1606,6 +1662,7 @@ impl Rooms {
                 banned: Vec::new(),
                 frozen: None,
                 games: 0,
+                variant: Some(0),
                 version: 0,
                 bid_clock: None,
                 last_call: None,
@@ -2001,6 +2058,7 @@ impl Rooms {
             settings: room.settings.clone(),
             watchers: self.watchers(room),
             games: room.games,
+            variant: room.variant,
         }
     }
 
@@ -2170,6 +2228,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         banned: saved.banned,
         frozen,
         games: saved.games,
+        variant: saved.variant,
         version: 0,
         bid_clock: None,
         last_call: None,
@@ -2293,6 +2352,7 @@ impl Store {
             banned: &room.banned,
             frozen_by: room.frozen.map(|f| f.by),
             games: room.games,
+            variant: room.variant,
         };
         match serde_json::to_vec(&saved) {
             Ok(bytes) => self.send(Job::Write {

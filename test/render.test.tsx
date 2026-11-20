@@ -13,16 +13,26 @@ import type { RoomState } from "../src/client/net.ts";
 import { Room } from "../src/client/Room.tsx";
 import { rng } from "../src/rng.ts";
 
-const DIR = path.join(import.meta.dirname, "fixtures/states");
 const NOW = Date.UTC(2026, 10, 20, 12, 0, 0);
-const states = fs
-  .readdirSync(DIR)
-  .filter((f) => f.endsWith(".json"))
-  .sort()
-  .map((f) => [f.replace(/\.json$/, ""), JSON.parse(fs.readFileSync(path.join(DIR, f), "utf8"))] as const);
+const load = (dir: string) =>
+  fs
+    .readdirSync(path.join(import.meta.dirname, dir))
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .map(
+      (f) =>
+        [
+          f.replace(/\.json$/, ""),
+          JSON.parse(fs.readFileSync(path.join(import.meta.dirname, dir, f), "utf8")),
+        ] as const,
+    );
+/** Auction Adda (scripts/capture-states.ts) and Pahunch (scripts/capture-pahunch.ts). */
+const states = load("fixtures/states");
+const pahunch = load("fixtures/pahunch");
 
 /** States also checked at phone width. */
 const PHONE_TOO = ["lobby-admin", "your-play", "open-buying-bid", "over"];
+const PAHUNCH_PHONE_TOO = ["your-move", "vote-voter", "over"];
 
 // React wants to know it runs inside act().
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -77,6 +87,63 @@ describe("room pages", () => {
       height: 844,
     });
     expect(room(state)).toMatchSnapshot();
+  });
+});
+
+describe("pahunch pages", () => {
+  beforeEach(() => {
+    (window as unknown as { happyDOM: { setViewport(v: object): void } }).happyDOM.setViewport({
+      width: 1024,
+      height: 768,
+    });
+  });
+
+  it.each(pahunch)("%s", (_, state) => {
+    expect(room(state)).toMatchSnapshot();
+  });
+
+  it.each(pahunch.filter(([name]) => PAHUNCH_PHONE_TOO.includes(name)))("%s on a phone", (_, state) => {
+    (window as unknown as { happyDOM: { setViewport(v: object): void } }).happyDOM.setViewport({
+      width: 390,
+      height: 844,
+    });
+    expect(room(state)).toMatchSnapshot();
+  });
+
+  it("shows no one else's points before the end", () => {
+    for (const [name, state] of pahunch.filter(([n]) => n !== "over" && n !== "ended-early" && n !== "lobby-admin")) {
+      const el = document.createElement("div");
+      document.body.append(el);
+      const root = createRoot(el);
+      act(() =>
+        root.render(<Room state={{ ...state, receivedAt: NOW }} send={() => {}} join={() => {}} reactions={[]} />),
+      );
+      const shown = [...el.querySelectorAll(".ph-seat-chip")].filter((c) => c.querySelector(".ph-points"));
+      const me = (state as { you: number | null }).you;
+      expect(
+        shown.map((c) => Number((c as HTMLElement).dataset.seat)),
+        name,
+      ).toEqual(me === null ? [] : [me]);
+      act(() => root.unmount());
+    }
+  });
+
+  it("offers the moves of the room you tap", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    const state = { ...Object.fromEntries(pahunch)["your-move"], receivedAt: NOW } as RoomState;
+    act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
+    const all = el.querySelectorAll(".ph-moves .btn").length;
+    const live = el.querySelector(".ph-room.live") as SVGGElement;
+    act(() => live.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const some = el.querySelectorAll(".ph-moves .btn").length;
+    expect(some).toBeLessThan(all);
+    act(() => (el.querySelector(".ph-moves .act-row .btn") as HTMLButtonElement).click());
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ type: "action" });
+    act(() => root.unmount());
   });
 });
 

@@ -21,6 +21,7 @@ use ts_rs::TS;
 pub enum GameId {
     #[default]
     Auction,
+    Pahunch,
 }
 
 /// A game in progress. Saved as the game's own state; the room's theme says which game it is.
@@ -28,6 +29,7 @@ pub enum GameId {
 #[serde(untagged)]
 pub enum Match {
     Auction(engine::GameState),
+    Pahunch(pahunch::State),
 }
 
 /// One seat's view of a game, sent as the game's own view.
@@ -35,6 +37,7 @@ pub enum Match {
 #[serde(untagged)]
 pub enum AnyView {
     Auction(engine::View),
+    Pahunch(pahunch::View),
 }
 
 /// A move of any game, as the client sends it. Read for the room's game (`GameId::action`);
@@ -43,6 +46,7 @@ pub enum AnyView {
 #[serde(untagged)]
 pub enum AnyAction {
     Auction(engine::Action),
+    Pahunch(pahunch::Action),
 }
 
 /// Runs `$body` with `$G` as the game type of `$id` (a `GameId`).
@@ -51,6 +55,10 @@ macro_rules! with_game {
         match $id {
             GameId::Auction => {
                 type $G = engine::Auction;
+                $body
+            }
+            GameId::Pahunch => {
+                type $G = pahunch::Pahunch;
                 $body
             }
         }
@@ -66,13 +74,29 @@ macro_rules! each {
                 type $G = engine::Auction;
                 $body
             }
+            Match::Pahunch($s) => {
+                type $G = pahunch::Pahunch;
+                $body
+            }
         }
     };
 }
 
 impl GameId {
     /// Every game, for checks that must hold for each.
-    pub const ALL: [Self; 1] = [Self::Auction];
+    pub const ALL: [Self; 2] = [Self::Auction, Self::Pahunch];
+
+    /// The setups an admin can pick from (boards…); empty = one setup.
+    #[must_use]
+    pub fn variants(self) -> Vec<String> {
+        with_game!(self, G => G::variants())
+    }
+
+    /// # Errors
+    /// When the variant does not exist or does not seat `n`.
+    pub fn new_game_on(self, n: u8, seed: u32, variant: u8) -> Result<Match, RuleError> {
+        with_game!(self, G => G::new_game_on(n, seed, variant).map(Match::from))
+    }
 
     #[must_use]
     pub fn min_players(self) -> u8 {
@@ -130,12 +154,51 @@ impl From<engine::View> for AnyView {
     }
 }
 
+impl From<pahunch::State> for Match {
+    fn from(s: pahunch::State) -> Self {
+        Self::Pahunch(s)
+    }
+}
+
+impl From<pahunch::Action> for AnyAction {
+    fn from(a: pahunch::Action) -> Self {
+        Self::Pahunch(a)
+    }
+}
+
+impl From<pahunch::View> for AnyView {
+    fn from(v: pahunch::View) -> Self {
+        Self::Pahunch(v)
+    }
+}
+
+impl AnyAction {
+    /// The move's `type` is not one of its game's (it parsed into the catch-all).
+    #[must_use]
+    pub fn unknown(&self) -> bool {
+        match self {
+            Self::Auction(a) => engine::Auction::unknown(a),
+            Self::Pahunch(a) => pahunch::Pahunch::unknown(a),
+        }
+    }
+}
+
 impl AnyView {
     /// The view of an Auction Adda game; `None` for another game.
     #[must_use]
     pub fn into_auction(self) -> Option<engine::View> {
         match self {
             Self::Auction(v) => Some(v),
+            Self::Pahunch(_) => None,
+        }
+    }
+
+    /// The view of a Pahunch game; `None` for another game.
+    #[must_use]
+    pub fn into_pahunch(self) -> Option<pahunch::View> {
+        match self {
+            Self::Pahunch(v) => Some(v),
+            Self::Auction(_) => None,
         }
     }
 }
@@ -149,6 +212,7 @@ impl Match {
     pub fn id(&self) -> GameId {
         match self {
             Self::Auction(_) => GameId::Auction,
+            Self::Pahunch(_) => GameId::Pahunch,
         }
     }
 
@@ -188,6 +252,7 @@ impl Match {
         #[allow(unreachable_patterns, clippy::match_wildcard_for_single_variants)]
         match (self, action) {
             (Self::Auction(_), AnyAction::Auction(a)) => engine::Auction::unknown(a),
+            (Self::Pahunch(_), AnyAction::Pahunch(a)) => pahunch::Pahunch::unknown(a),
             _ => false,
         }
     }
@@ -198,6 +263,7 @@ impl Match {
         #[allow(unreachable_patterns, clippy::match_wildcard_for_single_variants)]
         match (self, action) {
             (Self::Auction(s), AnyAction::Auction(a)) => engine::Auction::act(s, seat, a).map(Self::Auction),
+            (Self::Pahunch(s), AnyAction::Pahunch(a)) => pahunch::Pahunch::act(s, seat, a).map(Self::Pahunch),
             _ => other_game(),
         }
     }
@@ -248,6 +314,9 @@ impl Match {
             (Self::Auction(before), Self::Auction(after)) => {
                 engine::Auction::undo_call(before, after, by).map(Self::Auction)
             }
+            (Self::Pahunch(before), Self::Pahunch(after)) => {
+                pahunch::Pahunch::undo_call(before, after, by).map(Self::Pahunch)
+            }
             _ => other_game(),
         }
     }
@@ -277,5 +346,15 @@ mod tests {
             Some(AnyAction::Auction(engine::Action::Pass))
         );
         assert!(GameId::Auction.action(&serde_json::json!({ "type": "bid" })).is_err());
+        let climb = serde_json::json!({ "type": "climb", "path": 3 });
+        assert_eq!(
+            GameId::Pahunch.action(&climb).ok(),
+            Some(AnyAction::Pahunch(pahunch::Action::Climb { path: 3 }))
+        );
+        // Another game's move is not one of this game's.
+        assert_eq!(
+            GameId::Pahunch.action(&pass).ok(),
+            Some(AnyAction::Pahunch(pahunch::Action::Unknown))
+        );
     }
 }

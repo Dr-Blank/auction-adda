@@ -60,11 +60,30 @@ pub trait Game {
     /// How many genres an admin picks for the cast (one per suit, species…); 0 = no picks.
     fn cast_slots() -> u8;
 
-    /// A new game for `n` seats, dealt from `seed`.
+    /// A new game for `n` seats, dealt from `seed`, on the default variant.
     ///
     /// # Errors
     /// When the game does not support `n` seats.
     fn new_game(n: u8, seed: u32) -> Result<Self::State, RuleError>;
+
+    /// Names of the setups an admin can pick from (boards, decks…), the default first. Empty (the
+    /// default) = the game has one setup.
+    #[must_use]
+    fn variants() -> Vec<String> {
+        Vec::new()
+    }
+
+    /// A new game on `variant`, an index into [`variants`](Game::variants).
+    ///
+    /// # Errors
+    /// When the variant does not exist or does not seat `n`.
+    fn new_game_on(n: u8, seed: u32, variant: u8) -> Result<Self::State, RuleError> {
+        if variant == 0 {
+            Self::new_game(n, seed)
+        } else {
+            Err(RuleError::new("No such setup"))
+        }
+    }
 
     /// How many seats the game was dealt for.
     fn seats(s: &Self::State) -> u8;
@@ -75,7 +94,8 @@ pub trait Game {
 
     fn over(s: &Self::State) -> bool;
 
-    /// The seats that won; empty until the game is over.
+    /// The seats that won; empty until the game is over. A game the admin ended early may have
+    /// none (then the client shows no podium).
     fn winners(s: &Self::State) -> Vec<Seat>;
 
     /// Seats that owe a move right now. Empty once the game is over.
@@ -100,7 +120,7 @@ pub trait Game {
     /// When the seat does not owe a move.
     fn skip(s: &Self::State, seat: Seat) -> Result<Self::State, RuleError>;
 
-    /// The admin ends the game now; the standings as they are decide.
+    /// The admin ends the game now; the standings as they are decide, or nobody wins.
     ///
     /// # Errors
     /// When the game is already over.

@@ -5,4 +5,4 @@
  * either side does not compile. Each theme belongs to one game (`game`): picking a theme picks
  * the game.
  */
-export type ThemeId = "box-office" | "leather-willow";
+export type ThemeId = "box-office" | "leather-willow" | "society-committee";

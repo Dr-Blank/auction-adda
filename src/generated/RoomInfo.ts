@@ -47,6 +47,11 @@ bidMsWindow: number | null,
  */
 frozenBy: number | null, settings: RoomSettings, 
 /**
+ * The setup the next game plays on (index into the game's list in `games.json`); null = a
+ * random one each game.
+ */
+variant: number | null, 
+/**
  * People here without a seat, then kicked or removed people who are not here.
  */
 watchers: Array<Watcher>, 

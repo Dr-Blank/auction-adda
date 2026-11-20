@@ -3,4 +3,4 @@
 /**
  * Which game a room plays. The theme decides it (`ThemeId::game`).
  */
-export type GameId = "auction";
+export type GameId = "auction" | "pahunch";

@@ -648,6 +648,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "pahunch"
+version = "0.1.0"
+dependencies = [
+ "game",
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,6 +869,7 @@ dependencies = [
  "engine",
  "game",
  "jiff",
+ "pahunch",
  "rand 0.10.3",
  "serde",
  "serde_json",

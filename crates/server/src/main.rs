@@ -31,7 +31,7 @@ const BOT_TICK_EVERY: Duration = Duration::from_millis(200);
 /// How long shutdown waits for open requests before giving up on them.
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(5);
 
-/// Auction Adda game server: serves the built app and the game over a WebSocket at /ws.
+/// Game Adda server: serves the built app and the game over a WebSocket at /ws.
 /// Every setting can also come from the environment variable named in brackets.
 #[derive(Parser)]
 #[command(version, about)]
@@ -176,7 +176,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("listening on {}:{}", s.host, s.port))?;
     let port = listener.local_addr()?.port();
     // Read by the test harness and the VS Code tasks; keep the wording.
-    println!("Auction Adda listening on port {port} ({saved} saved rooms)");
+    println!("Game Adda listening on port {port} ({saved} saved rooms)");
 
     let stop = shutdown.clone();
     tokio::spawn(async move {

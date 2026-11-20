@@ -5,20 +5,20 @@ import { leatherWillow } from "./leather-willow/index.tsx";
 import type { Theme, ThemeDef } from "./types.ts";
 
 /**
- * Client-only registry (themes contain JSX). `ThemeId` comes from the server's list, so a theme
- * missing on either side does not compile.
+ * Client-only registry (themes contain JSX), the auction's themes of the server's `ThemeId` list.
+ * A theme the server gives this game but missing here fails `test/games.test.ts`.
  */
-export const THEMES: Record<ThemeId, ThemeDef> = {
+export const THEMES = {
   "box-office": boxOffice,
   "leather-willow": leatherWillow,
-};
+} satisfies Partial<Record<ThemeId, ThemeDef>>;
 
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
-export const DEFAULT_THEME: ThemeId = "box-office";
+export const DEFAULT_THEME = "box-office" satisfies keyof typeof THEMES;
 const NO_CAST: Cast = { seed: 0, genres: [] };
 
 export function getDef(id: string): ThemeDef {
-  return THEMES[id as ThemeId] ?? THEMES[DEFAULT_THEME];
+  return (THEMES as Partial<Record<string, ThemeDef>>)[id] ?? THEMES[DEFAULT_THEME];
 }
 
 // Same room, same cast, same object: components can depend on it.

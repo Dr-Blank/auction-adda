@@ -1,6 +1,7 @@
 //! Writes `src/generated/`: the TypeScript types of every message (and everything they contain),
 //! an `index.ts` that re-exports them, the deck as `deck.json` for the theme tests, and
-//! `games.json`: the game each theme plays and the seat counts of each game.
+//! `games.json`: the game each theme plays, the seat counts of each game and the setups (boards)
+//! an admin can pick.
 //! The files are committed; CI runs this and fails when they changed.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -48,14 +49,15 @@ fn export_typescript() {
         .iter()
         .map(|t| (t.id(), serde_json::to_value(t.game()).unwrap()))
         .collect();
+    let id = |g: &GameId| serde_json::to_value(g).unwrap().as_str().unwrap().to_owned();
     let players: Map<String, Value> = GameId::ALL
         .iter()
-        .map(|g| {
-            let id = serde_json::to_value(g).unwrap().as_str().unwrap().to_owned();
-            (id, json!([g.min_players(), g.max_players()]))
-        })
+        .map(|g| (id(g), json!([g.min_players(), g.max_players()])))
         .collect();
-    let games = serde_json::to_string_pretty(&json!({ "themes": themes, "players": players })).unwrap() + "\n";
+    let variants: Map<String, Value> = GameId::ALL.iter().map(|g| (id(g), json!(g.variants()))).collect();
+    let games = serde_json::to_string_pretty(&json!({ "themes": themes, "players": players, "variants": variants }))
+        .unwrap()
+        + "\n";
     fs::write(dir.join("games.json"), games).unwrap();
 }
 

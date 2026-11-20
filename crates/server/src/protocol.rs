@@ -14,6 +14,7 @@ use crate::games::{AnyAction, AnyView, GameId};
 pub enum ThemeId {
     BoxOffice,
     LeatherWillow,
+    SocietyCommittee,
 }
 
 /// Which of a theme's genres play and which of their names show. The server stores it; every
@@ -30,13 +31,14 @@ pub struct Cast {
 }
 
 impl ThemeId {
-    pub const ALL: [Self; 2] = [Self::BoxOffice, Self::LeatherWillow];
+    pub const ALL: [Self; 3] = [Self::BoxOffice, Self::LeatherWillow, Self::SocietyCommittee];
 
     /// The game this theme dresses.
     #[must_use]
     pub const fn game(self) -> GameId {
         match self {
             Self::BoxOffice | Self::LeatherWillow => GameId::Auction,
+            Self::SocietyCommittee => GameId::Pahunch,
         }
     }
 
@@ -269,6 +271,11 @@ pub enum ClientMsg {
         #[serde(default)]
         reroll: bool,
     },
+    /// Admin only, in the lobby: the setup the next games play on (a board…), an index into the
+    /// game's list in `games.json`; null = a random one each game.
+    Variant {
+        variant: Option<u8>,
+    },
     /// Admin only, in the lobby or a game: replaces the room's settings.
     Settings {
         settings: RoomSettings,
@@ -327,6 +334,7 @@ impl ClientMsg {
             Self::Admin { .. } => "admin",
             Self::Timer { .. } => "timer",
             Self::Cast { .. } => "cast",
+            Self::Variant { .. } => "variant",
             Self::Settings { .. } => "settings",
             Self::Freeze { .. } => "freeze",
             Self::Remove { .. } => "remove",
@@ -394,6 +402,9 @@ pub struct RoomInfo {
     /// The seat that froze the game; null while it runs. A frozen clock keeps `bid_ms_left`.
     pub frozen_by: Option<Seat>,
     pub settings: RoomSettings,
+    /// The setup the next game plays on (index into the game's list in `games.json`); null = a
+    /// random one each game.
+    pub variant: Option<u8>,
     /// People here without a seat, then kicked or removed people who are not here.
     pub watchers: Vec<Watcher>,
     /// Games played to the end in this room (the series the seats' `wins` count).

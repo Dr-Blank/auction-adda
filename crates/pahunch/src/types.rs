@@ -1,0 +1,202 @@
+//! State, moves and views. The view, the moves and the log are part of the wire protocol; the
+//! state is what the room file keeps. TypeScript names start with `Pahunch` (one folder holds the
+//! types of every game).
+
+pub use game::{RuleError, Seat};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use crate::board::{Layout, Rooms};
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Player {
+    /// Climbers not yet on the board.
+    pub hand: u8,
+    /// Point tokens by value; hidden from the others until the end.
+    pub tokens: Vec<u8>,
+}
+
+/// A climb that waits for votes: the mover's climber leaves `room` by `path` once `need` yes
+/// votes are in.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchVote")]
+pub struct Vote {
+    pub room: u8,
+    pub path: u8,
+    pub need: u8,
+    /// Yes votes per seat; `null` = not answered (or no climber there). The mover's own climbers
+    /// count as yes.
+    pub answers: Vec<Option<u8>>,
+    /// Neutrals in the room the mover paid: each a yes.
+    pub bribed: u8,
+    /// Log line that asked: the vote clock starts there.
+    pub start: u32,
+}
+
+impl Vote {
+    #[must_use]
+    pub fn yes(&self) -> u8 {
+        self.answers
+            .iter()
+            .flatten()
+            .fold(self.bribed, |a, &b| a.saturating_add(b))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "t", rename_all = "lowercase")]
+#[ts(rename = "PahunchLog")]
+pub enum LogEntry {
+    Start {
+        first: Seat,
+    },
+    Enter {
+        p: Seat,
+        room: u8,
+    },
+    /// `token`: a token was taken on the way (its value only the climber sees, until the end).
+    /// `free`: no vote was needed (enough own climbers, or the blocker on the path).
+    Climb {
+        p: Seat,
+        path: u8,
+        token: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        took: Option<u8>,
+        free: bool,
+    },
+    /// A vote starts.
+    Ask {
+        p: Seat,
+        path: u8,
+        need: u8,
+    },
+    Vote {
+        p: Seat,
+        yes: u8,
+        of: u8,
+    },
+    Bribe {
+        p: Seat,
+    },
+    /// `p` earned `ones` 1-point tokens for needed yes votes (or for nudging a neutral).
+    Reward {
+        p: Seat,
+        ones: u8,
+    },
+    /// The vote did not pass (or the mover gave up): the climber stays.
+    Fail {
+        p: Seat,
+    },
+    Nudge {
+        p: Seat,
+        path: u8,
+    },
+    Block {
+        p: Seat,
+        path: u8,
+    },
+    /// A gift of tokens; their values stay between the two.
+    Gift {
+        from: Seat,
+        to: Seat,
+        count: u8,
+    },
+    /// The admin skipped an absent player: the next line is a random move made for them.
+    Skip {
+        p: Seat,
+    },
+    /// `by`: the admin ended the game early; nobody wins then.
+    End {
+        winners: Vec<Seat>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        by: Option<Seat>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct State {
+    pub n: u8,
+    pub seed: u32,
+    pub layout: Layout,
+    /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
+    pub rooms: Rooms,
+    /// The token on each path; `null` = none.
+    pub tokens_on: Vec<Option<u8>>,
+    pub blocker: u8,
+    /// Tokens left to refill paths, drawn from the end.
+    pub bag: Vec<u8>,
+    /// 1-point tokens left.
+    pub supply: u16,
+    pub players: Vec<Player>,
+    pub turn: Seat,
+    pub vote: Option<Vote>,
+    pub log: Vec<LogEntry>,
+    pub over: bool,
+    pub winners: Vec<Seat>,
+    /// Moves made for absent players so far: each draws its random move from the seed and this.
+    pub skips: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "lowercase")]
+#[ts(rename = "PahunchAction")]
+pub enum Action {
+    /// A climber from your hand into a bottom room.
+    Enter { room: u8 },
+    /// One of your climbers up `path`.
+    Climb { path: u8 },
+    /// Your answer to the running vote: how many of your climbers there say yes.
+    Vote { yes: u8 },
+    /// The mover pays a neutral in the room one token of this value for its yes.
+    Bribe { token: u8 },
+    /// The mover gives up the climb; the turn ends.
+    Withdraw,
+    /// A neutral up `path`, no vote needed; you get a 1-point token.
+    Nudge { path: u8 },
+    /// The blocker onto `path`.
+    Block { path: u8 },
+    /// Tokens (by value) to another player, at any time.
+    Give { to: Seat, tokens: Vec<u8> },
+    /// Any other `type`: answered with "Unknown move".
+    #[serde(other)]
+    #[ts(skip)]
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchPlayer")]
+pub struct PlayerView {
+    pub hand: u8,
+    /// `null` = hidden: own tokens always show; everyone's show at the end.
+    pub tokens: Option<Vec<u8>>,
+}
+
+/// What one seat (or a spectator, `you: null`) may know.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchView")]
+pub struct View {
+    pub n: u8,
+    pub you: Option<Seat>,
+    pub layout: Layout,
+    pub rooms: Rooms,
+    pub tokens_on: Vec<Option<u8>>,
+    pub blocker: u8,
+    /// Tokens left in the bag.
+    pub bag: u8,
+    pub supply: u16,
+    pub players: Vec<PlayerView>,
+    pub turn: Seat,
+    pub vote: Option<Vote>,
+    pub pending: Vec<Seat>,
+    pub log: Vec<LogEntry>,
+    /// Position of `log[0]` in the full log.
+    pub log_start: u32,
+    pub over: bool,
+    pub winners: Vec<Seat>,
+}

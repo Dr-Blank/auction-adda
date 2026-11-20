@@ -71,7 +71,7 @@ interface Moment {
 }
 
 export function Table({ state, send, reactions }: TableProps) {
-  const g = state.game!;
+  const g = state.game as View;
   const me = g.you;
   const { room } = state;
   const theme = getTheme(room.theme, room.cast);

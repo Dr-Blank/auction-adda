@@ -105,7 +105,8 @@ export function Home({
           if (!name.trim()) return;
           saveName(name.trim());
           saveTheme(theme);
-          send({ type: "create", theme, name, prefs: savedPrefs(theme), avatar: look });
+          const game = gameOf(theme);
+          send({ type: "create", theme, name, prefs: savedPrefs(theme, game.id, game.clockDefault), avatar: look });
         }}
       >
         <div className="you-row">

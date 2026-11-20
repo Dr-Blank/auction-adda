@@ -208,5 +208,5 @@ impl Game for SkipsAnyone {
 fn a_game_that_breaks_a_rule_fails_with_where() {
     let e = check::random_games::<SkipsAnyone>(3).unwrap_err();
     assert!(e.contains("could be skipped without owing a move"), "{e}");
-    assert!(e.contains("seats, game 0"), "{e}");
+    assert!(e.contains("seats, variant 0, game 0"), "{e}");
 }

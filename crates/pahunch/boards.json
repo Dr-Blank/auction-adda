@@ -1,0 +1,44 @@
+{
+  "boards": [
+    {
+      "id": "classic",
+      "name": "Classic",
+      "rooms": [
+        { "cap": 7, "x": 12, "y": 88 },
+        { "cap": 3, "x": 37, "y": 88 },
+        { "cap": 3, "x": 63, "y": 88 },
+        { "cap": 5, "x": 88, "y": 88 },
+        { "cap": 5, "x": 22, "y": 62 },
+        { "cap": 1, "x": 50, "y": 62 },
+        { "cap": 3, "x": 78, "y": 62 },
+        { "cap": 3, "x": 34, "y": 36 },
+        { "cap": 1, "x": 66, "y": 36 },
+        { "cap": 0, "x": 50, "y": 10 }
+      ],
+      "paths": [
+        { "from": 0, "to": 4 },
+        { "from": 1, "to": 4 },
+        { "from": 1, "to": 5 },
+        { "from": 2, "to": 5 },
+        { "from": 2, "to": 6 },
+        { "from": 3, "to": 6 },
+        { "from": 4, "to": 7 },
+        { "from": 5, "to": 7 },
+        { "from": 5, "to": 8 },
+        { "from": 6, "to": 8 },
+        { "from": 7, "to": 9 },
+        { "from": 8, "to": 9 }
+      ],
+      "blocker": 10,
+      "bag": { "2": 8, "3": 10, "4": 7, "5": 5 },
+      "supply": 40,
+      "startOnes": 2,
+      "minBribe": 2,
+      "players": {
+        "3": { "climbers": 6, "summit": 5, "neutrals": [0, 3] },
+        "4": { "climbers": 6, "summit": 5, "neutrals": [0] },
+        "5": { "climbers": 5, "summit": 6, "neutrals": [] }
+      }
+    }
+  ]
+}

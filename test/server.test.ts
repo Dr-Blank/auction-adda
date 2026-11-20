@@ -8,10 +8,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { chooseAction } from "../scripts/bot.ts";
-import type { ClientMsg, ServerMsg } from "../src/generated/index.ts";
+import type { ClientMsg, ServerMsg, View } from "../src/generated/index.ts";
 import { rng } from "../src/rng.ts";
 
-type State = Extract<ServerMsg, { type: "state" }>;
+/** A `state` message of an auction room (the games here are auctions). */
+type State = Omit<Extract<ServerMsg, { type: "state" }>, "game"> & { game: View | null };
 
 /** The server under test. `npm test` builds it first. */
 const SERVER_CMD = process.env.AA_SERVER_CMD ?? "target/debug/auction-adda";
@@ -152,7 +153,7 @@ describe("server over real sockets", () => {
                 if (i === 0 && m.room.seats.length === n) send(ws, { type: "start" });
                 return;
               }
-              const g = m.game;
+              const g = m.game as View;
               const you = m.you!;
               expect(g.you).toBe(you);
               expect(m.room.seats[you].name).toBe(`P${i}`);
@@ -164,7 +165,7 @@ describe("server over real sockets", () => {
                 if (!g.over && j !== you) expect(p.money).toBeNull();
               });
               if (g.auction) expect(Object.keys(g.auction)).not.toContain("bids");
-              latest[i] = m;
+              latest[i] = { ...m, game: g };
               seen[i]++;
               step();
             } catch (e) {

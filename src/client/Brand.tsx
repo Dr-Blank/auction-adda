@@ -12,7 +12,7 @@ export function goHome(e?: MouseEvent) {
 export function Brand({ as = "span" }: { as?: "span" | "h1" }) {
   const link = (
     <a className="brand-link" href="/" onClick={goHome} title="Home">
-      Auction Adda
+      Game Adda
     </a>
   );
   return as === "h1" ? <h1 className="brand">{link}</h1> : <span className="brand">{link}</span>;

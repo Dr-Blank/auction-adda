@@ -14,11 +14,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
-import type { ClientMsg, ServerMsg } from "../src/generated/index.ts";
+import type { ClientMsg, ServerMsg, View } from "../src/generated/index.ts";
 import { rng } from "../src/rng.ts";
 import { chooseAction } from "./bot.ts";
 
-type State = Extract<ServerMsg, { type: "state" }>;
+/** A `state` message of an auction room (this script plays the auction only). */
+type State = Omit<Extract<ServerMsg, { type: "state" }>, "game"> & { game: View | null };
 
 const url = process.argv[2] ?? "ws://localhost:8799/ws";
 const out = path.resolve(import.meta.dirname, "../test/fixtures/states");
@@ -36,9 +37,10 @@ function client(name: string) {
     const m = JSON.parse(data.toString()) as ServerMsg;
     if (m.type === "error") console.error(`${name}: ${m.message}`);
     if (m.type !== "state") return;
-    latest = m;
-    got.push(m);
-    for (const l of listeners) l(m);
+    const s = m as State;
+    latest = s;
+    got.push(s);
+    for (const l of listeners) l(s);
   });
   return {
     name,

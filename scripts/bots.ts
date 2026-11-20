@@ -25,10 +25,11 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import WebSocket from "ws";
 import { MAX_PLAYERS, MIN_PLAYERS } from "../src/games/auction/config.ts";
-import type { ClientMsg, SeatInfo, ServerMsg } from "../src/generated/index.ts";
+import type { ClientMsg, SeatInfo, ServerMsg, View } from "../src/generated/index.ts";
 import { chooseAction } from "./bot.ts";
 
-type StateMsg = Extract<ServerMsg, { type: "state" }>;
+/** A `state` message of an auction room: these bots play the auction only. */
+type StateMsg = Omit<Extract<ServerMsg, { type: "state" }>, "game"> & { game: View | null };
 
 const LAST_ROOM = path.resolve(import.meta.dirname, "../node_modules/.cache/auction-adda/last-room");
 const BOT_NAME = /^Bot \d+$/;
@@ -252,7 +253,7 @@ function bot(index: number): void {
       }
       if (index + 1 < count) bot(index + 1);
     } else if (m.type === "state") {
-      latest = m;
+      latest = m as StateMsg;
       // Seats are drawn when a game starts (and each round, if the admin wants): follow ours.
       if (m.you !== null) seat = m.you;
       if (seat === null) {

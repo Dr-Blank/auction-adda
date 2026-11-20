@@ -66,13 +66,18 @@ export function useSavedLook(): [string, (code: string) => void] {
 export const savedTheme = () => store.get("aa:theme");
 export const saveTheme = (theme: string) => store.set("aa:theme", theme);
 
+/** Where a game's clock is kept: the auction's under its first key, others per game. */
+const timerKey = (game: string) => (game === "auction" ? "aa:timer" : `aa:timer:${game}`);
+
 /**
- * Room settings this person last picked as admin: their next room starts with them. The timer is
- * kept for every theme, the genres per theme (their indices mean nothing in another theme).
+ * Room settings this person last picked as admin: their next room starts with them. The clock is
+ * kept per game, the genres per theme (their indices mean nothing in another theme). `clock` is
+ * the game's own default for a browser that never set one; left out, the server's.
  */
-export function savedPrefs(theme: string): Prefs | null {
+export function savedPrefs(theme: string, game = "auction", clock?: [number, number]): Prefs | null {
   try {
-    const timer = JSON.parse(store.get("aa:timer") ?? "null") as { bidTimerS: number; bidExtendS: number } | null;
+    const saved = JSON.parse(store.get(timerKey(game)) ?? "null") as { bidTimerS: number; bidExtendS: number } | null;
+    const timer = saved ?? (clock ? { bidTimerS: clock[0], bidExtendS: clock[1] } : null);
     const genres = JSON.parse(store.get(`aa:genres:${theme}`) ?? "[]") as number[];
     const settings = JSON.parse(store.get("aa:settings") ?? "null") as RoomSettings | null;
     if (!timer && genres.length === 0 && !settings) return null;
@@ -88,8 +93,8 @@ export function savedPrefs(theme: string): Prefs | null {
   }
 }
 export const saveSettings = (settings: RoomSettings) => store.set("aa:settings", JSON.stringify(settings));
-export const saveTimer = (bidTimerS: number, bidExtendS: number) =>
-  store.set("aa:timer", JSON.stringify({ bidTimerS, bidExtendS }));
+export const saveTimer = (bidTimerS: number, bidExtendS: number, game = "auction") =>
+  store.set(timerKey(game), JSON.stringify({ bidTimerS, bidExtendS }));
 export const saveGenres = (theme: string, genres: number[]) => store.set(`aa:genres:${theme}`, JSON.stringify(genres));
 const TOKEN = "aa:token:";
 const tokenKey = (room: string) => `${TOKEN}${room}`;

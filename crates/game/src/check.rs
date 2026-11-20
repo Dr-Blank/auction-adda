@@ -33,20 +33,30 @@ pub fn random_games<G: Game>(games: u32) -> Result<(), String> {
             return Err(format!("a game for {n} seats started, outside {players:?}"));
         }
     }
+    let variants = u8::try_from(G::variants().len().max(1)).map_err(|_| "more than 255 variants")?;
+    if G::new_game_on(*players.start(), 1, variants).is_ok() {
+        return Err(format!("variant {variants} started, past the {variants} listed"));
+    }
     for n in players {
-        for k in 0..games {
-            let seed = k.wrapping_mul(2_654_435_761).wrapping_add(u32::from(n));
-            play::<G>(n, seed).map_err(|e| format!("{n} seats, game {k} (seed {seed}): {e}"))?;
+        for variant in 0..variants {
+            for k in 0..games {
+                let seed = k.wrapping_mul(2_654_435_761).wrapping_add(u32::from(n));
+                play::<G>(n, seed, variant)
+                    .map_err(|e| format!("{n} seats, variant {variant}, game {k} (seed {seed}): {e}"))?;
+            }
         }
     }
     Ok(())
 }
 
-fn play<G: Game>(n: u8, seed: u32) -> Result<(), String> {
+fn play<G: Game>(n: u8, seed: u32, variant: u8) -> Result<(), String> {
     let mut rng = StdRng::seed_from_u64(u64::from(seed));
-    let mut s = G::new_game(n, seed).map_err(|e| format!("new game: {e}"))?;
-    if G::new_game(n, seed).ok().as_ref() != Some(&s) {
+    let mut s = G::new_game_on(n, seed, variant).map_err(|e| format!("new game: {e}"))?;
+    if G::new_game_on(n, seed, variant).ok().as_ref() != Some(&s) {
         return Err("the same seed dealt two different games".into());
+    }
+    if variant == 0 && G::new_game(n, seed).ok().as_ref() != Some(&s) {
+        return Err("variant 0 is not the default game".into());
     }
     if G::seats(&s) != n {
         return Err(format!("dealt for {} seats", G::seats(&s)));
@@ -122,8 +132,14 @@ fn every_state<G: Game>(s: &G::State, rng: &mut StdRng) -> Result<(), String> {
 
     if !G::over(s) {
         let ended = G::end_early(s, 0).map_err(|e| format!("ending early: {e}"))?;
-        if !G::over(&ended) || G::winners(&ended).is_empty() {
-            return Err("ending early did not finish the game with winners".into());
+        if !G::over(&ended) || !G::pending(&ended).is_empty() {
+            return Err("ending early did not finish the game".into());
+        }
+        if G::winners(&ended).iter().any(|&w| w >= n) {
+            return Err(format!(
+                "ending early made winners {:?} of {n} seats",
+                G::winners(&ended)
+            ));
         }
     }
     Ok(())

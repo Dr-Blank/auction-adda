@@ -112,9 +112,7 @@ export function ShareLink({ code }: { code: string }) {
         <button
           className="btn share-btn"
           onClick={() =>
-            navigator
-              .share({ title: "Auction Adda", text: `Join my Auction Adda room ${code}`, url: link })
-              .catch(() => {})
+            navigator.share({ title: "Game Adda", text: `Join my Game Adda room ${code}`, url: link }).catch(() => {})
           }
           title="Send the link with another app"
           aria-label="Share the room link"

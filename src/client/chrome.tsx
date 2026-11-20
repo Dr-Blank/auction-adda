@@ -24,7 +24,7 @@ import { Sheet } from "./Sheet.tsx";
 import { isMuted, play, setMuted } from "./sound.ts";
 
 /** The app's name, in the tab title. */
-const APP = "Auction Adda";
+const APP = "Game Adda";
 
 /**
  * While you owe a move: a sound once, and the tab title says so. In another tab the title

@@ -1,0 +1,92 @@
+{
+  "type": "state",
+  "room": {
+    "code": "ZVKXX3",
+    "theme": "society-committee",
+    "cast": {
+      "seed": 1376377813,
+      "genres": []
+    },
+    "started": false,
+    "seats": [
+      {
+        "name": "Asha",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3k9a1c0b2d4e5f6g",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Bilal",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "1a1b1c1d1e1f1g1h",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Chitra",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "2a2b2c2d2e2f2g2h",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Dev",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3a3b3c3d3e3f3g3h",
+        "ready": false,
+        "wins": 0
+      }
+    ],
+    "admin": 0,
+    "canUndo": false,
+    "minPlayers": 3,
+    "maxPlayers": 5,
+    "skipAfterMs": 30000,
+    "adminClaimMs": 20000,
+    "adminAutoMs": 30000,
+    "bidTimerS": 30,
+    "bidExtendS": 10,
+    "bidMsLeft": null,
+    "bidMsWindow": null,
+    "frozenBy": null,
+    "settings": {
+      "locked": false,
+      "freeze": "admin",
+      "rename": false,
+      "shuffleEachRound": false,
+      "reactions": [
+        "👏",
+        "😂",
+        "😮",
+        "🔥",
+        "😬",
+        "🙏"
+      ]
+    },
+    "variant": 0,
+    "watchers": [
+      {
+        "id": 9,
+        "name": "Esha",
+        "ban": null
+      }
+    ],
+    "games": 0
+  },
+  "you": 0,
+  "left": null,
+  "game": null
+}
