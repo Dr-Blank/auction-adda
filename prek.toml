@@ -5,8 +5,9 @@
 #   prek run --all-files --hook-stage manual
 #                                      everything, as CI runs it (needs cargo-deny)
 #
-# commit:     fast fixers and formatters on the staged files
-# push:       clippy, typecheck, Rust and socket tests
+# commit:     fixers and formatters on the staged files, then clippy, typecheck, Rust and socket
+#             tests (the unstaged changes are stashed, so the commit itself is checked)
+# push:       clippy, typecheck, Rust and socket tests again
 # manual/CI:  all of the above plus cargo-deny and the production build
 
 minimum_prek_version = "0.5.11"
@@ -52,12 +53,12 @@ hooks = [
   { id = "cargo-fmt", name = "cargo fmt", language = "system", entry = "cargo fmt --all", types = ["rust"], pass_filenames = false, priority = "format" },
   { id = "biome", name = "biome check", language = "system", entry = "node_modules/.bin/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true", files = '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|css|md)$', priority = "format" },
 
-  # ---- push ----
-  { id = "clippy", name = "cargo clippy", language = "system", entry = "cargo clippy --locked --workspace --all-targets -- -D warnings", pass_filenames = false, always_run = true, stages = ["pre-push", "manual"], priority = "lint" },
-  { id = "tsc", name = "tsc", language = "system", entry = "npm run -s typecheck", pass_filenames = false, always_run = true, stages = ["pre-push", "manual"], priority = "lint" },
+  # ---- commit and push ----
+  { id = "clippy", name = "cargo clippy", language = "system", entry = "cargo clippy --locked --workspace --all-targets -- -D warnings", pass_filenames = false, always_run = true, stages = ["pre-commit", "pre-push", "manual"], priority = "lint" },
+  { id = "tsc", name = "tsc", language = "system", entry = "npm run -s typecheck", pass_filenames = false, always_run = true, stages = ["pre-commit", "pre-push", "manual"], priority = "lint" },
   # Also rewrites src/generated: the hook fails if that changed, so stale TS types never land.
-  { id = "cargo-test", name = "cargo test", language = "system", entry = "cargo test --locked --workspace", pass_filenames = false, always_run = true, stages = ["pre-push", "manual"], priority = "test" },
-  { id = "npm-test", name = "socket tests", language = "system", entry = "npm test", pass_filenames = false, always_run = true, stages = ["pre-push", "manual"], priority = "socket-test" },
+  { id = "cargo-test", name = "cargo test", language = "system", entry = "cargo test --locked --workspace", pass_filenames = false, always_run = true, stages = ["pre-commit", "pre-push", "manual"], priority = "test" },
+  { id = "npm-test", name = "socket tests", language = "system", entry = "npm test", pass_filenames = false, always_run = true, stages = ["pre-commit", "pre-push", "manual"], priority = "socket-test" },
 
   # ---- CI ----
   { id = "cargo-deny", name = "cargo deny", language = "system", entry = "cargo deny --all-features --locked check", pass_filenames = false, always_run = true, stages = ["manual"], priority = "release" },
