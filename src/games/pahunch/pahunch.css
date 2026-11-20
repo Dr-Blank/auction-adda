@@ -318,6 +318,35 @@
   stroke: var(--text);
 }
 
+/* Where a usable path meets a room: a soft glow on the room's edge that fades along the path. */
+.ph-layer-joints {
+  pointer-events: none;
+}
+.ph-joint-stop {
+  stop-color: var(--accent);
+}
+.ph-joint {
+  display: none;
+}
+.ph-board.picking .ph-joint.live,
+.ph-joint.selected,
+.ph-joint.voting {
+  display: inline;
+  animation: ph-joint-pulse 1.8s ease-in-out infinite;
+}
+.ph-joint.dim {
+  display: none;
+}
+.ph-joint.selected,
+.ph-joint.voting {
+  animation: none;
+  opacity: 1;
+}
+.ph-joint-line {
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
 /* Coins, locks and the blocker. */
 .ph-coin-hit {
   fill: transparent;
@@ -411,6 +440,15 @@
 @keyframes ph-glow {
   50% {
     filter: drop-shadow(0 0 1.4px rgb(var(--accent-rgb) / 90%));
+  }
+}
+@keyframes ph-joint-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 @keyframes ph-glow-box {
@@ -881,6 +919,7 @@ button.ph-chip.on {
   .ph-blocker.live .ph-blocker-ring,
   .ph-path.selected .ph-path-line,
   .ph-path.voting .ph-path-line,
+  .ph-joint,
   .ph-fav-btn.live {
     animation: none;
   }

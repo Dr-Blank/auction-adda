@@ -6,7 +6,7 @@
 // the table's choice (pick a move, or explain the thing tapped). Drawn in layers so nothing that
 // matters hides: room boxes, then the paths over them, then the pieces, then coins and the blocker.
 
-import type { KeyboardEvent } from "react";
+import { type KeyboardEvent, useId } from "react";
 import { AvatarFace } from "../../client/Avatar.tsx";
 import type { PahunchLayout, PahunchView } from "../../generated/index.ts";
 import { offers, slot } from "./derive.ts";
@@ -149,6 +149,7 @@ export function Board(props: BoardProps) {
       vote?.room === room ? "voting" : "",
     ].join(" ");
   const tap = (fn: () => void) => ({ onClick: fn, onKeyDown: press(fn) });
+  const uid = useId().replace(/[^\w-]/g, "");
 
   return (
     <svg
@@ -173,6 +174,45 @@ export function Board(props: BoardProps) {
             <rect className="ph-room-box" x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx={1.6} />
           </g>
         ))}
+      </g>
+
+      {/* Where a path you can use meets a room, the room's edge glows there, and the glow fades
+          smoothly along the path to clear in its middle. Drawn only for live, picked and voting
+          paths (the CSS decides), between the boxes and the lines. */}
+      <g className="ph-layer-joints" aria-hidden="true">
+        <defs>
+          <radialGradient id={`${uid}j`}>
+            <stop className="ph-joint-stop" offset="0" stopOpacity="0.7" />
+            <stop className="ph-joint-stop" offset="0.45" stopOpacity="0.3" />
+            <stop className="ph-joint-stop" offset="1" stopOpacity="0" />
+          </radialGradient>
+          {ends.map((e, i) => (
+            <linearGradient
+              key={`g${i}`}
+              id={`${uid}l${i}`}
+              gradientUnits="userSpaceOnUse"
+              x1={e.x1}
+              y1={e.y1}
+              x2={e.x2}
+              y2={e.y2}
+            >
+              <stop className="ph-joint-stop" offset="0" stopOpacity="0.65" />
+              <stop className="ph-joint-stop" offset="0.4" stopOpacity="0" />
+              <stop className="ph-joint-stop" offset="0.6" stopOpacity="0" />
+              <stop className="ph-joint-stop" offset="1" stopOpacity="0.65" />
+            </linearGradient>
+          ))}
+        </defs>
+        {order.map((i) => {
+          const e = ends[i];
+          return (
+            <g key={`j${i}`} className={`ph-joint ${pathState(i)}`}>
+              <line className="ph-joint-line" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={`url(#${uid}l${i})`} />
+              <circle className="ph-joint-end" cx={e.x1} cy={e.y1} r={3.2} fill={`url(#${uid}j)`} />
+              <circle className="ph-joint-end" cx={e.x2} cy={e.y2} r={3.2} fill={`url(#${uid}j)`} />
+            </g>
+          );
+        })}
       </g>
 
       {/* Paths, over the boxes so none hides behind a room. */}
