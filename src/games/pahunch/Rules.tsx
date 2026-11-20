@@ -1,73 +1,114 @@
 import type { PahunchOptions } from "../../generated/index.ts";
 import type { PahunchSkin } from "./skin.ts";
 
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /**
  * The rules in this skin's words: short, in the order a first game needs them. `options`: the
  * running game's house rules; without them (the lobby) both ways are told.
  */
 export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; options?: PahunchOptions }) {
-  const { climber, climbers, points, neutral, neutrals, blocker, bribe } = skin.nouns;
+  const { climber, climbers, points, neutral, neutrals, blocker, bribe, path, backPath } = skin.nouns;
   const top = skin.rooms.full?.at(-1)?.name ?? "the top room";
+  const favoursOn = options?.favours !== false;
+  const key = skin.favours.backStairs;
   return (
     <section className="rules">
       <h2>How to play</h2>
       <p>{skin.story}</p>
+
       <h3>Your turn: one move</h3>
+      <p>Tap something glowing on the board, then pick the move in the bar. Anything you tap explains itself.</p>
       <ul>
         <li>
           <b>Add</b> a {climber} from your hand to a bottom room with a free seat.
         </li>
         <li>
-          <b>Move up</b> one of your {climbers}, along a path to the room above, if it has a free seat. Leaving a room
-          takes yes votes from more than half its seats (2 of 3, 3 of 5, 4 of 7; a room of one is free).
+          <b>Move up</b> one of your {climbers} along a {path} to the room above, if it has a free seat.
         </li>
         <li>
-          <b>Nudge</b> an {neutral} up a path, no vote needed, and take 1 {points}. {neutrals} never reach the {top}.
+          <b>Nudge</b> an {neutral} up a {path}: no vote, and you take 1 {points}.
         </li>
         <li>
-          <b>Send the {blocker}</b> to another path.
+          <b>Send {blocker}</b> to another {path} that has {points} on it.
         </li>
       </ul>
+
       <h3>Votes</h3>
       <ul>
-        <li>Your own {climbers} in the room say yes. Each other player answers for theirs: yes with some, or no.</li>
-        <li>Each yes the climb needed earns the player who gave it 1 {points}.</li>
         <li>
-          An {neutral} says yes only for {bribe}: you pay one of your tokens worth 2 or more, and it leaves the game.
+          Leaving a room takes yes votes from more than half its seats: 2 of 3, 3 of 5. Leaving a post of one is free.
         </li>
         <li>
-          The path with the {blocker} on it needs no vote at all, but whoever goes that way takes nothing from it.
+          Your own {climbers} in the room say yes. Every other player answers for theirs: yes with some of them, or no.
+        </li>
+        <li>Each yes the climb needed earns the player who gave it 1 {points}.</li>
+        <li>
+          An {neutral} says yes only for {bribe}: one of your tokens worth 2 or more, and it leaves the game. Two 1s
+          will not do, and there is no change.
         </li>
         <li>
           If the vote fails, or you give up, your {climber} stays.{" "}
           {options === undefined
-            ? "Then you choose another move, but not another vote out of that room; with the house rule “A failed vote ends the turn”, your turn ends instead."
+            ? "You then pick another move, but not a second vote out of that room. With the house rule “A failed vote ends the turn”, your turn ends instead."
             : options.failEndsTurn
-              ? "Your turn ends."
-              : "Choose another move, but not another vote out of that room."}
+              ? "Your turn ends (house rule)."
+              : "Pick another move, but not a second vote out of that room."}{" "}
+          Anything paid to an {neutral} stays paid.
         </li>
       </ul>
-      <h3>{points}</h3>
+
+      <h3>
+        {upper(points)} and {blocker}
+      </h3>
       <ul>
         <li>
-          Moving up out of a room of 3 or more takes the token lying on the path; a new one is drawn for it. Only you
-          see your {points} until the game ends.
+          Moving up out of a room of 3 or more takes the {points} lying on that {path}; a new coin is drawn for it. Only
+          you see your {points} until the game ends.
         </li>
-        <li>Give tokens to anyone, at any time. Deals are made on the call and nothing makes anyone keep them.</li>
+        <li>
+          {upper(blocker)} sits on one {path}. Anyone may climb past him with no vote, but he sits on the {points}{" "}
+          there, so nobody takes it.
+        </li>
+        <li>
+          Some coins carry a mark. Take one with your own climb and it does something extra, once:
+          <ul>
+            {Object.values(skin.bonuses).map((b) => (
+              <li key={b.name}>
+                <b>
+                  {b.glyph} {b.name}:
+                </b>{" "}
+                {b.effect}
+              </li>
+            ))}
+          </ul>
+          In your hand it is a plain 2.
+        </li>
+        <li>
+          After your move, any extra moves you have glow. Use them in any order, or press <b>End turn</b>.
+        </li>
+        <li>Give tokens to anyone, at any time. Deals are made on the call, and nothing makes anyone keep them.</li>
       </ul>
-      {options?.favours !== false && (
+
+      <h3>{upper(backPath)} 🔒</h3>
+      <p>
+        Dashed {backPath} are locked. They open for the mover only when someone offers them {key.glyph} {key.name}; the
+        climb then needs no vote. No {points} lies on them, and {blocker} never goes there.
+      </p>
+
+      {favoursOn && (
         <>
           <h3>Favours</h3>
           <ul>
             <li>
-              Each player gets one favour, different for everyone, with two uses. Favours are public: each player’s
-              shows on their seat.
+              Each player gets one favour, different for everyone, with two uses. Everyone sees whose favour is whose.
             </li>
             <li>
-              A favour helps only someone else’s move. On another player’s turn you may offer yours to them; deals for
-              it are made on the call. Each use earns you {points} and costs a use. An offer that is not used costs
+              A favour helps only someone else’s move, never your own. On another player’s turn, offer yours to them (or
+              they may ask you for it). Each use earns you {points} and costs a use. An offer that is not used costs
               nothing.
             </li>
+            <li>What the mover gives you for it is agreed on the call, and paid with gifts.</li>
             {Object.values(skin.favours).map((f) => (
               <li key={f.name}>
                 <b>
@@ -79,10 +120,12 @@ export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; opt
           </ul>
         </>
       )}
+
       <h3>The end</h3>
       <p>
-        The game ends the moment the {top} is full. Only players with a {climber} there can win: the most {points} wins,
-        and a tie goes to whoever got there first. If the admin ends the game early, nobody wins.
+        The game ends the moment the {top} is full. {upper(neutrals)} can take seats there too. Only players with a{" "}
+        {climber} in the {top} can win: the most {points} wins, and a tie goes to whoever got there first. If the admin
+        ends the game early, nobody wins.
       </p>
       {n !== undefined && <p className="muted small">This table: {n} players.</p>}
     </section>

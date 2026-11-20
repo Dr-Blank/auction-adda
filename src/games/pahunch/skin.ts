@@ -13,7 +13,11 @@ export interface PahunchNouns {
   neutrals: string;
   /** What a neutral is paid with, as a phrase ("a box of kaju katli"). */
   bribe: string;
+  /** The blocker as said mid-sentence, with its article if it takes one ("Daddu", "the Producer"). */
   blocker: string;
+  /** A way up between rooms, and one that is locked ("staircase", "back stairs"). */
+  path: string;
+  backPath: string;
   /** The whole board ("the society"). */
   board: string;
 }
@@ -32,8 +36,8 @@ export interface PahunchSkin extends Skin {
   blockerGlyph: string;
   /** Short lines for the rules: what the game is about, in this skin's words. */
   story: string;
-  /** What each special coin is called. */
-  bonuses: Record<PahunchBonus, string>;
+  /** Each special coin: its name, a mark drawn on the coin, and what taking it with your own climb does. */
+  bonuses: Record<PahunchBonus, { name: string; glyph: string; effect: string }>;
   /** Each favour: its name, a mark for small places, and what it lets the mover do, in one sentence. */
   favours: Record<PahunchFavour, { name: string; glyph: string; effect: string }>;
 }
@@ -78,6 +82,8 @@ export const societyCommittee: PahunchSkin = {
     neutrals: "aunties",
     bribe: "a box of kaju katli",
     blocker: "Daddu",
+    path: "staircase",
+    backPath: "back stairs",
     board: "the society",
   },
   rooms: {
@@ -110,7 +116,19 @@ export const societyCommittee: PahunchSkin = {
   ],
   neutralGlyph: "A",
   blockerGlyph: "D",
-  bonuses: { block: "Chai with Daddu", nudge: "Kitty party invite", favour: "Favour returned" },
+  bonuses: {
+    block: {
+      name: "Chai with Daddu",
+      glyph: "☕",
+      effect: "After your move this turn, you may also send Daddu to another staircase.",
+    },
+    nudge: {
+      name: "Kitty party invite",
+      glyph: "✉",
+      effect: "After your move this turn, you may also nudge an aunty up.",
+    },
+    favour: { name: "Favour returned", glyph: "↺", effect: "One use of your favour comes back at once (two at most)." },
+  },
   favours: {
     extraBlock: {
       name: "Daddu’s chess partner",

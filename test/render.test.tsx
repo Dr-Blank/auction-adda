@@ -118,12 +118,14 @@ describe("pahunch pages", () => {
       act(() =>
         root.render(<Room state={{ ...state, receivedAt: NOW }} send={() => {}} join={() => {}} reactions={[]} />),
       );
+      // Other players' chips never show points; your own points are in your tray.
       const shown = [...el.querySelectorAll(".ph-seat-chip")].filter((c) => c.querySelector(".ph-points"));
       const me = (state as { you: number | null }).you;
       expect(
         shown.map((c) => Number((c as HTMLElement).dataset.seat)),
         name,
-      ).toEqual(me === null ? [] : [me]);
+      ).toEqual([]);
+      expect(!!el.querySelector(".ph-tray .ph-score"), name).toBe(me !== null);
       act(() => root.unmount());
     }
   });
@@ -135,12 +137,12 @@ describe("pahunch pages", () => {
     const sent: unknown[] = [];
     const state = { ...Object.fromEntries(pahunch)["your-move"], receivedAt: NOW } as RoomState;
     act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
-    const all = el.querySelectorAll(".ph-moves .btn").length;
+    // The board comes first: no move buttons until something on it is tapped.
+    expect(el.querySelectorAll(".ph-pick .ph-move").length).toBe(0);
     const live = el.querySelector(".ph-room.live") as SVGGElement;
     act(() => live.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    const some = el.querySelectorAll(".ph-moves .btn").length;
-    expect(some).toBeLessThan(all);
-    act(() => (el.querySelector(".ph-moves .act-row .btn") as HTMLButtonElement).click());
+    expect(el.querySelectorAll(".ph-pick .ph-move").length).toBeGreaterThan(0);
+    act(() => (el.querySelector(".ph-pick .ph-move") as HTMLButtonElement).click());
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ type: "action" });
     act(() => root.unmount());

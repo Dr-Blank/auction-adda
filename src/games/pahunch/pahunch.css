@@ -1,6 +1,7 @@
-/* Pahunch's table: players across the top, the board as the stage, your points and the log beside.
-   Class names start with ph- (the shared table parts keep theirs). .table.ph-table outranks the shared
-   .table grid, whichever stylesheet loads last. */
+/* Pahunch's table: the other players across the top, the board as the stage, and beside it your
+   tray (you, your izzat, your favour), your move, and the log. Class names start with ph- (the
+   shared table parts keep theirs). .table.ph-table outranks the shared .table grid, whichever
+   stylesheet loads last. */
 
 .table.ph-table {
   grid-template-areas:
@@ -34,11 +35,24 @@
   border-left-color: var(--seat);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
-.ph-seat-chip.me {
-  background: var(--panel-2);
-}
-.ph-seat-chip .avatar-wrap {
+.ph-seat-chip .avatar-wrap,
+.ph-tray .avatar-wrap {
   position: relative;
+}
+.ph-seat-more {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 .ph-swatch {
   position: absolute;
@@ -68,60 +82,94 @@
 .ph-points {
   color: var(--accent-soft);
 }
+.ph-uses {
+  color: var(--accent-soft);
+  letter-spacing: 1px;
+}
+.ph-offered {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ph-fav.offered {
+  color: var(--text);
+}
 
 /* ---- the board ---- */
 .ph-stage {
   display: grid;
   gap: 10px;
+  align-content: start;
 }
 .ph-board {
   width: 100%;
-  max-height: min(70vh, 720px);
+  max-height: min(78vh, 760px);
   display: block;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+.ph-board [role="button"] {
+  cursor: pointer;
+  outline: none;
+}
+
+/* Rooms. Quiet by default; a room you can use glows, one you can't fades while you move. */
 .ph-room-box {
   fill: var(--panel-2);
-  stroke: var(--line);
+  stroke: var(--edge-3);
   stroke-width: 0.35;
+  transition: opacity 0.2s;
 }
 .ph-room.top .ph-room-box {
   fill: var(--deep);
   stroke: var(--accent-line);
   stroke-width: 0.6;
 }
+.ph-room-pad {
+  fill: transparent;
+}
 .ph-room-name {
   fill: var(--muted);
-  font-size: 2.3px;
-  font-weight: 600;
+  font-size: 2px;
+  font-weight: 400;
   text-anchor: middle;
-  pointer-events: none;
+  opacity: 0.85;
 }
-.ph-room.top .ph-room-name {
+.ph-room-inside.top .ph-room-name {
   fill: var(--accent-soft);
-}
-.ph-room.live {
-  cursor: pointer;
 }
 .ph-room.live .ph-room-box {
   stroke: var(--accent);
-  stroke-dasharray: 1.2 0.8;
+  stroke-width: 0.6;
+  animation: ph-glow 1.8s ease-in-out infinite;
+}
+.ph-room.idle .ph-room-box {
+  opacity: 0.55;
+}
+.ph-room-inside.idle .ph-room-name {
+  opacity: 0.5;
+}
+.ph-room.target .ph-room-box {
+  stroke: var(--accent-soft);
+  stroke-width: 0.5;
+  stroke-dasharray: 1 0.7;
+  opacity: 1;
+  animation: none;
 }
 .ph-room.selected .ph-room-box,
 .ph-room.voting .ph-room-box {
+  fill: var(--deep);
   stroke: var(--accent);
-  stroke-width: 0.8;
+  stroke-width: 0.9;
   stroke-dasharray: none;
+  animation: none;
+  filter: drop-shadow(0 0 1.2px rgb(var(--accent-rgb) / 70%));
 }
 .ph-room:focus-visible .ph-room-box {
   stroke: var(--text);
   stroke-width: 0.8;
 }
-.ph-room:focus {
-  outline: none;
-}
 
+/* Pieces: always full strength, they are what the board is about. */
 .ph-seat circle {
   stroke: var(--bg);
   stroke-width: 0.35;
@@ -140,57 +188,150 @@
 }
 .ph-seat.mine circle {
   stroke: var(--text);
-  stroke-width: 0.5;
+  stroke-width: 0.55;
 }
 .ph-seat text,
 .ph-token text,
-.ph-blocker text {
+.ph-blocker text,
+.ph-lock text,
+.ph-under text,
+.ph-coin-mark text {
   font-size: 2.3px;
   font-weight: 700;
   text-anchor: middle;
   pointer-events: none;
 }
 
-.ph-path-line {
-  stroke: var(--edge);
-  stroke-width: 0.5;
-}
+/* Paths: a dark casing under each line keeps crossings readable; each kind has its own line. */
 .ph-path-hit {
   stroke: transparent;
-  stroke-width: 4;
+  stroke-width: 3.6;
 }
-.ph-path.live {
-  cursor: pointer;
+.ph-path-case {
+  stroke: var(--felt);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.ph-path-line {
+  stroke: var(--edge);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+}
+.ph-path-head {
+  fill: var(--edge);
+  stroke: var(--felt);
+  stroke-width: 0.25;
+}
+.ph-path.slot .ph-path-line {
+  stroke: #9a8262;
+  stroke-width: 0.8;
+}
+.ph-path.slot .ph-path-head {
+  fill: #9a8262;
+}
+.ph-path.plain .ph-path-line {
+  stroke-width: 0.45;
+}
+.ph-path.back .ph-path-line {
+  stroke: var(--dim);
+  stroke-width: 0.45;
+  stroke-dasharray: 1 0.8;
+}
+.ph-path.back .ph-path-head {
+  fill: var(--dim);
+}
+.ph-path.back.open .ph-path-line,
+.ph-path.back.open .ph-path-head {
+  stroke: var(--back-1);
+  fill: var(--back-1);
+}
+.ph-path.back.open .ph-path-head {
+  stroke: var(--felt);
+}
+.ph-path,
+.ph-mark {
+  transition: opacity 0.2s;
+}
+.ph-path.idle,
+.ph-mark.idle {
+  opacity: 0.4;
 }
 .ph-path.live .ph-path-line {
-  stroke: var(--accent-line);
-  stroke-width: 0.7;
+  stroke: var(--accent);
+  stroke-width: 0.85;
+  animation: ph-glow 1.8s ease-in-out infinite;
+}
+.ph-path.live .ph-path-head {
+  fill: var(--accent);
+}
+.ph-path.dim,
+.ph-mark.dim {
+  opacity: 0.18;
 }
 .ph-path.selected .ph-path-line,
 .ph-path.voting .ph-path-line {
   stroke: var(--accent);
-  stroke-width: 0.9;
+  stroke-width: 1.1;
   stroke-dasharray: 1.4 0.8;
   animation: ph-march 1.2s linear infinite;
-}
-.ph-path:focus {
-  outline: none;
+  filter: drop-shadow(0 0 1px rgb(var(--accent-rgb) / 80%));
 }
 .ph-path:focus-visible .ph-path-line {
   stroke: var(--text);
 }
-.ph-path-dot {
-  fill: var(--edge);
+
+/* Coins, locks and the blocker. */
+.ph-coin-hit {
+  fill: transparent;
 }
-.ph-token circle {
+.ph-coin {
   fill: var(--accent);
-  stroke: var(--bg);
-  stroke-width: 0.35;
+  stroke: var(--felt);
+  stroke-width: 0.4;
 }
 .ph-token text {
   fill: #1f1604;
 }
-.ph-blocker circle {
+.ph-mark.live .ph-coin {
+  stroke: var(--accent-soft);
+  stroke-width: 0.5;
+}
+.ph-coin-mark circle {
+  fill: var(--panel);
+  stroke: var(--accent);
+  stroke-width: 0.25;
+}
+.ph-coin-mark text {
+  font-size: 1.55px;
+  fill: var(--text);
+}
+.ph-slot-empty {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 0.3;
+  stroke-dasharray: 0.5 0.4;
+}
+.ph-lock circle {
+  fill: var(--panel);
+  stroke: var(--dim);
+  stroke-width: 0.25;
+}
+.ph-lock text {
+  font-size: 1.7px;
+}
+.ph-mark.open .ph-lock circle {
+  stroke: var(--back-1);
+  stroke-width: 0.4;
+}
+.ph-blocker-hit {
+  fill: transparent;
+}
+.ph-blocker-ring {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 0.5;
+}
+.ph-blocker-disc {
   fill: var(--back-1);
   stroke: var(--accent-soft);
   stroke-width: 0.45;
@@ -198,14 +339,41 @@
 .ph-blocker text {
   fill: var(--text);
 }
+.ph-blocker.live .ph-blocker-ring {
+  stroke: var(--accent);
+  animation: ph-glow 1.8s ease-in-out infinite;
+}
+.ph-blocker.idle {
+  opacity: 0.6;
+}
+.ph-blocker.selected .ph-blocker-ring {
+  stroke: var(--accent);
+  stroke-width: 0.9;
+  animation: none;
+  filter: drop-shadow(0 0 1.2px rgb(var(--accent-rgb) / 80%));
+}
+.ph-blocker:focus-visible .ph-blocker-ring {
+  stroke: var(--text);
+}
+.ph-under circle {
+  fill: var(--accent);
+  stroke: var(--felt);
+  stroke-width: 0.3;
+}
+.ph-under text {
+  font-size: 1.6px;
+  fill: #1f1604;
+}
+
 @keyframes ph-march {
   to {
     stroke-dashoffset: -2.2;
   }
 }
-
-.ph-wait {
-  margin: 0;
+@keyframes ph-glow {
+  50% {
+    filter: drop-shadow(0 0 1.4px rgb(var(--accent-rgb) / 90%));
+  }
 }
 
 /* ---- the vote ---- */
@@ -242,50 +410,56 @@
   background: var(--seat, var(--dim));
 }
 
-/* ---- your moves ---- */
-.ph-moves {
+/* ---- your tray ---- */
+.ph-tray {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-.ph-moves select {
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--seat);
+  border-radius: 12px;
+  background: var(--panel-2);
   min-width: 0;
-  max-width: 100%;
 }
-/* Only a phone folds the list (below). */
-.ph-moves .ph-unfold {
-  display: none;
+.ph-tray.owing {
+  border-color: var(--accent);
+  border-left-color: var(--seat);
 }
-.ph-moves .status {
-  margin: 0;
-}
-.ph-moves .status .btn {
-  margin-left: 8px;
-}
-.ph-act-label {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-.ph-moves .btn small {
-  color: var(--muted);
-  font-weight: 400;
-}
-.ph-moves .btn.primary small {
-  color: inherit;
-  opacity: 0.8;
-}
-
-/* ---- tokens ---- */
-.ph-purse h2 {
+.ph-tray-head {
   display: flex;
-  justify-content: space-between;
-  margin: 0 0 6px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ph-tray-who {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  min-width: 0;
+  cursor: pointer;
+}
+.ph-score {
+  margin-left: auto;
+  color: var(--accent-soft);
+  white-space: nowrap;
+}
+.ph-score b {
+  font-size: 1.4rem;
+  color: var(--accent);
 }
 .ph-tokens {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin: 6px 0;
+  margin: 0;
 }
 .ph-chip {
   appearance: none;
@@ -313,10 +487,242 @@
 }
 button.ph-chip {
   cursor: pointer;
+  min-width: 40px;
+  height: 40px;
 }
 button.ph-chip.on {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 35%);
+}
+.ph-give {
+  min-height: 40px;
+}
+.ph-my-favour {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ph-fav-name {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 170px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ph-fav-name > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.ph-fav-name small {
+  color: var(--muted);
+}
+.ph-fav-glyph {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.ph-my-favour.offered .ph-fav-name {
+  border-color: var(--accent);
+}
+.ph-my-favour > .btn {
+  min-height: 48px;
+  touch-action: manipulation;
+}
+
+/* ---- tips: hidden until tapped ---- */
+.ph-tip-btn {
+  appearance: none;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+  touch-action: manipulation;
+}
+.ph-tip-btn.on {
+  opacity: 1;
+  border-color: var(--accent-line);
+  background: var(--panel);
+}
+.ph-tip {
+  flex: 1 1 100%;
+  display: block;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* ---- your move ---- */
+.ph-moves {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.ph-pick-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.ph-pick-head > * {
+  flex: none;
+}
+.ph-pick-head .ph-hint {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.ph-pick-head .ph-pick-what {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-pick-head > .ph-tip {
+  flex: 1 1 100%;
+}
+.ph-info {
+  font:
+    italic 700 1.05rem Georgia,
+    "Times New Roman",
+    serif;
+}
+.ph-turn {
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+.ph-pick-what {
+  font-weight: 600;
+  min-width: 0;
+}
+.ph-hint {
+  color: var(--muted);
+}
+.ph-moves .ph-chipbtn {
+  min-width: 40px;
+  min-height: 40px;
+  touch-action: manipulation;
+}
+.ph-moves .icon-btn.ph-chipbtn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+}
+.ph-move-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: 8px;
+}
+.ph-move-grid .btn {
+  min-height: 48px;
+  touch-action: manipulation;
+}
+.ph-moves .btn.ph-move {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 12px;
+}
+.ph-move small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.ph-move.primary small {
+  color: inherit;
+  opacity: 0.8;
+}
+.ph-done {
+  width: 100%;
+  min-height: 48px;
+}
+.ph-all {
+  display: grid;
+  gap: 12px;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+.ph-all-room {
+  display: grid;
+  gap: 6px;
+}
+.ph-act-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ph-on-offer {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ph-offer {
+  padding: 4px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--accent-soft);
+}
+.ph-offer small {
+  color: var(--muted);
+}
+.ph-favour-picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ph-favour-picks label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.ph-favour-picks select {
+  font-size: 1rem;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+}
+
+/* On a wide screen your move is a panel under your tray, not a strip across the page. */
+@media (min-width: 701px) {
+  .ph-side .ph-bar {
+    padding: 12px;
+    border: 1px solid var(--accent-line);
+    border-radius: 12px;
+    background: var(--panel);
+  }
 }
 
 /* ---- the end ---- */
@@ -350,83 +756,34 @@ button.ph-chip.on {
 }
 @media (max-width: 700px) {
   .ph-seat-chip {
-    flex-basis: 140px;
-    padding: 4px 8px 4px 4px;
+    flex-basis: 100px;
+    padding: 4px 6px 4px 4px;
   }
   .ph-board {
     max-height: none;
   }
   .ph-room-name {
-    font-size: 2.6px;
+    font-size: 2.1px;
   }
-  .ph-points {
-    flex-basis: 100%;
+  .ph-turn {
+    font-size: 1rem;
   }
-  .table.acting .ph-moves .act-row .btn {
-    flex: 1 1 auto;
-  }
-  .table.acting .ph-moves.folded .act-row {
-    display: none;
-  }
-  .table.acting .ph-unfold {
-    display: block;
-    width: 100%;
-    min-height: 44px;
-  }
-  .table.acting .ph-act-label {
-    flex-basis: 100%;
-  }
-  .table.acting .ph-moves select {
-    flex: 1 1 100%;
-    min-height: 44px;
+  .table.acting .ph-bar .ph-move-grid .btn {
+    flex: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .ph-room.live .ph-room-box,
+  .ph-path.live .ph-path-line,
+  .ph-blocker.live .ph-blocker-ring,
   .ph-path.selected .ph-path-line,
   .ph-path.voting .ph-path-line {
     animation: none;
   }
 }
 
-/* ---- favours ---- */
-.ph-fav .ph-uses {
-  letter-spacing: 1px;
-}
-.ph-uses {
-  color: var(--accent-soft);
-}
-.ph-offered {
-  color: var(--accent);
-  font-weight: 600;
-}
-.ph-fav.offered {
-  color: var(--text);
-}
-.ph-my-favour {
-  align-items: center;
-}
-.ph-my-favour .btn {
-  min-height: 44px;
-  touch-action: manipulation;
-}
-.ph-on-offer {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-}
-.ph-offer {
-  color: var(--accent-soft);
-}
-.ph-favour-picks label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.ph-favour-picks select {
-  font-size: 1rem;
+/* The shared small button is shorter than a phone tap target. */
+.table .ph-moves .btn.ph-chipbtn {
   min-height: 40px;
+  height: auto;
 }

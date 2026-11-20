@@ -1,11 +1,15 @@
 // Plays one seat of a Society Committee (Pahunch) room in headless Chromium against three server
-// bots, saves screenshots of its main moments (your move, a selected room, a vote as voter and as
-// climber, the log, the room menu, the gift sheet, the end) and checks on every tick:
+// bots, playing by tapping the board (a glowing room or Daddu, then a button in the bar). Saves
+// screenshots of its main moments (your move, a picked room, Daddu picked, a tip, all moves, a vote
+// as voter and as climber, a board tap explained, the log, the room menu, the gift sheet, the end)
+// and checks on every tick:
 //
 //   - the page never scrolls sideways;
 //   - the board is on screen and every room of it is drawn;
 //   - on a phone, the action bar is on screen while you owe a move, and its buttons are at least
 //     40 px tall;
+//   - every turn of this seat can be played by tapping the board;
+//   - a tap on the board while others move opens a sheet;
 //   - no script errors on the page.
 //
 // After `seconds` the admin (this seat) ends the game early, so the no-winner end is seen too.
@@ -136,7 +140,7 @@ const check = async (where) => {
     const bar = document.querySelector('.action-bar');
     const a = bar?.getBoundingClientRect();
     const owing = !!document.querySelector('.stage.owing');
-    const small = bar ? [...bar.querySelectorAll('.btn, select')].filter((x) => x.getClientRects().length && x.getBoundingClientRect().height < 40).length : 0;
+    const small = bar ? [...bar.querySelectorAll('.btn, select, button')].filter((x) => x.getClientRects().length && x.getBoundingClientRect().height < 40).map((x) => (x.className || x.tagName) + ' (' + Math.round(x.getBoundingClientRect().height) + 'px)').join(', ') : '';
     return {
       // clientWidth leaves out a scrollbar; innerWidth would hide an overflow of its width.
       wide: Math.max(d.scrollWidth, ...[...document.querySelectorAll('.table > *')].map((e) => e.getBoundingClientRect().right)) - d.clientWidth,
@@ -152,7 +156,7 @@ const check = async (where) => {
   if (!r.over && r.rooms < 2) fail(`${where}: the board shows ${r.rooms} rooms`);
   if (!r.over && r.boardW < 200) fail(`${where}: the board is ${r.boardW}px wide`);
   if (phone && r.owing && r.bar && !r.barOn) fail(`${where}: the action bar is off screen while you owe a move`);
-  if (phone && r.owing && r.small) fail(`${where}: ${r.small} action-bar control(s) under 40px`);
+  if (phone && r.owing && r.small) fail(`${where}: action-bar control(s) under 40px: ${r.small}`);
   return r;
 };
 
@@ -174,26 +178,52 @@ for (let tick = 0; tick < 4000; tick++) {
     break;
   }
   const state = await evaluate(`(() => ({
-    move: !!document.querySelector('.ph-moves'),
+    move: !!document.querySelector('.ph-pick'),
+    extra: !!document.querySelector('.ph-pick .ph-done'),
     vote: !!document.querySelector('.action-bar [aria-label="Your vote"]'),
     climb: !!document.querySelector('.action-bar [aria-label="Your climb"]'),
     voting: !!document.querySelector('.ph-vote'),
   }))()`);
   if (state.voting && !state.vote && !state.climb) await shot("vote-watching");
   if (state.move) {
-    await shot("your-move");
-    if (!taken.has("selected") && (await clickFirst(".ph-room.live"))) {
+    // Played the way a person plays: tap something glowing on the board, then a button in the bar.
+    await shot(state.extra ? "extra-move" : "your-move");
+    if (!taken.has("daddu") && (await clickFirst(".ph-blocker.live"))) {
       await sleep(300);
-      await shot("selected");
-    } else if (phone && !taken.has("all-moves") && (await clickFirst(".ph-unfold"))) {
+      await shot("daddu");
+      if (await clickFirst(".ph-path.live")) {
+        await sleep(300);
+        await shot("daddu-path");
+      }
+      await clickFirst('.ph-pick button[aria-label="Clear"]');
+      await sleep(200);
+    }
+    if (!taken.has("tip") && (await clickFirst(".ph-pick .ph-tip-btn"))) {
+      await sleep(300);
+      await shot("tip");
+      await clickFirst(".ph-pick .ph-tip-btn");
+    }
+    if (!taken.has("all-moves") && (await clickFirst('.ph-pick button[aria-expanded="false"].ph-chipbtn'))) {
       await sleep(300);
       await shot("all-moves");
+      await clickFirst('.ph-pick button[aria-expanded="true"].ph-chipbtn');
+      await sleep(200);
     }
-    // Prefer a climb; else whatever is offered first.
-    const climbed = await evaluate(
-      `(() => { const b = document.querySelector('.ph-moves [aria-label="Move up"] .btn'); if (!b) return false; b.click(); return true; })()`,
-    );
-    if (!climbed) await clickFirst(".ph-moves .act-row .btn");
+    let moved = false;
+    if (await clickFirst(".ph-room.live")) {
+      await sleep(300);
+      await shot("selected");
+      moved = await clickFirst(".ph-pick .ph-move.primary, .ph-pick .ph-move-grid .btn");
+    }
+    if (!moved && (await clickFirst(".ph-blocker.live"))) {
+      await sleep(200);
+      if (await clickFirst(".ph-path.live")) {
+        await sleep(200);
+        moved = await clickFirst(".ph-pick .ph-move-grid .btn");
+      }
+    }
+    if (!moved && state.extra) moved = await clickFirst(".ph-pick .ph-done");
+    if (!moved) fail(`tick ${tick}: no move could be made by tapping the board`);
     await sleep(300);
   } else if (state.vote) {
     await shot("vote-voter");
@@ -203,6 +233,15 @@ for (let tick = 0; tick < 4000; tick++) {
     await clickFirst('.action-bar [aria-label="Your climb"] .btn');
   } else if (!taken.has("their-move") && !state.voting) {
     await shot("their-move");
+    // A tap on the board explains what was tapped.
+    if (await clickFirst(".ph-room")) {
+      await sleep(300);
+      const open = await evaluate(`!!document.querySelector('[role="dialog"]')`);
+      if (!open) fail("a tap on a room while others move opened no sheet");
+      await shot("board-info");
+      await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await sleep(200);
+    }
     // The sheets, once each, while someone else moves.
     await clickFirst('.icon-btn[aria-label="Log"]');
     await sleep(300);
@@ -210,7 +249,7 @@ for (let tick = 0; tick < 4000; tick++) {
     await clickFirst('[role="dialog"] .sheet-close, [role="dialog"] button[aria-label="Close"]');
     await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
     await sleep(200);
-    if (await clickFirst(".ph-purse .btn")) {
+    if (await clickFirst(".ph-tray .ph-give")) {
       await sleep(300);
       await shot("give");
       await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
