@@ -11,16 +11,13 @@ use std::thread::JoinHandle;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
-use engine::{
-    Action, AuctionKind, GameState, LogEntry, RuleError, Seat, apply_action, apply_ruling, apply_skip, config,
-    end_early, new_game, pending, permuted, reseat, undo_ruling, view_for,
-};
+use game::{RuleError, Seat, permuted};
 use rand::RngExt;
 use rand::seq::{IndexedRandom, SliceRandom};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
-use crate::bot::choose_action;
+use crate::games::{GameId, Match};
 use crate::protocol::{
     Cast, ClientMsg, ErrorCode, FreezeBy, MAX_REACTIONS, MyRoom, Prefs, RoomInfo, RoomSettings, RoomStage, SeatInfo,
     SeatKey, ServerMsg, ThemeId, Watcher,
@@ -73,9 +70,10 @@ fn check_timer(seconds: u16, extend: u16) -> Result<(), Fail> {
     Ok(())
 }
 
-/// The admin's genre pick, sorted: one per suit, or empty for a random cast.
-fn check_genres(genres: &[u8]) -> Result<Vec<u8>, Fail> {
-    let suits = usize::from(config().suits);
+/// The admin's genre pick, sorted: one per slot of the game (a suit, say), or empty for a random
+/// cast.
+fn check_genres(genres: &[u8], game: GameId) -> Result<Vec<u8>, Fail> {
+    let suits = usize::from(game.cast_slots());
     let mut sorted = genres.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
@@ -240,7 +238,7 @@ impl SeatData {
 /// The admin's last called result: the game before it, and the room's game version it produced.
 /// Undo works while nothing has changed the game since.
 struct LastCall {
-    before: GameState,
+    before: Match,
     version: u64,
 }
 
@@ -251,7 +249,8 @@ struct Room {
     seats: Vec<SeatData>,
     /// Seat allowed to call auction results by voice.
     admin: Seat,
-    game: Option<GameState>,
+    /// The game being played, of the theme's game (`ThemeId::game`).
+    game: Option<Match>,
     created_at: u64,
     updated_at: u64,
     /// Open-auction clock in seconds from the lot going up; 0 = off (tables that bid by voice).
@@ -285,6 +284,11 @@ struct Room {
 const MAX_MISSED: usize = 16;
 
 impl Room {
+    /// The game this room plays, as its theme says.
+    fn kind(&self) -> GameId {
+        ThemeId::game_of(&self.theme)
+    }
+
     fn name(&self, seat: Seat) -> String {
         self.seats.get(usize::from(seat)).map_or_default(|s| s.name.clone())
     }
@@ -349,18 +353,18 @@ impl Room {
     }
 
     /// A new game (start or rematch): the one before it, over, stays in the tally.
-    fn new_game(&mut self, game: GameState) {
+    fn new_game(&mut self, game: Match) {
         self.game = None;
         self.set_game(game);
     }
 
-    fn set_game(&mut self, game: GameState) {
+    fn set_game(&mut self, game: Match) {
         // The series tally: a game that ends counts its winners; an undo that takes the end back
         // takes the wins back.
-        let was_over = self.game.as_ref().filter(|g| g.over);
-        let tally = match (was_over, game.over) {
-            (None, true) => Some((game.winners.clone(), true)),
-            (Some(g), false) => Some((g.winners.clone(), false)),
+        let was_over = self.game.as_ref().filter(|g| g.over());
+        let tally = match (was_over, game.over()) {
+            (None, true) => Some((game.winners(), true)),
+            (Some(g), false) => Some((g.winners(), false)),
             _ => None,
         };
         if let Some((winners, won)) = tally {
@@ -382,11 +386,11 @@ impl Room {
                 info!(room = %self.code, "Game over ({} played)", self.games);
             }
         }
-        if game.over {
+        if game.over() {
             self.frozen = None;
         }
-        let new_round = self.game.as_ref().is_some_and(|g| game.round > g.round);
-        if new_round && !game.over && self.settings.shuffle_each_round {
+        let new_round = self.game.as_ref().is_some_and(|g| game.round() > g.round());
+        if new_round && !game.over() && self.settings.shuffle_each_round {
             self.reshuffle = true;
         }
         self.game = Some(game);
@@ -397,7 +401,7 @@ impl Room {
     /// undone.
     fn reseat(&mut self, to: &[Seat]) -> Result<(), Fail> {
         if let Some(g) = &self.game {
-            self.game = Some(reseat(g, to)?);
+            self.game = Some(g.reseat(to)?);
         }
         let m = |s: Seat| to.get(usize::from(s)).copied().unwrap_or(s);
         self.seats = permuted(&self.seats, to);
@@ -411,8 +415,9 @@ impl Room {
         Ok(())
     }
 
-    /// Starts the open-auction clock when a lot goes up or a call is undone, and tops it up to
-    /// `bid_extend_s` when someone bids; stops it when no open auction runs or the timer is off.
+    /// Starts the game's clock (the open-auction clock) when the game starts one (a lot goes up,
+    /// a call is undone), and tops it up to `bid_extend_s` when the game moves it on (a bid);
+    /// stops it when the game runs none or the timer is off.
     fn sync_bid_clock(&mut self, now: u64) {
         // A frozen clock stands at the moment it froze.
         let now = self.frozen.map_or(now, |f| f.at);
@@ -420,7 +425,7 @@ impl Room {
             .game
             .as_ref()
             .filter(|_| self.bid_timer_s > 0)
-            .and_then(bid_clock_marks);
+            .and_then(Match::clock);
         let first = now + u64::from(self.bid_timer_s) * 1000;
         let extend = now + u64::from(self.bid_extend_s) * 1000;
         self.bid_clock = marks.map(|(lot, last)| match self.bid_clock {
@@ -441,12 +446,12 @@ impl Room {
         });
     }
 
-    fn game(&self) -> Result<&GameState, Fail> {
+    fn game(&self) -> Result<&Match, Fail> {
         self.game.as_ref().ok_or_else(|| Fail::new("The game has not started"))
     }
 
     /// The game, for a move: refused while it is frozen.
-    fn game_to_move(&self) -> Result<&GameState, Fail> {
+    fn game_to_move(&self) -> Result<&Match, Fail> {
         match self.frozen {
             Some(f) => fail(format!("{} froze the game; wait until it runs again", self.name(f.by))),
             None => self.game(),
@@ -481,34 +486,9 @@ impl Room {
     }
 }
 
-/// For the running open auction: the log line that put the lot up (or undid a call on it), and
-/// the last line that moved its clock (that one or a later bid). `None` when no open auction runs.
-fn bid_clock_marks(g: &GameState) -> Option<(usize, usize)> {
-    g.auction.as_ref().filter(|a| a.kind == AuctionKind::Open)?;
-    let lot = g
-        .log
-        .iter()
-        .rposition(|e| matches!(e, LogEntry::Play { .. } | LogEntry::Undo { .. }))?;
-    let last = g
-        .log
-        .iter()
-        .rposition(|e| matches!(e, LogEntry::Bid { .. }))
-        .filter(|&i| i > lot)
-        .unwrap_or(lot);
-    Some((lot, last))
-}
-
-/// The open-auction clock ran out: everyone still in is done, which closes the auction.
-fn time_up(game: &GameState) -> Result<GameState, RuleError> {
-    let high = game.auction.as_ref().map_or(0, |a| a.high);
-    pending(game).into_iter().try_fold(game.clone(), |g, seat| {
-        apply_action(&g, seat, &Action::Done { seen_high: high })
-    })
-}
-
 /// The save file, version 1: `{ v, code, theme, cast, seats, admin, game, createdAt, updatedAt,
 /// bidTimerS, bidExtendS }` (`cast`, `bidTimerS` or `bidExtendS` missing in older files: the
-/// default).
+/// default). `game` is the state of the theme's game, as that game writes it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedRef<'a> {
@@ -518,7 +498,7 @@ struct SavedRef<'a> {
     cast: &'a Cast,
     seats: &'a [SeatData],
     admin: Seat,
-    game: &'a Option<GameState>,
+    game: &'a Option<Match>,
     created_at: u64,
     updated_at: u64,
     bid_timer_s: u16,
@@ -541,7 +521,8 @@ struct Saved {
     seats: Vec<SeatData>,
     #[serde(default)]
     admin: serde_json::Value,
-    game: Option<GameState>,
+    /// Read as the theme's game once the theme is known.
+    game: Option<serde_json::Value>,
     created_at: u64,
     updated_at: u64,
     #[serde(default = "default_bid_timer")]
@@ -813,7 +794,7 @@ impl Rooms {
                 && room.bid_clock.is_some_and(|c| c.due <= now)
                 && let Some(game) = &room.game
             {
-                match time_up(game) {
+                match game.time_up() {
                     Ok(game) => {
                         info!(room = %room.code, "Open auction timed out");
                         room.set_game(game);
@@ -828,7 +809,7 @@ impl Rooms {
                 }
             }
             let bot = room.game.as_ref().filter(|_| !room.clients.is_empty()).and_then(|g| {
-                pending(g)
+                g.pending()
                     .into_iter()
                     .filter(|&s| room.is_bot(s))
                     .collect::<Vec<_>>()
@@ -852,15 +833,16 @@ impl Rooms {
                 continue;
             }
             room.bot_due = None;
-            let next = choose_action(&view_for(game, Some(seat)), &mut rng)
+            let next = game
+                .bot(seat, &mut rng)
                 .ok_or_else(|| Fail::new("No move found"))
-                .and_then(|action| {
+                .and_then(|(action, next)| {
                     debug!(room = %room.code, seat, "Bot move {action:?}");
-                    apply_action(game, seat, &action).map_err(Fail::from)
+                    next.map_err(Fail::from)
                 })
                 .or_else(|e| {
                     warn!(room = %room.code, seat, "Bot move refused ({}); skipping it", e.message);
-                    apply_skip(game, seat).map_err(Fail::from)
+                    game.skip(seat).map_err(Fail::from)
                 });
             match next {
                 Ok(game) => {
@@ -939,6 +921,13 @@ impl Rooms {
         reason = "one arm per message, in the order of the TypeScript original"
     )]
     fn dispatch(&mut self, id: ClientId, msg: ClientMsg) -> Result<(), Fail> {
+        // A move that is no game's move is as bad as a message that does not parse, wherever it
+        // comes from; the room's game reads it later.
+        if let ClientMsg::Action { action } = &msg
+            && !GameId::ALL.iter().any(|g| g.action(action).is_ok())
+        {
+            return fail("Bad message");
+        }
         let msg = match msg {
             ClientMsg::Create {
                 theme,
@@ -1133,22 +1122,22 @@ impl Rooms {
                 }
                 room.require_admin(me, "start the game")?;
                 let n = u8::try_from(room.seats.len()).unwrap_or(u8::MAX);
-                let cfg = config();
-                if !cfg.players.contains_key(&n) {
-                    return fail(format!("Needs {}–{} players", cfg.min_players(), cfg.max_players()));
+                let kind = room.kind();
+                if !(kind.min_players()..=kind.max_players()).contains(&n) {
+                    return fail(format!("Needs {}–{} players", kind.min_players(), kind.max_players()));
                 }
                 let seed = new_seed();
-                room.new_game(new_game(n, seed)?);
+                room.new_game(kind.new_game(n, seed)?);
                 room.reshuffle = shuffle_seats;
                 info!(room = %code, seat = me, "Game started with {n} players (seed {seed})");
             }
             ClientMsg::Rematch => {
-                let Some(game) = room.game.as_ref().filter(|g| g.over) else {
+                let Some(game) = room.game.as_ref().filter(|g| g.over()) else {
                     return fail("The game is not over yet");
                 };
                 room.require_admin(me, "start a rematch")?;
-                let (n, seed) = (game.n, new_seed());
-                room.new_game(new_game(n, seed)?);
+                let (n, seed) = (game.seats(), new_seed());
+                room.new_game(game.id().new_game(n, seed)?);
                 room.reshuffle = shuffle_seats;
                 // Same genres, new names.
                 room.cast.seed = new_seed();
@@ -1157,13 +1146,13 @@ impl Rooms {
             ClientMsg::End => {
                 let before = room.game()?;
                 room.require_admin(me, "end the game")?;
-                let game = end_early(before, me)?;
+                let game = before.end_early(me)?;
                 room.set_game(game);
                 room.last_call = None;
                 info!(room = %code, seat = me, "Admin ended the game early");
             }
             ClientMsg::Lobby => {
-                if !room.game.as_ref().is_some_and(|g| g.over) {
+                if !room.game.as_ref().is_some_and(Match::over) {
                     return fail("End the game first");
                 }
                 room.require_admin(me, "change the setup")?;
@@ -1176,6 +1165,10 @@ impl Rooms {
                     return fail("Change the theme in the lobby");
                 }
                 let id = theme.id();
+                let max = theme.game().max_players();
+                if room.seats.len() > usize::from(max) {
+                    return fail(format!("That game seats at most {max}; remove a seat first"));
+                }
                 if room.theme != id {
                     room.theme = id;
                     // A genre's number means another genre in another theme.
@@ -1222,11 +1215,12 @@ impl Rooms {
                     self.changed(&code);
                     return Ok(());
                 }
-                if room.seats.len() >= usize::from(config().max_players()) {
+                let max = room.kind().max_players();
+                if room.seats.len() >= usize::from(max) {
                     return fail("The room is full");
                 }
                 // Fewer seats than bot numbers, so one is free.
-                let name = (1..=config().max_players())
+                let name = (1..=max)
                     .map(|k| format!("Bot {k}"))
                     .find(|n| room.seats.iter().all(|s| s.name != *n))
                     .unwrap_or_default();
@@ -1274,10 +1268,11 @@ impl Rooms {
             }
             ClientMsg::Action { action } => {
                 let before = room.game_to_move()?;
-                if action == Action::Unknown {
+                let action = before.id().action(&action).map_err(|_| Fail::new("Bad message"))?;
+                if before.unknown(&action) {
                     return fail("Unknown move");
                 }
-                let game = apply_action(before, me, &action)?;
+                let game = before.act(me, &action)?;
                 debug!(room = %code, seat = me, "Move {action:?}");
                 room.set_game(game);
             }
@@ -1285,7 +1280,7 @@ impl Rooms {
                 let before = room.game_to_move()?;
                 room.require_admin(me, "skip a move")?;
                 require_away(room, seat)?;
-                let game = apply_skip(before, seat)?;
+                let game = before.skip(seat)?;
                 info!(room = %code, seat = me, "Skipped away seat {seat}");
                 room.set_game(game);
             }
@@ -1294,7 +1289,7 @@ impl Rooms {
                 if me != room.admin {
                     return fail("Only the room admin can call a result");
                 }
-                let game = apply_ruling(before, me, winner, price)?;
+                let game = before.call(me, winner, price)?;
                 if let Some(w) = winner {
                     info!(room = %code, seat = me, "Admin called a sale to seat {w} for {price}");
                 } else {
@@ -1318,7 +1313,7 @@ impl Rooms {
                 if call.version != room.version {
                     return fail("Nothing to undo: someone has moved since the call");
                 }
-                let game = undo_ruling(&call.before, after, me)?;
+                let game = call.before.undo_call(after, me)?;
                 room.set_game(game);
                 room.last_call = None;
                 info!(room = %code, seat = me, "Admin undid the last call");
@@ -1367,7 +1362,7 @@ impl Rooms {
                 if room.game.is_some() {
                     return fail("The game has started; the cast is set");
                 }
-                room.cast.genres = check_genres(&genres)?;
+                room.cast.genres = check_genres(&genres, room.kind())?;
                 if reroll {
                     room.cast.seed = new_seed();
                 }
@@ -1382,7 +1377,7 @@ impl Rooms {
                 room.settings = settings;
             }
             ClientMsg::Freeze { on } => {
-                if room.game()?.over {
+                if room.game()?.over() {
                     return fail("The game is over");
                 }
                 match (on, room.frozen) {
@@ -1535,15 +1530,15 @@ impl Rooms {
         avatar: String,
     ) -> Result<(), Fail> {
         let name = clean_name(raw_name)?;
-        if ThemeId::parse(theme).is_none() {
+        let Some(kind) = ThemeId::parse(theme).map(ThemeId::game) else {
             return fail("Unknown theme");
-        }
+        };
         let prefs = prefs.unwrap_or_default();
         let (bid_timer_s, bid_extend_s) = match check_timer(prefs.bid_timer_s, prefs.bid_extend_s) {
             Ok(()) => (prefs.bid_timer_s, prefs.bid_extend_s),
             Err(_) => (DEFAULT_BID_TIMER_S, DEFAULT_BID_EXTEND_S),
         };
-        let genres = check_genres(&prefs.genres).unwrap_or_default();
+        let genres = check_genres(&prefs.genres, kind).unwrap_or_default();
         let mut settings = prefs.settings.unwrap_or_default();
         if !settings.reactions_ok() {
             settings.reactions = RoomSettings::default().reactions;
@@ -1688,7 +1683,7 @@ impl Rooms {
             && let Some(raw_name) = raw_name
         {
             let name = clean_name(raw_name)?;
-            if room.seats.len() >= usize::from(config().max_players()) {
+            if room.seats.len() >= usize::from(room.kind().max_players()) {
                 return fail("The room is full");
             }
             if room.settings.locked {
@@ -1940,8 +1935,8 @@ impl Rooms {
                     theme: room.theme.clone(),
                     stage: match &room.game {
                         None => RoomStage::Lobby,
-                        Some(g) if g.over => RoomStage::Over,
-                        Some(g) => RoomStage::Playing { round: g.round },
+                        Some(g) if g.over() => RoomStage::Over,
+                        Some(g) => RoomStage::Playing { round: g.round() },
                     },
                     players: room.seats.iter().map(|s| s.name.clone()).collect(),
                     seat,
@@ -1967,7 +1962,7 @@ impl Rooms {
 
     fn info(&self, room: &Room) -> RoomInfo {
         let now = (self.now)();
-        let cfg = config();
+        let kind = room.kind();
         RoomInfo {
             code: room.code.clone(),
             theme: room.theme.clone(),
@@ -1993,8 +1988,8 @@ impl Rooms {
                 .collect(),
             admin: room.admin,
             can_undo: room.game.is_some() && room.last_call.as_ref().is_some_and(|c| c.version == room.version),
-            min_players: cfg.min_players(),
-            max_players: cfg.max_players(),
+            min_players: kind.min_players(),
+            max_players: kind.max_players(),
             skip_after_ms: self.skip_after_ms,
             admin_claim_ms: ADMIN_CLAIM_MS,
             admin_auto_ms: ADMIN_AUTO_MS,
@@ -2059,7 +2054,7 @@ impl Rooms {
                 room: info.clone(),
                 you: c.seat,
                 left: c.seat.is_none().then(|| room.left_by(c.token.as_deref())).flatten(),
-                game: room.game.as_ref().map(|g| view_for(g, c.seat)),
+                game: room.game.as_ref().map(|g| g.view(c.seat)),
             };
             if !(c.sink)(&msg) {
                 self.dropped.push(cid);
@@ -2080,7 +2075,7 @@ impl Rooms {
         }
         info!(room = %code, "Seats shuffled: {to:?}");
         let order: Vec<&str> = room.seats.iter().map(|s| s.name.as_str()).collect();
-        let what = if room.game.as_ref().is_some_and(|g| g.round > 0) {
+        let what = if room.game.as_ref().is_some_and(|g| g.round() > 0) {
             "New seats for this round"
         } else {
             "Seats drawn at random"
@@ -2149,6 +2144,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         return Ok(None);
     }
     let saved: Saved = serde_json::from_value(data)?;
+    let game = saved.game.map(|g| ThemeId::game_of(&saved.theme).load(g)).transpose()?;
     let admin = saved
         .admin
         .as_u64()
@@ -2156,7 +2152,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         .filter(|&a| usize::from(a) < saved.seats.len())
         .unwrap_or(0);
     let frozen = (saved.frozen_by)
-        .filter(|_| saved.game.as_ref().is_some_and(|g| !g.over))
+        .filter(|_| game.as_ref().is_some_and(|g| !g.over()))
         .map(|by| Frozen { by, at: now });
     Ok(Some(Room {
         code: code.to_owned(),
@@ -2165,7 +2161,7 @@ fn read_room(path: &Path, code: &str, now: u64) -> anyhow::Result<Option<Room>> 
         away: saved.seats.iter().map(|s| (!s.bot).then_some(now)).collect(),
         seats: saved.seats,
         admin,
-        game: saved.game,
+        game,
         created_at: saved.created_at,
         updated_at: saved.updated_at,
         bid_timer_s: saved.bid_timer_s.min(MAX_BID_TIMER_S),

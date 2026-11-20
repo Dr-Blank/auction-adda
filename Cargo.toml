@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/engine", "crates/server"]
+members = ["crates/game", "crates/engine", "crates/server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ repository = "https://github.com/Dr-Blank/auction-adda"
 publish = false
 
 [workspace.dependencies]
+game = { path = "crates/game" }
 engine = { path = "crates/engine" }
 anyhow = "1.0.104"
 axum = { version = "0.8.9", features = ["ws"] }

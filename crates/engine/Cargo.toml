@@ -9,13 +9,15 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+game.workspace = true
+rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]
 flate2.workspace = true
+game.workspace = true
 # Exact float parsing, for comparing generator values with the recorded ones.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 

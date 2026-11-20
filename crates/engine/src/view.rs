@@ -1,4 +1,4 @@
-use crate::game::pending;
+use crate::rules::pending;
 use crate::types::{AuctionView, GameState, PlayerView, Seat, View};
 
 const LOG_LIMIT: usize = 150;

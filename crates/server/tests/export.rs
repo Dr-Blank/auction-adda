@@ -1,5 +1,6 @@
 //! Writes `src/generated/`: the TypeScript types of every message (and everything they contain),
-//! an `index.ts` that re-exports them, and the deck as `deck.json` for the theme tests.
+//! an `index.ts` that re-exports them, the deck as `deck.json` for the theme tests, and
+//! `games.json`: the game each theme plays and the seat counts of each game.
 //! The files are committed; CI runs this and fails when they changed.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -8,6 +9,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 
+use serde_json::{Map, Value, json};
+use server::games::GameId;
 use server::protocol::{ClientMsg, ServerMsg, ThemeId};
 use ts_rs::TS;
 
@@ -23,6 +26,7 @@ fn export_typescript() {
     ClientMsg::export_all(&cfg).unwrap();
     ServerMsg::export_all(&cfg).unwrap();
     ThemeId::export_all(&cfg).unwrap();
+    GameId::export_all(&cfg).unwrap();
 
     let mut names: Vec<String> = fs::read_dir(&dir)
         .unwrap()
@@ -39,4 +43,34 @@ fn export_typescript() {
 
     let deck = serde_json::to_string(&engine::build_deck()).unwrap() + "\n";
     fs::write(dir.join("deck.json"), deck).unwrap();
+
+    let themes: Map<String, Value> = ThemeId::ALL
+        .iter()
+        .map(|t| (t.id(), serde_json::to_value(t.game()).unwrap()))
+        .collect();
+    let players: Map<String, Value> = GameId::ALL
+        .iter()
+        .map(|g| {
+            let id = serde_json::to_value(g).unwrap().as_str().unwrap().to_owned();
+            (id, json!([g.min_players(), g.max_players()]))
+        })
+        .collect();
+    let games = serde_json::to_string_pretty(&json!({ "themes": themes, "players": players })).unwrap() + "\n";
+    fs::write(dir.join("games.json"), games).unwrap();
+}
+
+/// `ThemeId::ALL` and `GameId::ALL` list every variant: an id the lists leave out would be
+/// missing from `games.json` and from the checks that run for every game.
+#[test]
+fn every_theme_and_game_is_listed() {
+    let cfg = ts_rs::Config::default();
+    // The TypeScript union names every variant: `"a" | "b"`.
+    let typed = ThemeId::inline(&cfg).matches('"').count() / 2;
+    assert_eq!(
+        typed,
+        ThemeId::ALL.len(),
+        "a ThemeId variant is missing from ThemeId::ALL"
+    );
+    let typed = GameId::inline(&cfg).matches('"').count() / 2;
+    assert_eq!(typed, GameId::ALL.len(), "a GameId variant is missing from GameId::ALL");
 }

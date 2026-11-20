@@ -2,9 +2,10 @@
 //! makes random legal moves; it is a stand-in for a missing player, not an opponent worth beating.
 //! Same choices as `scripts/bot.ts`, which drives the bots that connect over the socket.
 
-use engine::{Action, AuctionKind, AuctionType, Card, View};
 use rand::seq::IndexedRandom;
 use rand::{Rng, RngExt};
+
+use crate::types::{Action, AuctionKind, AuctionType, Card, View};
 
 /// The move for the viewer of `v`, or `None` when it owes none.
 pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {

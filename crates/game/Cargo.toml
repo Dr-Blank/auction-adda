@@ -1,0 +1,18 @@
+[package]
+name = "game"
+description = "What every game on the table shares: seats, rule errors, the seeded generator, the Game trait"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

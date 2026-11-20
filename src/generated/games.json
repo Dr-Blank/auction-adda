@@ -1,0 +1,12 @@
+{
+  "players": {
+    "auction": [
+      3,
+      5
+    ]
+  },
+  "themes": {
+    "box-office": "auction",
+    "leather-willow": "auction"
+  }
+}

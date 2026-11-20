@@ -1,11 +1,10 @@
 //! Game state, moves and views. Every type here is part of the wire protocol or the save file;
 //! the TypeScript client gets them from `src/generated/` (written by the `export` test).
 
+pub use game::{RuleError, Seat};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Seat index, 0-based.
-pub type Seat = u8;
 /// Money and prices.
 pub type Money = u32;
 
@@ -318,15 +317,4 @@ pub struct View {
     pub over: bool,
     pub winners: Vec<Seat>,
     pub deck_count: u8,
-}
-
-/// A move that breaks the rules. The message goes back to the player as it is.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("{0}")]
-pub struct RuleError(pub String);
-
-impl RuleError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
-    }
 }

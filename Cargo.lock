@@ -282,9 +282,10 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "game",
+ "rand 0.10.3",
  "serde",
  "serde_json",
- "thiserror",
  "ts-rs",
 ]
 
@@ -347,6 +348,16 @@ dependencies = [
  "futures-task",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "game"
+version = "0.1.0"
+dependencies = [
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -845,6 +856,7 @@ dependencies = [
  "axum",
  "clap",
  "engine",
+ "game",
  "jiff",
  "rand 0.10.3",
  "serde",

@@ -1,8 +1,10 @@
 //! The rules. Every public function takes the state, checks the move and returns a new state, so a
 //! rejected move never leaves a half-changed game.
 
+use game::{index, permuted, rng, shuffle};
+
 use crate::config::config;
-use crate::deck::{build_deck, index, rng, shuffle, sort_hand};
+use crate::deck::{build_deck, sort_hand};
 use crate::invariants::check_step;
 use crate::types::{
     Action, Auction, AuctionKind, AuctionType, Card, GameState, LogEntry, Money, Player, RoundSummary, RuleError, Sale,
@@ -223,14 +225,6 @@ pub fn undo_ruling(before: &GameState, after: &GameState, by: Seat) -> Result<Ga
         cards: cards.clone(),
     });
     Ok(s)
-}
-
-/// `items` (one per seat) in the new seat order: the item of seat `i` goes to `to[i]`.
-#[must_use]
-pub fn permuted<T: Clone>(items: &[T], to: &[Seat]) -> Vec<T> {
-    let mut placed: Vec<(Seat, T)> = to.iter().copied().zip(items.iter().cloned()).collect();
-    placed.sort_by_key(|&(t, _)| t);
-    placed.into_iter().map(|(_, x)| x).collect()
 }
 
 /// Moves every player to a new seat, `to[old] = new`, with everything that names a seat (turn,

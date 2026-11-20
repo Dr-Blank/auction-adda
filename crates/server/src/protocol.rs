@@ -1,11 +1,14 @@
 //! Messages between the browser and the server. The client gets these types from `src/generated/`.
 
-use engine::{Action, Money, Seat, View};
+use game::Seat;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::games::{AnyAction, AnyView, GameId};
+
 /// Themes the server accepts. The client's theme registry is typed by this, so a theme missing on
-/// either side does not compile.
+/// either side does not compile. Each theme belongs to one game (`game`): picking a theme picks
+/// the game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ThemeId {
@@ -27,6 +30,22 @@ pub struct Cast {
 }
 
 impl ThemeId {
+    pub const ALL: [Self; 2] = [Self::BoxOffice, Self::LeatherWillow];
+
+    /// The game this theme dresses.
+    #[must_use]
+    pub const fn game(self) -> GameId {
+        match self {
+            Self::BoxOffice | Self::LeatherWillow => GameId::Auction,
+        }
+    }
+
+    /// The game a room with this theme id plays: a theme no longer known plays the default game.
+    #[must_use]
+    pub fn game_of(id: &str) -> GameId {
+        Self::parse(id).map_or_default(Self::game)
+    }
+
     #[must_use]
     pub fn parse(id: &str) -> Option<Self> {
         serde_json::from_value(serde_json::Value::String(id.into())).ok()
@@ -187,8 +206,11 @@ pub enum ClientMsg {
     Kick {
         seat: Seat,
     },
+    /// A move in the room's game. Read by that game's rules: a move that is not one of any
+    /// game's is a bad message.
     Action {
-        action: Action,
+        #[ts(as = "AnyAction")]
+        action: serde_json::Value,
     },
     Skip {
         seat: Seat,
@@ -225,7 +247,7 @@ pub enum ClientMsg {
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
     Rule {
         winner: Option<Seat>,
-        price: Money,
+        price: u32,
     },
     /// Admin only: take back the result just called, while nobody has moved since.
     Undo,
@@ -445,7 +467,8 @@ pub enum ServerMsg {
         you: Option<Seat>,
         /// The seat this tab left to a bot in the running game; `back` takes it again.
         left: Option<Seat>,
-        game: Option<View>,
+        /// The seat's view of the game, as the room's game (the theme's) shapes it.
+        game: Option<AnyView>,
     },
     /// Answer to `rooms`: the rooms where a token still holds a seat, admin rooms first, then the
     /// most recently active. `gone`: codes where it does not (expired, left, or a new room that

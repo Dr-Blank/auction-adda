@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 
 use engine::{AuctionKind, AuctionType, LogEntry, View};
 use serde_json::{Value, json};
+use server::games::AnyView;
 use server::protocol::{ErrorCode, RoomInfo, ServerMsg};
 use server::rooms::{ClientId, CreateLimit, Options, Rooms};
 
@@ -57,7 +58,7 @@ fn state(c: &Fake) -> State {
                 room: room.clone(),
                 you: *you,
                 left: *left,
-                game: game.clone(),
+                game: game.clone().and_then(AnyView::into_auction),
             }),
             _ => None,
         })
@@ -677,7 +678,7 @@ fn only_the_admin_adds_bots_starts_and_rematches_bots_play_their_seats() {
             break;
         }
         for c in [a, b] {
-            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+            if let Some(action) = engine::choose_action(&game(c), &mut rng) {
                 send(&mut rooms, c, json!({ "type": "action", "action": action }));
             }
         }
@@ -967,7 +968,7 @@ fn seats_are_drawn_when_a_game_starts_and_each_round_if_the_admin_wants() {
     let mut rng = rand::rng();
     while game(&clients[0]).round == 0 {
         for c in &clients {
-            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+            if let Some(action) = engine::choose_action(&game(c), &mut rng) {
                 send(&mut rooms, c, json!({ "type": "action", "action": action }));
             }
         }
@@ -1065,7 +1066,7 @@ fn play_to_open_auction(rooms: &mut Rooms, clients: &[Fake]) {
             if is_open(c) {
                 return;
             }
-            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+            if let Some(action) = engine::choose_action(&game(c), &mut rng) {
                 send(rooms, c, json!({ "type": "action", "action": action }));
             }
         }
@@ -1103,7 +1104,7 @@ fn a_frozen_game_stops_the_clock_and_every_move_until_whoever_froze_it_or_the_ad
     assert!(is_open(admin));
     assert_eq!(state(admin).room.bid_ms_left, Some(8_000));
     for c in &clients {
-        if let Some(action) = server::bot::choose_action(&game(c), &mut rand::rng()) {
+        if let Some(action) = engine::choose_action(&game(c), &mut rand::rng()) {
             send(&mut rooms, c, json!({ "type": "action", "action": action }));
             assert_error(c, "froze the game; wait until it runs again");
         }
@@ -1183,7 +1184,7 @@ fn a_bot_stands_in_for_a_disconnected_player_until_they_rejoin_kicked_players_lo
             break;
         }
         for c in [a, c] {
-            if let Some(action) = server::bot::choose_action(&game(c), &mut rng) {
+            if let Some(action) = engine::choose_action(&game(c), &mut rng) {
                 send(&mut rooms, c, json!({ "type": "action", "action": action }));
             }
         }
@@ -1701,4 +1702,93 @@ fn loads_a_room_saved_by_the_node_server() {
         saved["game"]["players"][1]["hand"].as_array().unwrap().len()
     );
     assert!(dir.files().contains(&"BROKEN.json".to_owned()));
+}
+
+/// A move whose fields do not parse is refused as a bad message, whoever sends it and wherever
+/// they are; a move of an unknown type is an unknown move.
+#[test]
+fn a_malformed_move_is_a_bad_message_in_or_out_of_a_room() {
+    let mut rooms = Rooms::new(fixed()).unwrap();
+    let nowhere = fake(&mut rooms, "10.0.0.9");
+    send(
+        &mut rooms,
+        &nowhere,
+        json!({ "type": "action", "action": { "type": "bid", "amount": "lots" } }),
+    );
+    assert_error(&nowhere, "Bad message");
+    send(&mut rooms, &nowhere, json!({ "type": "action", "action": 7 }));
+    assert_error(&nowhere, "Bad message");
+    send(
+        &mut rooms,
+        &nowhere,
+        json!({ "type": "action", "action": { "type": "pass" } }),
+    );
+    assert_error(&nowhere, "Join a room first");
+
+    let (clients, _) = seated(&mut rooms, 3);
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    let turn = usize::from(game(&clients[0]).turn);
+    let mover = &clients[turn];
+    send(
+        &mut rooms,
+        mover,
+        json!({ "type": "action", "action": { "type": "play", "card": -1 } }),
+    );
+    assert_error(mover, "Bad message");
+    send(
+        &mut rooms,
+        mover,
+        json!({ "type": "action", "action": { "type": "play" } }),
+    );
+    assert_error(mover, "Bad message");
+    send(
+        &mut rooms,
+        mover,
+        json!({ "type": "action", "action": { "type": "fly" } }),
+    );
+    assert_error(mover, "Unknown move");
+    assert!(game(mover).auction.is_none(), "nothing was played");
+}
+
+/// On the wire, a state message carries the seat's view of the game as a plain object, and the
+/// room says which theme it plays.
+#[test]
+fn a_state_message_carries_the_view_as_a_plain_object() {
+    let mut rooms = Rooms::new(fixed()).unwrap();
+    let (clients, _) = seated(&mut rooms, 3);
+    send(&mut rooms, &clients[0], json!({ "type": "start" }));
+    let msg = serde_json::to_value(last(&clients[1])).unwrap();
+    assert_eq!(msg["type"], "state");
+    assert_eq!(msg["you"], 1);
+    assert_eq!(msg["room"]["theme"], "box-office");
+    let view = &msg["game"];
+    assert_eq!(view["n"], 3);
+    assert_eq!(view["you"], 1);
+    assert_eq!(view["hand"].as_array().unwrap().len(), 10);
+    assert_eq!(view["players"][1]["money"], 100);
+    assert!(view["players"][0]["money"].is_null(), "others' money is hidden");
+    assert!(view["auction"].is_null());
+    let mut keys: Vec<&String> = view.as_object().unwrap().keys().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "auction",
+            "deckCount",
+            "hand",
+            "log",
+            "logStart",
+            "n",
+            "over",
+            "pending",
+            "played",
+            "players",
+            "round",
+            "summaries",
+            "tokens",
+            "turn",
+            "winners",
+            "you"
+        ]
+    );
 }
