@@ -27,6 +27,7 @@ import { play } from "../../client/sound.ts";
 import type {
   ClientMsg,
   PahunchAction,
+  PahunchBonuses,
   PahunchLog,
   PahunchView,
   PahunchVote,
@@ -125,9 +126,11 @@ export function Table({ state, send, reactions }: TableProps) {
   }, [moment]);
 
   const myTurn = me !== null && !v.over && v.vote === null && v.turn === me;
-  const myClimbs = myTurn ? climbs(v, me) : [];
-  const myEnters = myTurn ? enterRooms(v, me) : [];
-  const myNudges = myTurn ? nudges(v) : [];
+  // After the main move, only bonus moves are left (or ending the turn).
+  const bonus = v.bonuses.block > 0 || v.bonuses.nudge > 0 ? v.bonuses : null;
+  const myClimbs = myTurn && !bonus ? climbs(v, me) : [];
+  const myEnters = myTurn && !bonus ? enterRooms(v, me) : [];
+  const myNudges = myTurn && (!bonus || bonus.nudge > 0) ? nudges(v) : [];
   const liveRooms = new Set<number>([
     ...myEnters,
     ...myClimbs.map((c) => v.layout.paths[c.path].from),
@@ -140,7 +143,16 @@ export function Table({ state, send, reactions }: TableProps) {
     if (v.vote) bar = <VoteBar ctx={ctx} vote={v.vote} act={act} />;
     else if (myTurn)
       bar = (
-        <MoveBar ctx={ctx} sel={sel} setSel={setSel} climbs={myClimbs} enters={myEnters} nudges={myNudges} act={act} />
+        <MoveBar
+          ctx={ctx}
+          sel={sel}
+          setSel={setSel}
+          climbs={myClimbs}
+          enters={myEnters}
+          nudges={myNudges}
+          bonus={bonus}
+          act={act}
+        />
       );
   }
   const docked = owing && bar !== null;
@@ -424,7 +436,10 @@ function climbNote(ctx: Ctx, c: ClimbOption): string {
   const { v, skin } = ctx;
   const token = v.tokensOn[c.path];
   if (c.kind === "blocked") return `the ${skin.nouns.blocker} lets you through, no ${skin.nouns.points}`;
-  const gain = token !== null && (v.layout.rooms[v.layout.paths[c.path].from]?.cap ?? 0) > 1 ? ` · +${token}` : "";
+  const gain =
+    token !== null && (v.layout.rooms[v.layout.paths[c.path].from]?.cap ?? 0) > 1
+      ? ` · +${token.value}${token.bonus ? ` ${skin.bonuses[token.bonus]}` : ""}`
+      : "";
   if (c.kind === "own") return `your ${skin.nouns.climbers} carry the vote${gain}`;
   return `needs ${c.need} votes, you have ${c.own}${gain}`;
 }
@@ -436,9 +451,11 @@ function MoveBar(props: {
   climbs: ClimbOption[];
   enters: number[];
   nudges: number[];
+  /** Bonus moves left after the main move; `null` before it. */
+  bonus: PahunchBonuses | null;
   act: (a: PahunchAction) => void;
 }) {
-  const { ctx, sel, act } = props;
+  const { ctx, sel, act, bonus } = props;
   const { v, skin } = ctx;
   const paths = v.layout.paths;
   const inSel = (path: number) =>
@@ -450,7 +467,8 @@ function MoveBar(props: {
   const blockAt = sel?.path !== undefined && targets.includes(sel.path) ? sel.path : null;
   const [blockTo, setBlockTo] = useState<number>(() => targets[0] ?? 0);
   const route = (path: number) => `${ctx.room(paths[path].from)} → ${ctx.room(paths[path].to)}`;
-  const nothing = enters.length + ups.length + nudge.length === 0 && blockAt === null;
+  const canBlock = !bonus || bonus.block > 0;
+  const nothing = enters.length + ups.length + nudge.length === 0 && (blockAt === null || !canBlock);
   const { climber } = skin.nouns;
   // On a phone the full list would cover the board: it stays folded until you tap the board or ask for it.
   const [unfolded, setUnfolded] = useState(false);
@@ -459,12 +477,14 @@ function MoveBar(props: {
   return (
     <div className={`ph-moves ${folded ? "folded" : ""}`}>
       <p className="status">
-        <b>Your move.</b>{" "}
-        {sel
-          ? nothing
-            ? "Nothing to do there. Pick another room or path."
-            : "Pick one:"
-          : `Tap a lit room or path on the board, or pick here. One move a turn.`}
+        <b>{bonus ? "Bonus move." : "Your move."}</b>{" "}
+        {bonus && !sel
+          ? "Use it, or end your turn."
+          : sel
+            ? nothing
+              ? "Nothing to do there. Pick another room or path."
+              : "Pick one:"
+            : `Tap a lit room or path on the board, or pick here. One move a turn.`}
         {sel && (
           <button
             className="btn small ghost"
@@ -477,6 +497,13 @@ function MoveBar(props: {
           </button>
         )}
       </p>
+      {bonus && (
+        <div className="act-row">
+          <button type="button" className="btn primary" onClick={() => act({ type: "done" })}>
+            End turn
+          </button>
+        </div>
+      )}
       {folded && (
         <button type="button" className="btn ph-unfold" onClick={() => setUnfolded(true)}>
           List every move
@@ -519,7 +546,7 @@ function MoveBar(props: {
         </div>
       )}
       <div className="act-row" role="group" aria-label={`Move the ${skin.nouns.blocker}`}>
-        {blockAt !== null ? (
+        {!canBlock ? null : blockAt !== null ? (
           <button className="btn" onClick={() => act({ type: "block", path: blockAt })}>
             Send the {skin.nouns.blocker} to {route(blockAt)}
           </button>
@@ -824,6 +851,16 @@ export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {
       return `${who(e.p)} nudged an ${skin.nouns.neutral} up from ${route(e.path)} and took ${pts(1)}.`;
     case "block":
       return `${who(e.p)} sent the ${skin.nouns.blocker} to the way from ${route(e.path)}.`;
+    case "bonus": {
+      const what = {
+        block: `may also move the ${skin.nouns.blocker} this turn`,
+        nudge: `may also nudge an ${skin.nouns.neutral} up this turn`,
+        favour: "gets a favour use back",
+      }[e.kind];
+      return `${who(e.p)} picked up ${skin.bonuses[e.kind]}: ${what}.`;
+    }
+    case "done":
+      return `${who(e.p)} ended the turn.`;
     case "gift":
       return `${who(e.from)} gave ${e.to === ctx.me ? "you" : ctx.names[e.to]} ${e.count} ${e.count === 1 ? "token" : "tokens"}.`;
     case "skip":

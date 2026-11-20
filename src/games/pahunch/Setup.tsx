@@ -54,8 +54,12 @@ export function VoteClock({ room, me, send }: { room: RoomInfo; me: number | nul
   );
 }
 
-/** Which board the next game is played on: one the admin picks, or a different one each game. */
+/**
+ * Which board the next game is played on: one the admin picks, or a different one each game.
+ * Hidden while there is only one board.
+ */
 export function BoardPicker({ room, me, send }: RoomProps) {
+  if (BOARDS.length < 2) return null;
   const isAdmin = room.admin === me;
   const random = room.variant === null;
   const current = random ? "A different board each game" : (BOARDS[room.variant ?? 0] ?? BOARDS[0] ?? "Classic");

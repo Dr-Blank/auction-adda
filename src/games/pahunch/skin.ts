@@ -1,6 +1,7 @@
 // What a Pahunch theme names and colours. The rules know rooms, paths, climbers, neutrals, a
 // blocker and point tokens by number; a skin turns them into a housing society, a film set…
 
+import type { PahunchBonus } from "../../generated/index.ts";
 import type { Skin } from "../types.ts";
 
 export interface PahunchNouns {
@@ -31,6 +32,8 @@ export interface PahunchSkin extends Skin {
   blockerGlyph: string;
   /** Short lines for the rules: what the game is about, in this skin's words. */
   story: string;
+  /** What each special coin is called. */
+  bonuses: Record<PahunchBonus, string>;
 }
 
 export const societyCommittee: PahunchSkin = {
@@ -93,18 +96,6 @@ export const societyCommittee: PahunchSkin = {
       { name: "Managing committee", short: "Managing" },
       { name: "Chairman’s cabin", short: "Chairman" },
     ],
-    classic: [
-      { name: "Parking sub-committee", short: "Parking" },
-      { name: "Lift committee", short: "Lift" },
-      { name: "Water tank committee", short: "Water tank" },
-      { name: "Festival committee", short: "Festival" },
-      { name: "Garden committee", short: "Garden" },
-      { name: "Treasurer’s desk", short: "Treasurer" },
-      { name: "Security committee", short: "Security" },
-      { name: "Managing committee", short: "Managing" },
-      { name: "Secretary’s chair", short: "Secretary" },
-      { name: "Chairman’s cabin", short: "Chairman" },
-    ],
   },
   seats: [
     { color: "#e4572e", ink: "#1a0d08" },
@@ -117,6 +108,7 @@ export const societyCommittee: PahunchSkin = {
   ],
   neutralGlyph: "A",
   blockerGlyph: "D",
+  bonuses: { block: "Chai with Daddu", nudge: "Kitty party invite", favour: "Favour returned" },
   story:
     "Everyone in the society wants the Chairman’s cabin. Committees only let a resident move up when most of their members agree, so votes are traded for izzat, promises are made on the call, and the aunties can always be persuaded with a box of kaju katli. Daddu, the senior citizen, sits on one staircase: anyone may walk past him without a vote, but he sits on the izzat there, so nobody takes it.",
 };

@@ -5,7 +5,8 @@
 //! neutral up, or move the blocker. Leaving a room takes more than half its seats in yes votes:
 //! your own climbers there say yes, every other player answers for theirs, and a neutral says
 //! yes when the mover pays it a token. A climb by the blocker's path needs no vote but takes no
-//! token. Back paths are locked. The game ends when the top room is full (neutrals count): of the
+//! token. Back paths are locked. A special coin taken on a climb gives a bonus: one more move
+//! after the main one, before the turn passes. The game ends when the top room is full (neutrals count): of the
 //! players with a climber there, the one with the most points wins (a tie goes to whoever arrived
 //! first); with none there, nobody wins.
 
@@ -14,7 +15,7 @@ use rand::rngs::StdRng;
 
 use crate::board::{Layout, Rooms, boards};
 use crate::bot::choose_action;
-use crate::types::{Action, LogEntry, Options, Player, RuleError, Seat, State, Vote};
+use crate::types::{Action, Bonus, Bonuses, LogEntry, Options, Player, RuleError, Seat, State, Vote};
 use crate::view::view_for;
 
 const LOCKED: &str = "The back stairs are locked";
@@ -48,12 +49,7 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
     };
     let layout = board.layout(seating);
     let mut random = game::rng(seed);
-    let bag: Vec<u8> = board
-        .bag
-        .iter()
-        .flat_map(|(&value, &count)| std::iter::repeat_n(value, usize::from(count)))
-        .collect();
-    let mut bag = game::shuffle(bag, &mut random);
+    let mut bag = game::shuffle(board.coins(), &mut random);
     let tokens_on = (0..u8::try_from(layout.paths.len()).unwrap_or(0))
         .map(|p| if layout.slot(p) { bag.pop() } else { None })
         .collect();
@@ -67,6 +63,7 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         seed,
         options,
         tried: Vec::new(),
+        bonuses: Bonuses::default(),
         layout,
         rooms,
         tokens_on,
@@ -278,6 +275,10 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
     if seat != s.turn {
         return fail("It is not your turn");
     }
+    if s.bonuses.any() {
+        bonus_move(&mut s, seat, action)?;
+        return Ok(s);
+    }
     let me = usize::from(seat);
     match *action {
         Action::Enter { room } => {
@@ -288,7 +289,7 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
                 p.hand -= 1;
             }
             s.log.push(LogEntry::Enter { p: seat, room });
-            next_turn(&mut s);
+            end_move(&mut s);
         }
         Action::Climb { path } => {
             let tokens = &s.players.get(me).ok_or_else(damaged)?.tokens;
@@ -319,24 +320,57 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
             }
         }
         Action::Nudge { path } => {
-            check_nudge(&s.layout, &s.rooms, path)?;
-            let p = s.layout.path(path).ok_or_else(damaged)?;
-            move_piece(&mut s.rooms, p.from, p.to, None)?;
-            s.log.push(LogEntry::Nudge { p: seat, path });
-            reward(&mut s, seat, 1);
+            nudge(&mut s, seat, path)?;
             end_move(&mut s);
         }
         Action::Block { path } => {
-            check_block(&s.layout, s.blocker, path)?;
-            s.blocker = path;
-            s.log.push(LogEntry::Block { p: seat, path });
-            next_turn(&mut s);
+            block(&mut s, seat, path)?;
+            end_move(&mut s);
         }
+        Action::Done => return fail("Make your move first"),
         Action::Vote { .. } | Action::Bribe { .. } | Action::Withdraw => return fail("No vote is running"),
         Action::Unknown => return fail("Unknown move"),
         Action::Give { .. } => {}
     }
     Ok(s)
+}
+
+fn nudge(s: &mut State, seat: Seat, path: u8) -> Result<(), RuleError> {
+    check_nudge(&s.layout, &s.rooms, path)?;
+    let p = s.layout.path(path).ok_or_else(damaged)?;
+    move_piece(&mut s.rooms, p.from, p.to, None)?;
+    s.log.push(LogEntry::Nudge { p: seat, path });
+    reward(s, seat, 1);
+    Ok(())
+}
+
+fn block(s: &mut State, seat: Seat, path: u8) -> Result<(), RuleError> {
+    check_block(&s.layout, s.blocker, path)?;
+    s.blocker = path;
+    s.log.push(LogEntry::Block { p: seat, path });
+    Ok(())
+}
+
+/// A move after the main one: a bonus, or the end of the turn.
+fn bonus_move(s: &mut State, seat: Seat, action: &Action) -> Result<(), RuleError> {
+    match *action {
+        Action::Block { path } if s.bonuses.block > 0 => {
+            block(s, seat, path)?;
+            s.bonuses.block -= 1;
+        }
+        Action::Nudge { path } if s.bonuses.nudge > 0 => {
+            nudge(s, seat, path)?;
+            s.bonuses.nudge -= 1;
+        }
+        Action::Done => {
+            s.log.push(LogEntry::Done { p: seat });
+            s.bonuses = Bonuses::default();
+        }
+        Action::Unknown => return fail("Unknown move"),
+        _ => return fail("Use a bonus move or end the turn"),
+    }
+    end_move(s);
+    Ok(())
 }
 
 fn give(s: &mut State, from: Seat, to: Seat, tokens: &[u8]) -> Result<(), RuleError> {
@@ -478,7 +512,8 @@ fn move_piece(rooms: &mut Rooms, from: u8, to: u8, who: Option<Seat>) -> Result<
     Ok(())
 }
 
-/// The mover's climber goes up `path`, taking its token unless the blocker covers it.
+/// The mover's climber goes up `path`, taking its token unless the blocker covers it. A special
+/// coin's bonus is the mover's, this turn only; in the hand it is a plain token.
 fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleError> {
     let p = s.layout.path(path).ok_or_else(damaged)?;
     move_piece(&mut s.rooms, p.from, p.to, Some(seat))?;
@@ -493,25 +528,43 @@ fn climb(s: &mut State, seat: Seat, path: u8, free: bool) -> Result<(), RuleErro
         None
     };
     if let (Some(t), Some(player)) = (took, s.players.get_mut(usize::from(seat))) {
-        player.tokens.push(t);
+        player.tokens.push(t.value);
         player.tokens.sort_unstable();
     }
     s.log.push(LogEntry::Climb {
         p: seat,
         path,
         token: took.is_some(),
-        took,
+        took: took.map(|t| t.value),
         free,
     });
+    if let Some(kind) = took.and_then(|t| t.bonus) {
+        let fired = match kind {
+            Bonus::Block => {
+                s.bonuses.block += 1;
+                true
+            }
+            Bonus::Nudge => {
+                s.bonuses.nudge += 1;
+                true
+            }
+            // Gives a used favour one use back; without favours it is a plain token.
+            Bonus::Favour => false,
+        };
+        if fired {
+            s.log.push(LogEntry::Bonus { p: seat, kind });
+        }
+    }
     end_move(s);
     Ok(())
 }
 
-/// After a move that put a piece somewhere: a full top room ends the game, else the turn passes.
+/// After a move: a full top room ends the game; else the turn passes, unless bonus moves are
+/// left.
 fn end_move(s: &mut State) {
     if held(&s.rooms, s.layout.summit) >= usize::from(s.layout.cap(s.layout.summit)) {
         finish(s, None);
-    } else {
+    } else if !s.bonuses.any() {
         next_turn(s);
     }
 }
@@ -519,6 +572,7 @@ fn end_move(s: &mut State) {
 fn next_turn(s: &mut State) {
     s.turn = (s.turn + 1) % s.n;
     s.tried.clear();
+    s.bonuses = Bonuses::default();
 }
 
 /// A player's points.
@@ -532,6 +586,7 @@ pub fn score(p: &Player) -> u32 {
 fn finish(s: &mut State, by: Option<Seat>) {
     s.over = true;
     s.vote = None;
+    s.bonuses = Bonuses::default();
     s.winners = if by.is_some() {
         Vec::new()
     } else {
@@ -646,6 +701,8 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
             | LogEntry::Fail { p }
             | LogEntry::Nudge { p, .. }
             | LogEntry::Block { p, .. }
+            | LogEntry::Bonus { p, .. }
+            | LogEntry::Done { p }
             | LogEntry::Skip { p } => *p = m(*p),
             LogEntry::Gift { from, to, .. } => {
                 *from = m(*from);

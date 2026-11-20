@@ -3,7 +3,7 @@ import type { PahunchSkin } from "./skin.ts";
 /** The rules in this skin's words: short, in the order a first game needs them. */
 export function Rules({ skin, n }: { skin: PahunchSkin; n?: number }) {
   const { climber, climbers, points, neutral, neutrals, blocker, bribe } = skin.nouns;
-  const top = skin.rooms.classic?.at(-1)?.name ?? "the top room";
+  const top = skin.rooms.full?.at(-1)?.name ?? "the top room";
   return (
     <section className="rules">
       <h2>How to play</h2>

@@ -6,7 +6,7 @@
 // Four socket players in a Society Committee room play random legal moves
 // (scripts/pahunch-bot.ts); a fifth tab watches. The script keeps the first state seat 0 receives
 // at each moment the render tests need (lobby, your move, their move, a vote as voter and as the
-// climber, the final result, a game the admin ended early, a spectator) and writes them to
+// climber, a bonus move, the final result, a game the admin ended early, a spectator) and writes them to
 // test/fixtures/pahunch/. The clock fields are fixed, as in scripts/capture-states.ts.
 
 import fs from "node:fs";
@@ -106,6 +106,7 @@ players[0].onState((s) => {
   // Seats are drawn at the start: seat 0's player sits wherever `you` says.
   const me = g.you ?? -1;
   if (g.vote) keep(g.turn === me ? "vote-climber" : g.pending.includes(me) ? "vote-voter" : "vote-watching", s);
+  else if (g.turn === me && (g.bonuses.block > 0 || g.bonuses.nudge > 0)) keep("your-bonus", s);
   else keep(g.turn === me ? "your-move" : "their-move", s);
 });
 watcher.onState((s) => {

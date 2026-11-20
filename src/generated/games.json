@@ -32,8 +32,7 @@
   "variants": {
     "auction": [],
     "pahunch": [
-      "Full board",
-      "Quick board"
+      "Full board"
     ]
   }
 }

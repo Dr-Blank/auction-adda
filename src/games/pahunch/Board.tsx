@@ -110,7 +110,7 @@ export function Board({ v, skin, names, liveRooms, livePaths, selected, onRoom, 
           blocked
             ? `, the ${skin.nouns.blocker} stands here`
             : token !== null
-              ? `, ${token} ${skin.nouns.points} on it`
+              ? `, ${token.value} ${skin.nouns.points} on it${token.bonus ? ` (${skin.bonuses[token.bonus]})` : ""}`
               : ""
         }`;
         return (
@@ -134,10 +134,10 @@ export function Board({ v, skin, names, liveRooms, livePaths, selected, onRoom, 
                 </text>
               </g>
             ) : token !== null ? (
-              <g className="ph-token">
+              <g className={`ph-token ${token.bonus ? `bonus ${token.bonus}` : ""}`}>
                 <circle cx={mx} cy={my} r={2.3} />
                 <text x={mx} y={my + 0.95}>
-                  {token}
+                  {token.value}
                 </text>
               </g>
             ) : (

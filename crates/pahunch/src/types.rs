@@ -3,10 +3,80 @@
 //! types of every game).
 
 pub use game::{RuleError, Seat};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use ts_rs::TS;
 
 use crate::board::{Layout, Rooms};
+
+/// What a special coin lets its taker do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(rename = "PahunchBonus")]
+pub enum Bonus {
+    /// The mover may also move the blocker this turn.
+    Block,
+    /// The mover may also nudge a neutral this turn.
+    Nudge,
+    /// A used favour gets one use back.
+    Favour,
+}
+
+/// A point token out of the bag. Board coins lie face up, so their bonus is public; in a hand
+/// only the value counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(rename = "PahunchCoin")]
+pub struct Coin {
+    pub value: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub bonus: Option<Bonus>,
+}
+
+impl Coin {
+    #[must_use]
+    pub const fn plain(value: u8) -> Self {
+        Self { value, bonus: None }
+    }
+}
+
+/// Games saved before special coins kept a bare number.
+impl<'de> Deserialize<'de> for Coin {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Bare(u8),
+            Full {
+                value: u8,
+                #[serde(default)]
+                bonus: Option<Bonus>,
+            },
+        }
+        Ok(match Repr::deserialize(d)? {
+            Repr::Bare(value) => Coin::plain(value),
+            Repr::Full { value, bonus } => Coin { value, bonus },
+        })
+    }
+}
+
+/// Extra moves the mover has left this turn, after the main move. While any is left the turn
+/// stays with them, until they use it or end the turn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchBonuses")]
+pub struct Bonuses {
+    /// Blocker moves left.
+    pub block: u8,
+    /// Neutral nudges left.
+    pub nudge: u8,
+}
+
+impl Bonuses {
+    #[must_use]
+    pub const fn any(&self) -> bool {
+        self.block > 0 || self.nudge > 0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Player {
@@ -97,6 +167,15 @@ pub enum LogEntry {
         p: Seat,
         path: u8,
     },
+    /// The mover took a special coin: its bonus is theirs.
+    Bonus {
+        p: Seat,
+        kind: Bonus,
+    },
+    /// The mover ended the turn with bonus moves left.
+    Done {
+        p: Seat,
+    },
     /// A gift of tokens; their values stay between the two.
     Gift {
         from: Seat,
@@ -157,14 +236,17 @@ pub struct State {
     /// Rooms that voted the mover down this turn: no second vote there until the turn passes.
     #[serde(default)]
     pub tried: Vec<u8>,
+    /// Bonus moves the mover has left this turn.
+    #[serde(default)]
+    pub bonuses: Bonuses,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
     /// The token on each path; `null` = none.
-    pub tokens_on: Vec<Option<u8>>,
+    pub tokens_on: Vec<Option<Coin>>,
     pub blocker: u8,
     /// Tokens left to refill paths, drawn from the end.
-    pub bag: Vec<u8>,
+    pub bag: Vec<Coin>,
     /// 1-point tokens left.
     pub supply: u16,
     pub players: Vec<Player>,
@@ -195,6 +277,8 @@ pub enum Action {
     Nudge { path: u8 },
     /// The blocker onto `path`.
     Block { path: u8 },
+    /// The mover ends the turn with bonus moves left.
+    Done,
     /// Tokens (by value) to another player, at any time.
     Give { to: Seat, tokens: Vec<u8> },
     /// Any other `type`: answered with "Unknown move".
@@ -222,9 +306,11 @@ pub struct View {
     pub options: Options,
     /// Rooms that voted the mover down this turn.
     pub tried: Vec<u8>,
+    /// Bonus moves the mover has left this turn.
+    pub bonuses: Bonuses,
     pub layout: Layout,
     pub rooms: Rooms,
-    pub tokens_on: Vec<Option<u8>>,
+    pub tokens_on: Vec<Option<Coin>>,
     pub blocker: u8,
     /// Tokens left in the bag.
     pub bag: u8,

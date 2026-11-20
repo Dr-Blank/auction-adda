@@ -29,6 +29,15 @@ export function choosePahunch(v: PahunchView, random: () => number): PahunchActi
     return bribes.length > 0 && random() < 0.7 ? { type: "bribe", token: bribes[0] } : { type: "withdraw" };
   }
 
+  // Bonus moves: mostly end the turn, now and then use one.
+  const { block: blocks, nudge: pushes } = v.bonuses;
+  if (blocks > 0 || pushes > 0) {
+    const r = random() * 10;
+    const p = r < 3 && pushes > 0 ? pick(nudges(v)) : r >= 3 && r < 5 && blocks > 0 ? pick(blockTargets(v)) : undefined;
+    if (p === undefined) return { type: "done" };
+    return r < 3 ? { type: "nudge", path: p } : { type: "block", path: p };
+  }
+
   const ups = climbs(v, me);
   const free = ups.filter((c) => c.kind !== "ask");
   const enters = enterRooms(v, me);

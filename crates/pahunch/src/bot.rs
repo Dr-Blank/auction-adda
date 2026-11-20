@@ -36,6 +36,24 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
     }
 
     let paths = || 0..u8::try_from(v.layout.paths.len()).unwrap_or(0);
+    let pick = |xs: &[u8], rng: &mut R| xs.choose(rng).copied();
+
+    // Bonus moves: mostly end the turn, now and then use one.
+    if v.bonuses.any() {
+        let blocks: Vec<u8> = paths()
+            .filter(|&p| v.bonuses.block > 0 && check_block(&v.layout, v.blocker, p).is_ok())
+            .collect();
+        let nudges: Vec<u8> = paths()
+            .filter(|&p| v.bonuses.nudge > 0 && check_nudge(&v.layout, &v.rooms, p).is_ok())
+            .collect();
+        let action = match rng.random_range(0..10) {
+            0..3 => pick(&nudges, rng).map(|path| Action::Nudge { path }),
+            3..5 => pick(&blocks, rng).map(|path| Action::Block { path }),
+            _ => None,
+        };
+        return Some(action.unwrap_or(Action::Done));
+    }
+
     let rooms = 0..u8::try_from(v.layout.rooms.len()).unwrap_or(0);
     let hand = v.players.get(usize::from(me))?.hand;
     let board = Board {
@@ -65,7 +83,6 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
         .map(|&(p, _)| p)
         .collect();
     let any: Vec<u8> = climbs.iter().map(|&(p, _)| p).collect();
-    let pick = |xs: &[u8], rng: &mut R| xs.choose(rng).copied();
     let action = match roll {
         0..30 => pick(&free, rng).map(|path| Action::Climb { path }),
         30..60 => pick(&any, rng).map(|path| Action::Climb { path }),

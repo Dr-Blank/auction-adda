@@ -8,7 +8,10 @@ use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::types::Seat;
+use crate::types::{Bonus, Coin, Seat};
+
+/// What a special coin is worth.
+pub const SPECIAL: u8 = 2;
 
 /// One room as a board defines it. `x`, `y` place it for drawing (0–100, `y` 0 at the top);
 /// the rules never read them.
@@ -55,6 +58,9 @@ pub struct Board {
     pub blocker: u8,
     /// Point tokens in the bag: value → how many.
     pub bag: BTreeMap<u8, u8>,
+    /// Special coins in the bag, each worth [`SPECIAL`]: bonus → how many.
+    #[serde(default)]
+    pub specials: BTreeMap<Bonus, u8>,
     /// 1-point tokens in the supply, before each player takes their start.
     pub supply: u16,
     pub start_ones: u8,
@@ -112,6 +118,25 @@ impl Board {
         }
     }
 
+    /// Every coin in the bag, unshuffled.
+    #[must_use]
+    pub fn coins(&self) -> Vec<Coin> {
+        let plain = self
+            .bag
+            .iter()
+            .flat_map(|(&value, &count)| std::iter::repeat_n(Coin::plain(value), usize::from(count)));
+        let special = self.specials.iter().flat_map(|(&bonus, &count)| {
+            std::iter::repeat_n(
+                Coin {
+                    value: SPECIAL,
+                    bonus: Some(bonus),
+                },
+                usize::from(count),
+            )
+        });
+        plain.chain(special).collect()
+    }
+
     /// The one room no path leaves.
     fn summit(&self) -> Option<u8> {
         let tops: Vec<usize> = (0..self.rooms.len())
@@ -142,7 +167,7 @@ impl Board {
         if slots < 2 || !self.paths.get(usize::from(self.blocker)).is_some_and(|&p| self.slot(p)) {
             return Err("the blocker needs a token path to start on and another to move to".into());
         }
-        let bag: usize = self.bag.values().map(|&c| usize::from(c)).sum();
+        let bag = self.coins().len();
         if bag < slots {
             return Err(format!("{bag} bag tokens for {slots} token paths"));
         }
