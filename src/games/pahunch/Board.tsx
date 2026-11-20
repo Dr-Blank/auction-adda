@@ -68,12 +68,28 @@ function press(fn: () => void) {
 
 const ORDER = { back: 0, plain: 1, slot: 2 };
 
-/** Where seat `k` of a room sits; one squeezed in past the seats sits on the room's corner. */
+/**
+ * Where seat `k` of a room sits; a short last row is centred under the full one. One squeezed in
+ * past the seats sits on the room's corner.
+ */
 function seatAt(b: Box, k: number, cap: number): Pt {
   if (k >= Math.max(1, cap)) return { x: b.x + b.w / 2 - 0.6, y: b.y - b.h / 2 + 0.6 };
   const col = k % b.cols;
   const row = Math.floor(k / b.cols);
-  return { x: b.x - (b.cols * SEAT) / 2 + SEAT / 2 + col * SEAT, y: b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT };
+  const inRow = Math.min(b.cols, cap - row * b.cols);
+  return { x: b.x - (inRow * SEAT) / 2 + SEAT / 2 + col * SEAT, y: b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT };
+}
+
+/** A scalloped tile of eight petals about `r` across: the aunties' frame, unlike any player's round piece. */
+function flower(x: number, y: number, r: number): string {
+  const n = 8;
+  const r0 = r * 0.8;
+  const pt = (i: number) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    return `${(x + r0 * Math.cos(a)).toFixed(2)} ${(y + r0 * Math.sin(a)).toFixed(2)}`;
+  };
+  const bulge = (r0 * Math.sin(Math.PI / n)).toFixed(2);
+  return `M${pt(0)}${Array.from({ length: n }, (_, i) => `A${bulge} ${bulge} 0 0 1 ${pt(i + 1)}`).join("")}Z`;
 }
 
 /** Each seat's shape, drawn with its colour so colour is never the only sign of whose piece it is. */
@@ -184,15 +200,26 @@ export function Board(props: BoardProps) {
   const titleW = (room: number) => 2.9 + name(room, true).length * 1.02;
   const uid = useId().replace(/[^\w-]/g, "");
 
-  /** A piece: an aunty's own face, or a player's colour as a ring round their face or a disc with their shape. */
+  /**
+   * A piece: an aunty's own face on a square tile (players' pieces are round), or a player's
+   * colour as a ring round their face or a disc with their shape.
+   */
   const piece = (s: number | null, at: Pt, key: string | number, cls: string): ReactNode => {
     const look = s === null ? null : skin.seats[s % skin.seats.length];
     const base = `ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${cls}`;
     if (s === null)
       return (
         <g key={key} className={base}>
-          <circle className="ph-piece-ring" cx={at.x} cy={at.y} r={R} />
-          <AvatarFace code={skin.neutralLook} name={skin.nouns.neutral} x={at.x} y={at.y} r={R - 0.45} />
+          {/* Petals that turn slowly round her face. */}
+          <path className="ph-piece-ring ph-petals" d={flower(at.x, at.y, R + 0.15)} />
+          <AvatarFace
+            code={skin.neutralLook}
+            name={skin.nouns.neutral}
+            lips={skin.neutralLips}
+            x={at.x}
+            y={at.y}
+            r={R * 0.7}
+          />
         </g>
       );
     return (
@@ -437,12 +464,22 @@ export function Board(props: BoardProps) {
                 <circle className="ph-blocker-ring" cx={x} cy={y} r={3.7} />
                 <circle className="ph-blocker-disc" cx={x} cy={y} r={2.9} />
                 <AvatarFace code={skin.blockerLook} name={skin.nouns.blocker} x={x} y={y} r={2.5} />
+                {/* The coin under him, at his feet: its value colour and its bonus mark, like any coin. */}
                 {covered && (
-                  <g className="ph-under">
-                    <circle cx={x + 2.5} cy={y + 2.3} r={1.35} />
-                    <text x={x + 2.5} y={y + 2.85}>
+                  <g className={`ph-token ph-under v${Math.min(covered.value, 5)}`}>
+                    <circle className="ph-coin-rim" cx={x + 2.6} cy={y + 2.4} r={1.65} />
+                    <circle className="ph-coin" cx={x + 2.6} cy={y + 2.4} r={1.3} />
+                    <text x={x + 2.6} y={y + 3.0}>
                       {covered.value}
                     </text>
+                    {covered.bonus && (
+                      <g className="ph-coin-mark">
+                        <circle cx={x + 4.1} cy={y + 1.0} r={0.95} />
+                        <text x={x + 4.1} y={y + 1.42}>
+                          {skin.bonuses[covered.bonus].glyph}
+                        </text>
+                      </g>
+                    )}
                   </g>
                 )}
               </g>

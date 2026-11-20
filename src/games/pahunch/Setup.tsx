@@ -103,9 +103,11 @@ const OPTIONS = ((GAMES_JSON as { options?: Record<string, { id: string; label: 
 const HINTS: Record<string, string> = {
   failEndsTurn: "Off: after a vote fails you choose another move, or ask again. On: the turn passes at once.",
   oneVotePerRoom:
-    "For strict games. On: a room that voted you down will not vote again that turn. Off: ask again as often as you like.",
+    "For strict games. On: a room that voted you down will not vote again that turn, and a favour offer that is taken back or turned down is not made again that turn. Off: ask and offer again as often as you like.",
   favours:
     "On: every player gets a different favour with two uses, to offer the mover on their turn; its owner earns points each time it is used. Off: a simpler first game, with no favours.",
+  favourUsesOpen:
+    "Off: each player sees only their own favour’s uses left, so an owner can bluff about theirs; all show at the end. On: everyone sees them.",
   avatarsOnBoard:
     "Display only. On: each player’s pieces show their avatar in a ring of their colour. Off: a disc of their colour with their initial, easier to read on a small phone.",
 };

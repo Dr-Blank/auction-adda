@@ -78,6 +78,7 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         lent: Vec::new(),
         used: Vec::new(),
         asked: Vec::new(),
+        withdrawn: Vec::new(),
         layout,
         rooms,
         tokens_on,
@@ -563,6 +564,9 @@ fn lend(s: &mut State, seat: Seat, on: bool) -> Result<(), RuleError> {
         if p.uses == 0 {
             return fail("Your favour is used up");
         }
+        if s.options.one_vote_per_room && s.withdrawn.contains(&seat) {
+            return fail("Strict game: your favour was offered once this turn");
+        }
         s.lent.push(seat);
         // Offering it answers yes to the mover's request.
         s.asked.retain(|&o| o != seat);
@@ -574,12 +578,14 @@ fn lend(s: &mut State, seat: Seat, on: bool) -> Result<(), RuleError> {
             return fail("Wait for the vote to finish");
         }
         s.lent.retain(|&o| o != seat);
+        s.withdrawn.push(seat);
     }
     Ok(())
 }
 
 /// The mover asks `owner` for their favour (`on`), or takes the request back. The owner answers
-/// by lending it or by declining; the mover's own move does not wait for the answer.
+/// by lending it or by declining; the mover's own move does not wait for the answer. Off on a
+/// favour already on offer turns the offer down: the mover's climbs no longer use it.
 fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleError> {
     if !s.options.favours {
         return fail("Favours are off this game");
@@ -588,6 +594,14 @@ fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleE
         return fail("Ask for a favour on your own turn");
     }
     if !on {
+        if s.lent.contains(&owner) {
+            if s.vote.is_some() {
+                return fail("Wait for the vote to finish");
+            }
+            s.lent.retain(|&o| o != owner);
+            s.withdrawn.push(owner);
+            return Ok(());
+        }
         if !s.asked.contains(&owner) {
             return fail("You did not ask for that favour");
         }
@@ -617,6 +631,9 @@ fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleE
     }
     if p.uses == 0 {
         return fail("Their favour is used up");
+    }
+    if s.options.one_vote_per_room && s.withdrawn.contains(&owner) {
+        return fail("Strict game: their favour was offered once this turn");
     }
     s.asked.push(owner);
     s.log.push(LogEntry::Request { p: seat, owner });
@@ -945,6 +962,7 @@ fn clear_turn(s: &mut State) {
     s.lent.clear();
     s.used.clear();
     s.asked.clear();
+    s.withdrawn.clear();
 }
 
 fn next_turn(s: &mut State) {
@@ -1076,6 +1094,7 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
     s.lent = s.lent.iter().map(|&o| m(o)).collect();
     s.used = s.used.iter().map(|&o| m(o)).collect();
     s.asked = s.asked.iter().map(|&o| m(o)).collect();
+    s.withdrawn = s.withdrawn.iter().map(|&o| m(o)).collect();
     s.winners = s.winners.iter().map(|&w| m(w)).collect();
     for e in &mut s.log {
         match e {

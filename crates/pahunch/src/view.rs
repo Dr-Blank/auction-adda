@@ -4,7 +4,8 @@ use crate::types::{LogEntry, PlayerView, Seat, State, View};
 const LOG_LIMIT: usize = 150;
 
 /// The part of the state one seat may see. `seat` `None` = spectator. Points stay hidden: a
-/// player sees their own tokens (and which token they took); everyone's show at the end.
+/// player sees their own tokens (and which token they took); everyone's show at the end. Favour
+/// uses left are hidden the same way unless the room shows them.
 #[must_use]
 pub fn view_for(s: &State, seat: Option<Seat>) -> View {
     let mine = |i: Seat| seat == Some(i);
@@ -37,6 +38,7 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
         lent: s.lent.clone(),
         used: s.used.clone(),
         asked: s.asked.clone(),
+        withdrawn: s.withdrawn.clone(),
         layout: s.layout.clone(),
         rooms: s.rooms.clone(),
         tokens_on: s.tokens_on.clone(),
@@ -47,11 +49,14 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
             .players
             .iter()
             .enumerate()
-            .map(|(i, p)| PlayerView {
-                hand: p.hand,
-                tokens: (s.over || Seat::try_from(i).is_ok_and(mine)).then(|| p.tokens.clone()),
-                favour: p.favour,
-                uses: p.uses,
+            .map(|(i, p)| {
+                let own = Seat::try_from(i).is_ok_and(mine);
+                PlayerView {
+                    hand: p.hand,
+                    tokens: (s.over || own).then(|| p.tokens.clone()),
+                    favour: p.favour,
+                    uses: (s.over || own || s.options.favour_uses_open).then_some(p.uses),
+                }
             })
             .collect(),
         turn: s.turn,

@@ -286,15 +286,24 @@ pub enum LogEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "PahunchOptions")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off switches the admin flips"
+)]
 pub struct Options {
     /// A failed vote ends the mover's turn; off, they choose another move.
     pub fail_ends_turn: bool,
     /// Every player has a favour to lend.
     pub favours: bool,
-    /// Strict: a room that voted the mover down holds no second vote that turn. Off, the mover
-    /// may ask again. Games saved before this switch kept one vote per room.
+    /// Strict: a room that voted the mover down holds no second vote that turn, and a favour
+    /// whose offer ended unused is not offered again that turn. Off, the mover may ask again.
+    /// Games saved before this switch kept one vote per room.
     #[serde(default = "Options::strict_before")]
     pub one_vote_per_room: bool,
+    /// Everyone sees how many uses each favour has left. Off, each player sees only their own
+    /// (room to bluff) until the game ends.
+    #[serde(default)]
+    pub favour_uses_open: bool,
 }
 
 impl Default for Options {
@@ -303,6 +312,7 @@ impl Default for Options {
             fail_ends_turn: false,
             favours: true,
             one_vote_per_room: false,
+            favour_uses_open: false,
         }
     }
 }
@@ -315,6 +325,7 @@ impl Options {
             fail_ends_turn: true,
             favours: false,
             one_vote_per_room: true,
+            favour_uses_open: false,
         }
     }
 
@@ -349,6 +360,10 @@ pub struct State {
     /// Owners the mover asked for their favour this turn, who have not answered yet.
     #[serde(default)]
     pub asked: Vec<Seat>,
+    /// Owners whose offer this turn ended unused (taken back, or turned down by the mover). Under
+    /// the strict switch their favour is not offered again until the turn passes.
+    #[serde(default)]
+    pub withdrawn: Vec<Seat>,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
@@ -401,7 +416,8 @@ pub enum Action {
     /// Offer your favour to the mover (`on`), or take back an unused offer. Any time, like a gift.
     /// It also answers yes to the mover's request for it.
     Lend { on: bool },
-    /// The mover asks `owner` for their favour (`on`), or takes the request back.
+    /// The mover asks `owner` for their favour (`on`), or takes the request back. Off on a
+    /// favour on offer turns it down.
     Request { owner: Seat, on: bool },
     /// Say no to the mover's request for your favour.
     Decline,
@@ -433,7 +449,9 @@ pub struct PlayerView {
     /// `null` = hidden: own tokens always show; everyone's show at the end.
     pub tokens: Option<Vec<u8>>,
     pub favour: Option<FavourKind>,
-    pub uses: u8,
+    /// Uses left of the favour; `null` = hidden (another player's, unless the room shows them, or
+    /// the game is over).
+    pub uses: Option<u8>,
 }
 
 /// What one seat (or a spectator, `you: null`) may know.
@@ -456,6 +474,8 @@ pub struct View {
     pub used: Vec<Seat>,
     /// Owners the mover asked for their favour, who have not answered yet.
     pub asked: Vec<Seat>,
+    /// Owners whose offer this turn ended unused.
+    pub withdrawn: Vec<Seat>,
     pub layout: Layout,
     pub rooms: Rooms,
     pub tokens_on: Vec<Option<Coin>>,

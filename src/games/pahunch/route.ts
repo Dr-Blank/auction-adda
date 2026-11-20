@@ -79,6 +79,19 @@ const cross = (a: Pt, b: Pt, c: Pt, d: Pt) => {
   return s(a, b, c) * s(a, b, d) < 0 && s(c, d, a) * s(c, d, b) < 0;
 };
 
+/**
+ * Which way a path leaves its room: `0` up from the top edge, or `1` / `-1` out of the right / left
+ * edge when the room it goes to lies wholly off to that side (straight up would bend it into an S).
+ */
+export function exitSide(layout: PahunchLayout, path: number): -1 | 0 | 1 {
+  const { from, to } = layout.paths[path];
+  const a = boxOf(layout, from);
+  const b = boxOf(layout, to);
+  if (b.x - b.w / 2 > a.x + a.w / 2) return 1;
+  if (b.x + b.w / 2 < a.x - a.w / 2) return -1;
+  return 0;
+}
+
 /** Where each path plugs into its rooms: spread along the edge, in the order of the far end. */
 function ports(layout: PahunchLayout, boxes: Box[]) {
   const out: Pt[] = [];
@@ -93,13 +106,34 @@ function ports(layout: PahunchLayout, boxes: Box[]) {
       (top ? out : inn)[p] = at;
     });
   };
+  // Side exits share the upper half of their edge, the highest target highest.
+  const side = (room: number, ids: number[], dir: -1 | 1) => {
+    const b = boxes[room];
+    const lo = b.y - b.h / 2 + 3;
+    const sorted = [...ids].sort((a, c) => layout.rooms[layout.paths[a].to].y - layout.rooms[layout.paths[c].to].y);
+    sorted.forEach((p, k) => {
+      out[p] = { x: b.x + (dir * b.w) / 2, y: lo + ((b.y - lo) * (k + 0.5)) / sorted.length };
+    });
+  };
   const ids = layout.paths.map((_, i) => i);
+  const sides = ids.map((p) => exitSide(layout, p));
   layout.rooms.forEach((_, room) => {
+    const leaving = ids.filter((p) => layout.paths[p].from === room);
     spread(
       room,
-      ids.filter((p) => layout.paths[p].from === room),
+      leaving.filter((p) => sides[p] === 0),
       (p) => layout.paths[p].to,
       true,
+    );
+    side(
+      room,
+      leaving.filter((p) => sides[p] === 1),
+      1,
+    );
+    side(
+      room,
+      leaving.filter((p) => sides[p] === -1),
+      -1,
     );
     spread(
       room,
@@ -108,7 +142,7 @@ function ports(layout: PahunchLayout, boxes: Box[]) {
       false,
     );
   });
-  return { out, inn };
+  return { out, inn, sides };
 }
 
 const SHIFTS = [-18, -12, -7, -3, 0, 3, 7, 12, 18];
@@ -118,20 +152,29 @@ const COIN = 7;
 
 function build(layout: PahunchLayout): Route[] {
   const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
-  const { out, inn } = ports(layout, boxes);
+  const { out, inn, sides } = ports(layout, boxes);
   const marks = layout.paths.map((_, i) => layout.paths[i].back || slot(layout, i));
   const cands = layout.paths.map((path, i) => {
     const s = out[i];
     const e = inn[i];
     const dy = Math.max(4, s.y - e.y);
+    const dx = Math.max(4, Math.abs(e.x - s.x));
+    const dir = sides[i];
     const list: Route["p"][] = [];
     for (const k of BENDS)
       for (const a of SHIFTS)
-        for (const b of SHIFTS) list.push([s, { x: s.x + a, y: s.y - k * dy }, { x: e.x + b, y: e.y + k * dy }, e]);
+        for (const b of SHIFTS)
+          list.push([
+            s,
+            // Up from the top edge, or straight out of the side towards the room it goes to.
+            dir === 0 ? { x: s.x + a, y: s.y - k * dy } : { x: s.x + dir * k * dx, y: s.y + a * 0.3 },
+            { x: e.x + b, y: e.y + k * dy },
+            e,
+          ]);
     return { path, list };
   });
   // Every candidate's samples and fixed costs (rooms, length) once.
-  const pre = cands.map(({ path, list }) =>
+  const pre = cands.map(({ path, list }, i) =>
     list.map((p) => {
       const pts = sample(p);
       let cost = 0;
@@ -148,7 +191,11 @@ function build(layout: PahunchLayout): Route[] {
         mid,
         lo: { x: Math.min(...pts.map((q) => q.x)), y: Math.min(...pts.map((q) => q.y)) },
         hi: { x: Math.max(...pts.map((q) => q.x)), y: Math.max(...pts.map((q) => q.y)) },
-        base: cost + len * 0.6 + (Math.abs(p[1].x - p[0].x) + Math.abs(p[2].x - p[3].x)) * 0.15,
+        base:
+          cost +
+          len * 0.6 +
+          (sides[i] === 0 ? Math.abs(p[1].x - p[0].x) : Math.abs(p[1].y - p[0].y) / 0.3) * 0.15 +
+          Math.abs(p[2].x - p[3].x) * 0.15,
       };
     }),
   );

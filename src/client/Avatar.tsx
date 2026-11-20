@@ -342,8 +342,17 @@ function brows(style: number, c: string): ReactNode {
   return pair(<path d={d} stroke={c} strokeWidth={style === 5 ? 3.6 : 2.2} fill="none" strokeLinecap="round" />);
 }
 
-function mouth(style: number): ReactNode {
-  const line = (d: string) => <path d={d} stroke={INK} strokeWidth={2} fill="none" strokeLinecap="round" />;
+/** A mouth; `lip` (a colour, or "" for none) paints line mouths thicker and rims open ones. */
+function mouth(style: number, lip: string): ReactNode {
+  const shape = mouthShape(style, lip);
+  if (!lip || [0, 2, 4, 7].includes(style)) return shape;
+  return <g style={{ stroke: lip, strokeWidth: 1.8, strokeLinejoin: "round" }}>{shape}</g>;
+}
+
+function mouthShape(style: number, lip: string): ReactNode {
+  const line = (d: string) => (
+    <path d={d} stroke={lip || INK} strokeWidth={lip ? 3.4 : 2} fill="none" strokeLinecap="round" />
+  );
   switch (style) {
     case 1:
       return (
@@ -649,7 +658,8 @@ function headphones(l: Look): ReactNode {
   );
 }
 
-function Drawing({ look: l, viewBox }: { look: Look; viewBox: string }) {
+/** A look drawn; `lips` is a lipstick colour for a fixed character (a game's own figure), not a part players pick. */
+function Drawing({ look: l, viewBox, lips = "" }: { look: Look; viewBox: string; lips?: string }) {
   const skin = SKIN[l.skin];
   const h = HAIR[l.hairColor];
   const c = CLOTH[l.outfitColor];
@@ -672,7 +682,7 @@ function Drawing({ look: l, viewBox }: { look: Look; viewBox: string }) {
         fill="none"
         strokeLinecap="round"
       />
-      {mouth(l.mouth)}
+      {mouth(l.mouth, lips)}
       {eyes(l.eyes)}
       {brows(l.brows, shade(h, 0.15))}
       {hr.front}
@@ -684,10 +694,17 @@ function Drawing({ look: l, viewBox }: { look: Look; viewBox: string }) {
 
 /**
  * A seat's picture in its round frame. Empty `code`: the look comes from `name`. `zoom` shows just
- * the face, for choosing small features.
+ * the face, for choosing small features. `lips`: see `Drawing`.
  */
-export function Avatar(props: { code: string; name: string; className?: string; title?: string; zoom?: boolean }) {
-  const { code, name, className = "", title, zoom = false } = props;
+export function Avatar(props: {
+  code: string;
+  name: string;
+  className?: string;
+  title?: string;
+  zoom?: boolean;
+  lips?: string;
+}) {
+  const { code, name, className = "", title, zoom = false, lips } = props;
   const look = decode(code || lookFromName(name));
   const [top, bottom] = BG[look.bg];
   return (
@@ -696,17 +713,17 @@ export function Avatar(props: { code: string; name: string; className?: string; 
       title={title}
       style={{ background: `linear-gradient(170deg, ${top}, ${bottom})` }}
     >
-      <Drawing look={look} viewBox={zoom ? "25 28 50 50" : "0 0 100 100"} />
+      <Drawing look={look} viewBox={zoom ? "25 28 50 50" : "0 0 100 100"} lips={lips} />
     </span>
   );
 }
 
 /**
  * A seat's head, drawn inside another SVG (a game board): centred on (x, y) with radius `r`, cut
- * round, on its background colour. Shows the head and hair, not the clothes.
+ * round, on its background colour. Shows the head and hair, not the clothes. `lips`: see `Drawing`.
  */
-export function AvatarFace(props: { code: string; name: string; x: number; y: number; r: number }) {
-  const { code, name, x, y, r } = props;
+export function AvatarFace(props: { code: string; name: string; x: number; y: number; r: number; lips?: string }) {
+  const { code, name, x, y, r, lips } = props;
   const clip = `face${useId().replace(/[^\w-]/g, "")}`;
   const look = decode(code || lookFromName(name));
   return (
@@ -717,7 +734,7 @@ export function AvatarFace(props: { code: string; name: string; x: number; y: nu
       <g clipPath={`url(#${clip})`}>
         <circle cx={x} cy={y} r={r} fill={BG[look.bg][0]} />
         <svg x={x - r} y={y - r} width={2 * r} height={2 * r} aria-hidden="true">
-          <Drawing look={look} viewBox="17 11 66 66" />
+          <Drawing look={look} viewBox="17 11 66 66" lips={lips} />
         </svg>
       </g>
     </g>

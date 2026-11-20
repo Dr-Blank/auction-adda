@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { boxOf, overlaps, routes } from "../src/games/pahunch/route.ts";
+import { boxOf, exitSide, overlaps, routes } from "../src/games/pahunch/route.ts";
 import type { PahunchLayout } from "../src/generated/index.ts";
 
 interface BoardData {
@@ -36,13 +36,21 @@ describe.each(boards)("board $id", (b) => {
     expect(bad).toEqual([]);
   });
 
-  it("starts each path on the top edge of its room and ends it on the bottom edge of the next", () => {
+  it("starts each path on the top edge of its room (or the side facing a room off to that side) and ends it on the bottom edge of the next", () => {
     routes(layout).forEach((r, i) => {
       const from = boxOf(layout, b.paths[i].from);
       const to = boxOf(layout, b.paths[i].to);
-      expect(r.p[0].y).toBeCloseTo(from.y - from.h / 2);
+      const side = exitSide(layout, i);
+      if (side === 0) {
+        expect(r.p[0].y).toBeCloseTo(from.y - from.h / 2);
+        expect(Math.abs(r.p[0].x - from.x)).toBeLessThanOrEqual(from.w / 2);
+      } else {
+        expect(r.p[0].x).toBeCloseTo(from.x + (side * from.w) / 2);
+        expect(Math.abs(r.p[0].y - from.y)).toBeLessThanOrEqual(from.h / 2);
+        // Only when the room it goes to lies wholly off to that side.
+        expect(side * (to.x - from.x)).toBeGreaterThan((from.w + to.w) / 2);
+      }
       expect(r.p[3].y).toBeCloseTo(to.y + to.h / 2);
-      expect(Math.abs(r.p[0].x - from.x)).toBeLessThanOrEqual(from.w / 2);
       expect(Math.abs(r.p[3].x - to.x)).toBeLessThanOrEqual(to.w / 2);
     });
   });

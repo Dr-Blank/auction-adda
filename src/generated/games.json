@@ -10,12 +10,17 @@
       {
         "default": false,
         "id": "oneVotePerRoom",
-        "label": "Strict: one vote per room per turn"
+        "label": "Strict: one vote per room, one offer per favour, each turn"
       },
       {
         "default": true,
         "id": "favours",
         "label": "Favours"
+      },
+      {
+        "default": false,
+        "id": "favourUsesOpen",
+        "label": "Everyone sees favour uses left"
       },
       {
         "default": false,

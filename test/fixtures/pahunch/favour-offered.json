@@ -1,24 +1,14 @@
 {
   "type": "state",
   "room": {
-    "code": "AUMZ65",
+    "code": "RAJCPX",
     "theme": "society-committee",
     "cast": {
-      "seed": 1724579185,
+      "seed": 541998807,
       "genres": []
     },
     "started": true,
     "seats": [
-      {
-        "name": "Dev",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "3a3b3c3d3e3f3g3h",
-        "ready": false,
-        "wins": 0
-      },
       {
         "name": "Chitra",
         "connected": true,
@@ -48,9 +38,19 @@
         "avatar": "3k9a1c0b2d4e5f6g",
         "ready": false,
         "wins": 0
+      },
+      {
+        "name": "Dev",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3a3b3c3d3e3f3g3h",
+        "ready": false,
+        "wins": 0
       }
     ],
-    "admin": 3,
+    "admin": 2,
     "canUndo": false,
     "minPlayers": 3,
     "maxPlayers": 5,
@@ -80,22 +80,23 @@
     "variant": 0,
     "watchers": [
       {
-        "id": 21,
+        "id": 19,
         "name": "Esha",
         "ban": null
       }
     ],
     "games": 0
   },
-  "you": 3,
+  "you": 2,
   "left": null,
   "game": {
     "n": 4,
-    "you": 3,
+    "you": 2,
     "options": {
       "failEndsTurn": false,
       "favours": true,
-      "oneVotePerRoom": false
+      "oneVotePerRoom": false,
+      "favourUsesOpen": false
     },
     "tried": [],
     "bonuses": {
@@ -104,10 +105,11 @@
     },
     "moved": false,
     "lent": [
-      1
+      3
     ],
     "used": [],
     "asked": [],
+    "withdrawn": [],
     "layout": {
       "board": "full",
       "name": "Full board",
@@ -327,26 +329,25 @@
         2
       ],
       [
-        null
+        null,
+        3
       ],
-      [
-        1
-      ],
+      [],
       [
         null,
         1
       ],
+      [],
+      [],
+      [],
+      [],
       [
+        null,
         0
       ],
-      [],
-      [],
-      [],
       [
-        null
-      ],
-      [
-        3
+        3,
+        1
       ],
       [],
       [
@@ -366,41 +367,43 @@
       },
       null,
       {
+        "value": 2
+      },
+      {
         "value": 2,
         "bonus": "nudge"
       },
       {
         "value": 2
       },
-      {
-        "value": 4
-      },
-      null,
-      null,
-      {
-        "value": 2
-      },
-      {
-        "value": 4
-      },
-      null,
-      {
-        "value": 5
-      },
-      {
-        "value": 4
-      },
-      null,
-      null,
       null,
       null,
       {
         "value": 5
       },
+      {
+        "value": 5
+      },
+      null,
+      {
+        "value": 2,
+        "bonus": "block"
+      },
+      {
+        "value": 2,
+        "bonus": "favour"
+      },
+      null,
+      null,
       null,
       null,
       {
-        "value": 3
+        "value": 5
+      },
+      null,
+      null,
+      {
+        "value": 5
       }
     ],
     "blocker": 20,
@@ -410,36 +413,36 @@
       {
         "hand": 5,
         "tokens": null,
-        "favour": "climbAgain",
-        "uses": 2
+        "favour": "squeezeIn",
+        "uses": null
       },
       {
         "hand": 4,
         "tokens": null,
-        "favour": "coveredToken",
-        "uses": 2
-      },
-      {
-        "hand": 5,
-        "tokens": null,
-        "favour": "backStairs",
-        "uses": 2
+        "favour": "swapToken",
+        "uses": null
       },
       {
         "hand": 5,
         "tokens": [
           1,
           1,
-          4
+          1
         ],
-        "favour": "extraBlock",
+        "favour": "carry",
         "uses": 2
+      },
+      {
+        "hand": 4,
+        "tokens": null,
+        "favour": "extraBlock",
+        "uses": null
       }
     ],
-    "turn": 3,
+    "turn": 2,
     "vote": null,
     "pending": [
-      3
+      2
     ],
     "log": [
       {
@@ -498,7 +501,6 @@
         "p": 3,
         "path": 11,
         "token": true,
-        "took": 4,
         "free": false
       },
       {
@@ -517,6 +519,25 @@
         "t": "enter",
         "p": 2,
         "room": 0
+      },
+      {
+        "t": "enter",
+        "p": 3,
+        "room": 1
+      },
+      {
+        "t": "climb",
+        "p": 0,
+        "path": 3,
+        "token": false,
+        "free": true
+      },
+      {
+        "t": "climb",
+        "p": 1,
+        "path": 10,
+        "token": false,
+        "free": true
       }
     ],
     "logStart": 0,

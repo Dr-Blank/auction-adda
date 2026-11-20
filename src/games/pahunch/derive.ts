@@ -5,11 +5,14 @@ import type { PahunchCarry, PahunchFavour, PahunchLayout, PahunchView, PahunchVo
 
 type Rooms = PahunchView["rooms"];
 
-/** The favours on offer to the mover, with their owners: lent, with a use left. */
+/**
+ * The favours on offer to the mover, with their owners: lent, with a use left (a favour is only
+ * lent with one, so a hidden count counts as one).
+ */
 export function onOffer(v: PahunchView): { owner: number; kind: PahunchFavour }[] {
   return v.lent.flatMap((owner) => {
     const p = v.players[owner];
-    return p?.favour && p.uses > 0 ? [{ owner, kind: p.favour }] : [];
+    return p?.favour && (p.uses ?? 1) > 0 ? [{ owner, kind: p.favour }] : [];
   });
 }
 
@@ -177,8 +180,12 @@ export function askBlock(v: PahunchView, me: number | null, owner: number): stri
   if (v.lent.includes(owner)) return "on offer";
   if (v.used.includes(owner)) return "used this turn";
   if (p.uses === 0) return "used up";
+  if (onceOffered(v, owner)) return "strict game: offered once this turn";
   return null;
 }
+
+/** Under the strict switch, `owner`'s favour was on offer once this turn and that offer ended unused. */
+export const onceOffered = (v: PahunchView, owner: number) => v.options.oneVotePerRoom && v.withdrawn.includes(owner);
 
 /** Seats that still owe an answer to the vote. */
 export function votersLeft(v: PahunchView, vote: PahunchVote): number[] {

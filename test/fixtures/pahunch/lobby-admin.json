@@ -1,10 +1,10 @@
 {
   "type": "state",
   "room": {
-    "code": "AUMZ65",
+    "code": "RAJCPX",
     "theme": "society-committee",
     "cast": {
-      "seed": 1724579185,
+      "seed": 541998807,
       "genres": []
     },
     "started": false,
@@ -80,7 +80,7 @@
     "variant": 0,
     "watchers": [
       {
-        "id": 21,
+        "id": 19,
         "name": "Esha",
         "ban": null
       }

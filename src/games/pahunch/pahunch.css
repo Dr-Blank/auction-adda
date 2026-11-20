@@ -93,6 +93,77 @@
   color: var(--accent-soft);
   letter-spacing: 1px;
 }
+.ph-uses.hidden {
+  color: var(--dim);
+  font-weight: 700;
+}
+
+/* Faces in a line of text: the blocker as his face, a neutral's face beside her name. */
+.ph-inline-face {
+  display: inline-block;
+  vertical-align: -0.3em;
+  margin: 0 0.15em;
+}
+.ph-inline-face .avatar {
+  width: 1.45em;
+  height: 1.45em;
+  box-shadow: 0 0 0 1.5px var(--accent-soft);
+}
+.ph-inline-face.neutral .avatar {
+  box-shadow: 0 0 0 1.5px #e98fb6;
+}
+.ph-inline-who {
+  white-space: nowrap;
+}
+
+/* A sheet's text in three steps: what the thing does (big, full colour), its facts as chips, then
+   the small print (small, muted). */
+.ph-sheet-lead {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+.ph-fav-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.ph-fav-facts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+.ph-fav-owner .avatar {
+  width: 24px;
+  height: 24px;
+}
+.ph-fav-pay {
+  color: var(--accent-soft);
+  font-weight: 700;
+}
+.ph-fav-status {
+  color: var(--accent);
+  font-weight: 700;
+}
+.ph-sheet-small {
+  margin: 14px 0 0;
+  padding: 10px 0 0 18px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.ph-sheet-small li + li {
+  margin-top: 4px;
+}
 /* Another player's favour: its own button on the chip. Glows when you, moving, can ask for it. */
 .ph-fav-btn {
   appearance: none;
@@ -275,8 +346,15 @@
   stroke-width: 0.3;
   stroke-dasharray: 0.6 0.5;
 }
+/* An aunty: her face in pink petals that turn slowly, so she never reads as a player's round
+   piece or as the blocker. */
 .ph-seat.neutral .ph-piece-ring {
-  fill: var(--dim);
+  fill: #e98fb6;
+}
+.ph-petals {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ph-spin 14s linear infinite;
 }
 .ph-seat.mine .ph-piece-ring {
   stroke: var(--text);
@@ -576,16 +654,79 @@
   pointer-events: none;
   animation: ph-ghost 1.4s ease-in-out infinite;
 }
-.ph-under circle {
-  fill: var(--accent);
+/* The coin under the blocker: the same coin as on any path (colour by value, its bonus mark),
+   smaller, at his feet. */
+.ph-under .ph-coin-rim {
   stroke: var(--felt);
-  stroke-width: 0.3;
 }
 .ph-under text {
-  font-size: 1.6px;
-  fill: #1f1604;
+  font-size: 1.7px;
+}
+.ph-under .ph-coin-mark text {
+  font-size: 1.2px;
 }
 
+/* The key to the special coins, under the board. */
+.ph-coin-key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ph-key-chip {
+  appearance: none;
+  min-height: 40px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.ph-key-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6em;
+  height: 1.6em;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  font-weight: 700;
+}
+.ph-key-list {
+  margin: 0;
+  padding: 0;
+}
+.ph-key-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  list-style: none;
+  margin-bottom: 12px;
+}
+.ph-key-list li .ph-key-glyph {
+  flex: none;
+  font-size: 1.2rem;
+}
+.ph-key-effect {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+.ph-key-list small {
+  color: var(--dim);
+}
+.ph-key-list li.muted {
+  opacity: 0.55;
+}
+
+@keyframes ph-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @keyframes ph-march {
   to {
     stroke-dashoffset: -2.3;
@@ -1207,6 +1348,7 @@ button.ph-chip.on {
   .ph-seat.moving,
   .ph-seat.ghost,
   .ph-blocker.ghost,
+  .ph-petals,
   .ph-fav-btn.live {
     animation: none;
   }

@@ -13,7 +13,13 @@ failEndsTurn: boolean,
  */
 favours: boolean, 
 /**
- * Strict: a room that voted the mover down holds no second vote that turn. Off, the mover
- * may ask again. Games saved before this switch kept one vote per room.
+ * Strict: a room that voted the mover down holds no second vote that turn, and a favour
+ * whose offer ended unused is not offered again that turn. Off, the mover may ask again.
+ * Games saved before this switch kept one vote per room.
  */
-oneVotePerRoom: boolean, };
+oneVotePerRoom: boolean, 
+/**
+ * Everyone sees how many uses each favour has left. Off, each player sees only their own
+ * (room to bluff) until the game ends.
+ */
+favourUsesOpen: boolean, };

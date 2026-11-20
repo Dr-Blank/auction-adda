@@ -217,7 +217,7 @@ for (let tick = 0; tick < 4000; tick++) {
       await sleep(300);
       await shot("favour-sheet");
       const asked = await evaluate(
-        `(() => { const b = [...document.querySelectorAll('[role="dialog"] .btn.primary')].find((x) => x.textContent.startsWith('Ask')); if (!b) return false; b.click(); return true; })()`,
+        `(() => { const b = [...document.querySelectorAll('[role="dialog"] .btn.primary')].find((x) => x.textContent.includes('Ask')); if (!b) return false; b.click(); return true; })()`,
       );
       if (!asked) fail("a glowing favour opened no sheet with an Ask button");
       await sleep(150);

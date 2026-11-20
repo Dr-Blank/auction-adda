@@ -34,7 +34,11 @@ used: Array<number>,
 /**
  * Owners the mover asked for their favour, who have not answered yet.
  */
-asked: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
+asked: Array<number>, 
+/**
+ * Owners whose offer this turn ended unused.
+ */
+withdrawn: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
 /**
  * Tokens left in the bag.
  */

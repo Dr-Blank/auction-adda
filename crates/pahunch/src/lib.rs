@@ -13,7 +13,7 @@ use game::{Game, GameOption};
 
 /// The admin's switches, as the lobby lists them. `avatarsOnBoard` is for the screen only: the
 /// rules never read it.
-const OPTIONS: [GameOption; 4] = [
+const OPTIONS: [GameOption; 5] = [
     GameOption {
         id: "failEndsTurn",
         label: "A failed vote ends the turn",
@@ -21,13 +21,18 @@ const OPTIONS: [GameOption; 4] = [
     },
     GameOption {
         id: "oneVotePerRoom",
-        label: "Strict: one vote per room per turn",
+        label: "Strict: one vote per room, one offer per favour, each turn",
         default: false,
     },
     GameOption {
         id: "favours",
         label: "Favours",
         default: true,
+    },
+    GameOption {
+        id: "favourUsesOpen",
+        label: "Everyone sees favour uses left",
+        default: false,
     },
     GameOption {
         id: "avatarsOnBoard",
@@ -84,6 +89,7 @@ impl Game for Pahunch {
             fail_ends_turn: on("failEndsTurn"),
             favours: on("favours"),
             one_vote_per_room: on("oneVotePerRoom"),
+            favour_uses_open: on("favourUsesOpen"),
         };
         new_game_with(n, seed, variant, options)
     }

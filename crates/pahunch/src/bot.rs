@@ -33,10 +33,11 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
 
     let paths = || 0..u8::try_from(v.layout.paths.len()).unwrap_or(0);
     let pick = |xs: &[u8], rng: &mut R| xs.choose(rng).copied();
+    // A favour is only put on offer with a use left, so a hidden count on one is at least 1.
     let lent = offered(&v.lent, |o| {
         v.players
             .get(usize::from(o))
-            .and_then(|p| p.favour.map(|k| (k, p.uses)))
+            .and_then(|p| p.favour.map(|k| (k, p.uses.unwrap_or(1))))
     });
     let board = Board {
         layout: &v.layout,

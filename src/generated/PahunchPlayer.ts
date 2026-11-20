@@ -5,4 +5,9 @@ export type PahunchPlayer = { hand: number,
 /**
  * `null` = hidden: own tokens always show; everyone's show at the end.
  */
-tokens: Array<number> | null, favour: PahunchFavour | null, uses: number, };
+tokens: Array<number> | null, favour: PahunchFavour | null, 
+/**
+ * Uses left of the favour; `null` = hidden (another player's, unless the room shows them, or
+ * the game is over).
+ */
+uses: number | null, };

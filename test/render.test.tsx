@@ -168,7 +168,7 @@ describe("pahunch pages", () => {
     const chip = el.querySelector(".ph-fav-btn.live") as HTMLButtonElement;
     const owner = Number((chip.closest(".ph-seat-chip") as HTMLElement).dataset.seat);
     act(() => chip.click());
-    const ask = [...document.querySelectorAll(".sheet .btn.primary")].find((b) => b.textContent?.startsWith("Ask"));
+    const ask = [...document.querySelectorAll(".sheet .btn.primary")].find((b) => b.textContent?.includes("Ask"));
     act(() => (ask as HTMLButtonElement).click());
     expect(sent).toEqual([{ type: "action", action: { type: "request", owner, on: true } }]);
     act(() => root.unmount());

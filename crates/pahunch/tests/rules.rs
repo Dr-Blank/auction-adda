@@ -231,11 +231,13 @@ fn the_admins_options_reach_the_game() {
         ("failEndsTurn".to_owned(), true),
         ("favours".to_owned(), false),
         ("oneVotePerRoom".to_owned(), true),
+        ("favourUsesOpen".to_owned(), true),
     ]
     .into();
     let t = Pahunch::new_game_with(3, 1, 0, &on).unwrap();
     assert!(t.options.fail_ends_turn && !t.options.favours && t.options.one_vote_per_room);
-    assert_eq!(Pahunch::options().len(), 4);
+    assert!(t.options.favour_uses_open);
+    assert_eq!(Pahunch::options().len(), 5);
 }
 
 #[test]
@@ -736,10 +738,26 @@ fn every_player_is_dealt_a_different_favour_with_two_uses() {
     for kind in FavourKind::ALL {
         assert!(favour_pay().contains_key(&kind), "{kind:?} has a pay");
     }
-    let view = view_for(&pahunch::new_game(3, 11, 0).unwrap(), None);
+    let s = pahunch::new_game(3, 11, 0).unwrap();
+    let view = view_for(&s, None);
     assert!(
-        view.players.iter().all(|p| p.favour.is_some() && p.uses == 2),
-        "favours are public"
+        view.players.iter().all(|p| p.favour.is_some() && p.uses.is_none()),
+        "favours are public, their uses left hidden"
+    );
+    let own = view_for(&s, Some(1));
+    let uses: Vec<_> = own.players.iter().map(|p| p.uses).collect();
+    assert_eq!(uses, vec![None, Some(2), None], "a player sees their own uses");
+    let mut open = s.clone();
+    open.options.favour_uses_open = true;
+    assert!(
+        view_for(&open, None).players.iter().all(|p| p.uses == Some(2)),
+        "the room may show everyone's"
+    );
+    let mut over = s;
+    over.over = true;
+    assert!(
+        view_for(&over, None).players.iter().all(|p| p.uses == Some(2)),
+        "all show at the end"
     );
 }
 
@@ -1083,6 +1101,59 @@ fn a_request_needs_a_favour_that_can_still_be_given() {
     let during = act(&act(&s, 0, ask(2)), 0, Action::climb(11));
     assert_eq!(Pahunch::pending(&during), vec![1, 2]);
     assert!(act(&during, 2, Action::Decline).asked.is_empty());
+}
+
+#[test]
+fn the_mover_turns_down_a_favour_on_offer() {
+    let mut s = fresh(4);
+    s.rooms[3] = vec![Some(0), Some(1)];
+    let offered = act(&s, 2, Action::Lend { on: true });
+    let no = Action::Request { owner: 2, on: false };
+    assert_eq!(refused(&offered, 1, no.clone()), "Ask for a favour on your own turn");
+    let down = act(&offered, 0, no.clone());
+    assert!(down.lent.is_empty() && down.used.is_empty());
+    assert_eq!(down.players[2].uses, offered.players[2].uses, "nothing is spent");
+    // The owner may offer it again.
+    assert_eq!(act(&down, 2, Action::Lend { on: true }).lent, vec![2]);
+    // Not while a vote runs: the climb may be using it.
+    let vote = act(&offered, 0, Action::climb(11));
+    assert_eq!(refused(&vote, 0, no), "Wait for the vote to finish");
+}
+
+#[test]
+fn a_strict_game_offers_each_favour_once_a_turn() {
+    let mut s = fresh(4);
+    s.options.one_vote_per_room = true;
+    let offered = act(&s, 2, Action::Lend { on: true });
+    // Turned down by the mover: neither offered nor asked for again this turn.
+    let down = act(&offered, 0, Action::Request { owner: 2, on: false });
+    assert_eq!(down.withdrawn, vec![2]);
+    assert_eq!(
+        refused(&down, 2, Action::Lend { on: true }),
+        "Strict game: your favour was offered once this turn"
+    );
+    assert_eq!(
+        refused(&down, 0, ask(2)),
+        "Strict game: their favour was offered once this turn"
+    );
+    // Taken back by its owner: the same.
+    let back = act(&offered, 2, Action::Lend { on: false });
+    assert_eq!(
+        refused(&back, 2, Action::Lend { on: true }),
+        "Strict game: your favour was offered once this turn"
+    );
+    // The next turn starts afresh.
+    let next = act(&down, 0, Action::Enter { room: 1 });
+    assert!(next.withdrawn.is_empty());
+    // Off (the default), it may be offered again.
+    let mut loose = offered.clone();
+    loose.options.one_vote_per_room = false;
+    let again = act(
+        &act(&loose, 0, Action::Request { owner: 2, on: false }),
+        2,
+        Action::Lend { on: true },
+    );
+    assert_eq!(again.lent, vec![2]);
 }
 
 #[test]

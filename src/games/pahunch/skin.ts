@@ -32,11 +32,13 @@ export interface PahunchSkin extends Skin {
   rooms: Record<string, { name: string; short: string; icon: string }[]>;
   /** One colour per seat, and the ink that reads on it. */
   seats: { color: string; ink: string }[];
-  /** The letter on a neutral's disc and on the blocker's badge, where a face does not fit. */
+  /** The emoji that stands for a neutral and for the blocker in text (sheet titles, the coin key). */
   neutralGlyph: string;
   blockerGlyph: string;
   /** Fixed avatar looks (codes for client/Avatar.tsx) for the neutrals and the blocker, so they are easy to tell apart. */
   neutralLook: string;
+  /** Lipstick on the neutrals' face ("" for none): a fixed character's touch, not an avatar part. */
+  neutralLips: string;
   blockerLook: string;
   /** Short lines for the rules: what the game is about, in this skin's words. */
   story: string;
@@ -118,10 +120,12 @@ export const societyCommittee: PahunchSkin = {
     { color: "#5fd3bc", ink: "#05201b" },
     { color: "#f28fb1", ink: "#2a0b16" },
   ],
-  neutralGlyph: "A",
-  blockerGlyph: "D",
-  // An aunty: grey bun, glasses, pink. Daddu: white crop, glasses, moustache, white kurta.
-  neutralLook: "3248701110670",
+  neutralGlyph: "💁‍♀️",
+  blockerGlyph: "👴",
+  // An aunty: younger, big black blow-dry, red lipstick, bindi, pink with a dupatta, on light pink.
+  // Daddu: white crop, glasses, moustache, white kurta.
+  neutralLook: "311b072000773",
+  neutralLips: "#c8233a",
   blockerLook: "8321623212390",
   bonuses: {
     block: {
