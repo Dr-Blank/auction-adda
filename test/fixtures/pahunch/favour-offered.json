@@ -1,10 +1,10 @@
 {
   "type": "state",
   "room": {
-    "code": "84NH2P",
+    "code": "AUMZ65",
     "theme": "society-committee",
     "cast": {
-      "seed": 499059431,
+      "seed": 1724579185,
       "genres": []
     },
     "started": true,
@@ -80,7 +80,7 @@
     "variant": 0,
     "watchers": [
       {
-        "id": 4,
+        "id": 21,
         "name": "Esha",
         "ban": null
       }
@@ -97,9 +97,7 @@
       "favours": true,
       "oneVotePerRoom": false
     },
-    "tried": [
-      3
-    ],
+    "tried": [],
     "bonuses": {
       "block": 0,
       "nudge": 0
@@ -117,52 +115,52 @@
         {
           "cap": 1,
           "x": 10,
-          "y": 90
+          "y": 99
         },
         {
           "cap": 5,
           "x": 35,
-          "y": 90
+          "y": 99
         },
         {
           "cap": 1,
           "x": 62,
-          "y": 90
+          "y": 99
         },
         {
           "cap": 3,
           "x": 88,
-          "y": 90
+          "y": 99
         },
         {
           "cap": 1,
           "x": 8,
-          "y": 70
+          "y": 76
         },
         {
           "cap": 1,
           "x": 30,
-          "y": 70
+          "y": 76
         },
         {
           "cap": 1,
           "x": 88,
-          "y": 70
+          "y": 76
         },
         {
           "cap": 1,
           "x": 85,
-          "y": 50
+          "y": 53
         },
         {
           "cap": 3,
           "x": 20,
-          "y": 50
+          "y": 53
         },
         {
           "cap": 3,
           "x": 60,
-          "y": 70
+          "y": 76
         },
         {
           "cap": 3,
@@ -172,7 +170,7 @@
         {
           "cap": 1,
           "x": 58,
-          "y": 50
+          "y": 53
         },
         {
           "cap": 3,
@@ -187,7 +185,7 @@
         {
           "cap": 5,
           "x": 50,
-          "y": 8
+          "y": 6
         }
       ],
       "paths": [
@@ -325,37 +323,36 @@
       }
     },
     "rooms": [
-      [],
+      [
+        2
+      ],
+      [
+        null
+      ],
+      [
+        1
+      ],
       [
         null,
-        3,
-        2
+        1
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [],
+      [
+        null
       ],
       [
         3
       ],
-      [
-        null,
-        3,
-        0
-      ],
-      [],
-      [],
-      [],
       [],
       [
-        null,
-        2
-      ],
-      [
-        null,
-        0
+        null
       ],
       [],
-      [],
-      [
-        1
-      ],
       [],
       []
     ],
@@ -365,79 +362,77 @@
       null,
       null,
       {
+        "value": 3
+      },
+      null,
+      {
+        "value": 2,
+        "bonus": "nudge"
+      },
+      {
+        "value": 2
+      },
+      {
         "value": 4
       },
+      null,
       null,
       {
         "value": 2
       },
       {
-        "value": 3
-      },
-      {
-        "value": 2,
-        "bonus": "block"
-      },
-      null,
-      null,
-      {
-        "value": 2,
-        "bonus": "favour"
-      },
-      {
-        "value": 2,
-        "bonus": "favour"
+        "value": 4
       },
       null,
       {
         "value": 5
       },
       {
-        "value": 3
+        "value": 4
       },
       null,
       null,
       null,
       null,
       {
-        "value": 3
+        "value": 5
       },
       null,
       null,
       {
-        "value": 2
+        "value": 3
       }
     ],
     "blocker": 20,
-    "bag": 30,
+    "bag": 31,
     "supply": 50,
     "players": [
       {
+        "hand": 5,
+        "tokens": null,
+        "favour": "climbAgain",
+        "uses": 2
+      },
+      {
         "hand": 4,
         "tokens": null,
-        "favour": "carry",
+        "favour": "coveredToken",
         "uses": 2
       },
       {
         "hand": 5,
         "tokens": null,
-        "favour": "squeezeIn",
+        "favour": "backStairs",
         "uses": 2
       },
       {
-        "hand": 4,
-        "tokens": null,
-        "favour": "extraBlock",
-        "uses": 2
-      },
-      {
-        "hand": 3,
+        "hand": 5,
         "tokens": [
           1,
           1,
-          1
+          4
         ],
-        "favour": "climbAgain",
+        "favour": "extraBlock",
         "uses": 2
       }
     ],
@@ -449,17 +444,7 @@
     "log": [
       {
         "t": "start",
-        "first": 1
-      },
-      {
-        "t": "enter",
-        "p": 1,
-        "room": 3
-      },
-      {
-        "t": "enter",
-        "p": 2,
-        "room": 0
+        "first": 3
       },
       {
         "t": "enter",
@@ -467,143 +452,71 @@
         "room": 3
       },
       {
-        "t": "request",
+        "t": "enter",
         "p": 0,
-        "owner": 2
-      },
-      {
-        "t": "decline",
-        "p": 2
+        "room": 0
       },
       {
         "t": "enter",
-        "p": 0,
-        "room": 2
+        "p": 1,
+        "room": 3
+      },
+      {
+        "t": "request",
+        "p": 2,
+        "owner": 1
+      },
+      {
+        "t": "nudge",
+        "p": 2,
+        "path": 15
+      },
+      {
+        "t": "reward",
+        "p": 2,
+        "ones": 1
       },
       {
         "t": "ask",
-        "p": 1,
+        "p": 3,
         "path": 11,
         "need": 2
       },
       {
         "t": "vote",
-        "p": 3,
+        "p": 1,
         "yes": 1,
         "of": 1
       },
       {
         "t": "reward",
-        "p": 3,
+        "p": 1,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 1,
+        "p": 3,
         "path": 11,
         "token": true,
+        "took": 4,
         "free": false
       },
       {
         "t": "climb",
-        "p": 2,
+        "p": 0,
         "path": 0,
         "token": false,
         "free": true
       },
       {
         "t": "enter",
-        "p": 3,
-        "room": 1
-      },
-      {
-        "t": "climb",
-        "p": 0,
-        "path": 10,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "request",
         "p": 1,
-        "owner": 3
-      },
-      {
-        "t": "decline",
-        "p": 3
-      },
-      {
-        "t": "ask",
-        "p": 1,
-        "path": 15,
-        "need": 2
-      },
-      {
-        "t": "vote",
-        "p": 0,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "reward",
-        "p": 0,
-        "ones": 1
-      },
-      {
-        "t": "climb",
-        "p": 1,
-        "path": 15,
-        "token": true,
-        "free": false
-      },
-      {
-        "t": "climb",
-        "p": 2,
-        "path": 3,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "enter",
-        "p": 3,
         "room": 2
       },
       {
         "t": "enter",
-        "p": 0,
-        "room": 3
-      },
-      {
-        "t": "done",
-        "p": 0
-      },
-      {
-        "t": "climb",
-        "p": 1,
-        "path": 21,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "enter",
         "p": 2,
-        "room": 1
-      },
-      {
-        "t": "ask",
-        "p": 3,
-        "path": 12,
-        "need": 2
-      },
-      {
-        "t": "vote",
-        "p": 0,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "fail",
-        "p": 3
+        "room": 0
       }
     ],
     "logStart": 0,

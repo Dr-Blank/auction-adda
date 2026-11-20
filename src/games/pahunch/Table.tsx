@@ -36,7 +36,7 @@ import type {
 } from "../../generated/index.ts";
 import type { TableProps } from "../types.ts";
 import type { Pick } from "./Board.tsx";
-import { Board, pathKind } from "./Board.tsx";
+import { Board, pathKind, seatShape } from "./Board.tsx";
 import type { ClimbOption, Extras } from "./derive.ts";
 import {
   askBlock,
@@ -61,7 +61,7 @@ import {
 import { Rules } from "./Rules.tsx";
 import { VoteClock } from "./Setup.tsx";
 import type { PahunchSkin } from "./skin.ts";
-import { roomName, skinFor } from "./skin.ts";
+import { roomIcon, roomName, skinFor } from "./skin.ts";
 
 interface Ctx {
   v: PahunchView;
@@ -73,6 +73,10 @@ interface Ctx {
   room: (r: number) => string;
   /** The room's name as the board shows it. */
   short: (r: number) => string;
+  /** The room's icon, as the board shows it. */
+  icon: (r: number) => string;
+  /** Each seat's avatar look. */
+  looks: string[];
   pts: (n: number) => string;
 }
 
@@ -90,6 +94,8 @@ function useCtx(state: RoomState): Ctx {
     who: (i) => (i === me ? "You" : (names[i] ?? `Seat ${i + 1}`)),
     room: (r) => roomName(skin, v.layout.board, r, v.layout.summit),
     short: (r) => roomName(skin, v.layout.board, r, v.layout.summit, true),
+    icon: (r) => roomIcon(skin, v.layout.board, r, v.layout.summit),
+    looks: room.seats.map((s) => s.avatar),
     pts: (n) => `${n} ${skin.nouns.points}`,
   };
 }
@@ -341,8 +347,15 @@ export function Table({ state, send, reactions }: TableProps) {
       : [];
   const liveRooms = new Set(moves.flatMap((m) => (m.room === undefined ? [] : [m.room])));
   const livePaths = new Set(pick?.blocker ? blockAt : movePaths);
+  // A picked route for the blocker stands out; the other routes fade but stay tappable.
   const focus = pick
-    ? new Set(pick.blocker ? blockAt : picked.flatMap((m) => (m.path === undefined ? [] : [m.path])))
+    ? new Set(
+        pick.blocker
+          ? pick.path !== undefined
+            ? [pick.path]
+            : blockAt
+          : picked.flatMap((m) => (m.path === undefined ? [] : [m.path])),
+      )
     : null;
   const targets = new Set(pick && !pick.blocker ? picked.filter((m) => m.path !== undefined).map((m) => m.to) : []);
 
@@ -465,7 +478,7 @@ export function Table({ state, send, reactions }: TableProps) {
           <End ctx={ctx} room={room} send={send} isAdmin={isAdmin} />
         ) : (
           <>
-            {v.vote && <VoteSummary ctx={ctx} vote={v.vote} left={left} />}
+            {/* The vote's card sits in the side column, never over the board, so the board never moves. */}
             <Board
               v={v}
               skin={skin}
@@ -488,6 +501,7 @@ export function Table({ state, send, reactions }: TableProps) {
       </section>
 
       <aside className="side ph-side">
+        {v.vote && !v.over && <VoteSummary ctx={ctx} vote={v.vote} left={left} />}
         {me !== null && (
           <MyTray
             ctx={ctx}
@@ -560,6 +574,15 @@ interface SeatProps {
   awayFor: (seat: number) => number | null;
   send: (m: ClientMsg) => void;
   act: (a: PahunchAction) => void;
+}
+
+/** A seat's colour with its shape on it, as its pieces carry them on the board. */
+function SeatSwatch({ seat }: { seat: number }) {
+  return (
+    <svg className="ph-swatch" viewBox="-1.6 -1.6 3.2 3.2" aria-hidden="true">
+      <path d={seatShape(seat, 0, 0, 0.95)} />
+    </svg>
+  );
 }
 
 /** The other players' chips (a watcher sees everyone); your own seat is your tray. */
@@ -675,9 +698,7 @@ function PlayerChip(props: SeatProps & { i: number }) {
         >
           <Avatar code={seat.avatar} name={seat.name} className={seat.connected ? "on" : ""} />
         </button>
-        <span className="ph-swatch" aria-hidden="true">
-          {(seat.name.trim()[0] ?? "?").toUpperCase()}
-        </span>
+        <SeatSwatch seat={i} />
         <Floats reactions={reactions} seat={i} />
         {i === me && <ReactBar room={room} send={send} side />}
       </div>
@@ -687,7 +708,11 @@ function PlayerChip(props: SeatProps & { i: number }) {
           {room.admin === i && <span className="admin-mark">★</span>}
           {seat.bot && <span aria-label="bot"> 🤖</span>}
           {winner && <span aria-label="winner"> 👑</span>}
-          {mark && <span className="mark now">{mark}</span>}
+          {mark && (
+            <span className="mark now ph-mark-glyph" role="img" aria-label={mark}>
+              {mark === "votes" ? "🗳️" : "▶"}
+            </span>
+          )}
         </span>
         <span className="seat-line ph-counts">
           <span aria-label="still to place">✋ {p.hand}</span>
@@ -892,9 +917,7 @@ function MyTray(props: SeatProps & { act: (a: PahunchAction) => void; owing: boo
           >
             <Avatar code={seat.avatar} name={seat.name} className="on" />
           </button>
-          <span className="ph-swatch" aria-hidden="true">
-            {(seat.name.trim()[0] ?? "?").toUpperCase()}
-          </span>
+          <SeatSwatch seat={me} />
           <Floats reactions={reactions} seat={me} />
           <ReactBar room={room} send={send} side />
         </div>
@@ -1391,27 +1414,71 @@ function VoteSummary({ ctx, vote, left }: { ctx: Ctx; vote: PahunchVote; left: n
   const neutrals = count(v.rooms, vote.room, null);
   const yes = yesSoFar(vote);
   const voters = vote.answers.flatMap((a, s) => (count(v.rooms, vote.room, s) > 0 ? [{ s, a }] : []));
+  const secs = left === null ? null : Math.ceil(left / 1000);
+  // Read without words: the climber's face, the two rooms' icons, a pip per yes needed, and each
+  // voter's face with what they said. The sentence is for screen readers and the log.
+  const said = (s: number, a: number | null) =>
+    s === v.turn ? "yes (own)" : a === null ? "thinking" : a === 0 ? "no" : `yes ×${a}`;
   return (
     <div className="ph-vote" aria-live="polite">
-      <h2>
-        {who(v.turn)} {v.turn === ctx.me ? "want" : "wants"} to move up: {ctx.short(vote.room)} → {ctx.short(to)}
+      <h2 className="ph-vote-move">
+        <span className="ph-face" style={{ ["--seat" as string]: skin.seats[v.turn % skin.seats.length].color }}>
+          <Avatar code={ctx.looks[v.turn] ?? ""} name={who(v.turn)} />
+        </span>
+        <span className="ph-vote-rooms" aria-hidden="true">
+          <span className="ph-vote-icon">{ctx.icon(vote.room)}</span>
+          <span className="ph-vote-arrow">➜</span>
+          <span className="ph-vote-icon">{ctx.icon(to)}</span>
+        </span>
+        <span className="sr-only">
+          {who(v.turn)} {v.turn === ctx.me ? "want" : "wants"} to move up: {ctx.room(vote.room)} to {ctx.room(to)}
+        </span>
+        {secs !== null && (
+          <span className="ph-clock" aria-label={`${secs} seconds left`}>
+            ⏱ {secs}
+          </span>
+        )}
       </h2>
-      <p className="ph-tally">
-        <b>{yes}</b> of <b>{vote.need}</b> yes
-        {left !== null && <span className="ph-clock"> · ⏱ {Math.ceil(left / 1000)} s</span>}
+      <p className="ph-pips" role="img" aria-label={`${yes} of ${vote.need} yes`}>
+        {Array.from({ length: Math.max(vote.need, yes) }, (_, k) => (
+          <span key={k} className={k < yes ? "on" : ""} />
+        ))}
       </p>
       <ul className="ph-voters">
-        {voters.map(({ s, a }) => (
-          <li key={s} style={{ ["--seat" as string]: skin.seats[s % skin.seats.length].color }}>
-            <span className="ph-dot" aria-hidden="true" />
-            {who(s)} ×{count(v.rooms, vote.room, s)}:{" "}
-            {s === v.turn ? "yes (own)" : a === null ? <em>thinking…</em> : a === 0 ? "no" : `yes ×${a}`}
-          </li>
-        ))}
+        {voters.map(({ s, a }) => {
+          const n = count(v.rooms, vote.room, s);
+          const mark = s === v.turn ? "⬆" : a === null ? "⏳" : a === 0 ? "✗" : "✓";
+          const state = s === v.turn ? "own" : a === null ? "wait" : a === 0 ? "no" : "yes";
+          return (
+            <li
+              key={s}
+              className={`ph-voter ${state}`}
+              style={{ ["--seat" as string]: skin.seats[s % skin.seats.length].color }}
+              aria-label={`${who(s)}, ${n} in the room: ${said(s, a)}`}
+            >
+              <span className="ph-face">
+                <Avatar code={ctx.looks[s] ?? ""} name={who(s)} />
+                {n > 1 && <span className="ph-count">×{n}</span>}
+                <span className="ph-said" aria-hidden="true">
+                  {mark}
+                  {a !== null && a > 1 && s !== v.turn ? a : ""}
+                </span>
+              </span>
+            </li>
+          );
+        })}
         {neutrals > 0 && (
-          <li className="neutral">
-            <Avatar code={skin.neutralLook} name={skin.nouns.neutral} className="ph-dot-face" />
-            {neutrals} {neutrals === 1 ? skin.nouns.neutral : skin.nouns.neutrals}: {vote.bribed} paid
+          <li
+            className={`ph-voter neutral ${vote.bribed > 0 ? "yes" : "wait"}`}
+            aria-label={`${neutrals} ${neutrals === 1 ? skin.nouns.neutral : skin.nouns.neutrals}: ${vote.bribed} paid`}
+          >
+            <span className="ph-face">
+              <Avatar code={skin.neutralLook} name={skin.nouns.neutral} />
+              {neutrals > 1 && <span className="ph-count">×{neutrals}</span>}
+              <span className="ph-said ph-paid" aria-hidden="true">
+                {vote.bribed}
+              </span>
+            </span>
           </li>
         )}
       </ul>

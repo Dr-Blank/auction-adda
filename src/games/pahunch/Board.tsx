@@ -3,61 +3,25 @@
 // board in boards.json draws without code changes.
 //
 // The board is where you play: every room, path and the blocker is a button. What a tap does is
-// the table's choice (pick a move, or explain the thing tapped). Drawn in layers so nothing that
-// matters hides: room boxes, then the paths over them, then the pieces, then coins and the blocker.
+// the table's choice (pick a move, or explain the thing tapped). Paths are smooth wires routed
+// around the rooms (route.ts), drawn under the room cards and plugged into their edges; pieces,
+// coins and the blocker sit on top.
+//
+// A move always looks the same, whether it is your pick, a vote everyone watches, or the blocker
+// going somewhere: the piece that moves is lifted, its path marches towards the room it goes to,
+// and a faint copy of the piece already waits in the seat it will take.
 
-import { type KeyboardEvent, useId } from "react";
+import { type KeyboardEvent, type ReactNode, useId } from "react";
 import { AvatarFace } from "../../client/Avatar.tsx";
 import type { PahunchLayout, PahunchView } from "../../generated/index.ts";
 import { offers, slot } from "./derive.ts";
+import { type Box, boxOf, type Pt, routes, SEAT } from "./route.ts";
 import type { PahunchSkin } from "./skin.ts";
-import { roomName } from "./skin.ts";
+import { roomIcon, roomName } from "./skin.ts";
 
-const SEAT = 5.4;
+export { boxOf } from "./route.ts";
+
 const R = 2.15;
-const MIN_W = 15;
-
-interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  cols: number;
-}
-
-/** Where a room is drawn: centred on its board point, seats in one row up to 3, else two. */
-export function boxOf(layout: PahunchLayout, room: number): Box {
-  const r = layout.rooms[room];
-  const cap = Math.max(1, r.cap);
-  const cols = cap <= 3 ? cap : Math.ceil(cap / 2);
-  const rows = Math.ceil(cap / cols);
-  const w = Math.max(MIN_W, cols * SEAT + 3);
-  const h = rows * SEAT + 6.2;
-  return { x: r.x, y: r.y, w, h, cols };
-}
-
-/** Where each path leaves its room and arrives at the next: spread along the edges, by direction. */
-function pathEnds(layout: PahunchLayout) {
-  const spread = (room: number, ids: number[], other: (p: number) => number) => {
-    const b = boxOf(layout, room);
-    const sorted = [...ids].sort((a, c) => layout.rooms[other(a)].x - layout.rooms[other(c)].x);
-    return new Map(sorted.map((p, k) => [p, b.x - b.w / 2 + (b.w * (k + 1)) / (sorted.length + 1)]));
-  };
-  const ids = layout.paths.map((_, i) => i);
-  const fromX = new Map<number, number>();
-  const toX = new Map<number, number>();
-  layout.rooms.forEach((_, room) => {
-    const out = ids.filter((p) => layout.paths[p].from === room);
-    const inn = ids.filter((p) => layout.paths[p].to === room);
-    for (const [p, x] of spread(room, out, (q) => layout.paths[q].to)) fromX.set(p, x);
-    for (const [p, x] of spread(room, inn, (q) => layout.paths[q].from)) toX.set(p, x);
-  });
-  return layout.paths.map((p, i) => {
-    const a = boxOf(layout, p.from);
-    const b = boxOf(layout, p.to);
-    return { x1: fromX.get(i)!, y1: a.y - a.h / 2, x2: toX.get(i)!, y2: b.y + b.h / 2 };
-  });
-}
 
 /** What a path is: `back` stairs (locked, no coin), a `slot` that holds a coin, or `plain`. */
 export const pathKind = (layout: PahunchLayout, path: number): "back" | "slot" | "plain" =>
@@ -104,29 +68,88 @@ function press(fn: () => void) {
 
 const ORDER = { back: 0, plain: 1, slot: 2 };
 
+/** Where seat `k` of a room sits; one squeezed in past the seats sits on the room's corner. */
+function seatAt(b: Box, k: number, cap: number): Pt {
+  if (k >= Math.max(1, cap)) return { x: b.x + b.w / 2 - 0.6, y: b.y - b.h / 2 + 0.6 };
+  const col = k % b.cols;
+  const row = Math.floor(k / b.cols);
+  return { x: b.x - (b.cols * SEAT) / 2 + SEAT / 2 + col * SEAT, y: b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT };
+}
+
+/** Each seat's shape, drawn with its colour so colour is never the only sign of whose piece it is. */
+export function seatShape(k: number, x: number, y: number, r: number): string {
+  const poly = (n: number, turn: number, rr = r) =>
+    `M${Array.from({ length: n }, (_, i) => {
+      const a = turn + (i * 2 * Math.PI) / n;
+      return `${(x + rr * Math.cos(a)).toFixed(2)} ${(y + rr * Math.sin(a)).toFixed(2)}`;
+    }).join("L")}Z`;
+  switch (k % 7) {
+    case 0:
+      return `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+    case 1:
+      return poly(3, -Math.PI / 2, r * 1.15);
+    case 2:
+      return poly(4, Math.PI / 4, r * 1.2);
+    case 3:
+      return poly(4, 0, r * 1.2);
+    case 4: {
+      const pts = Array.from({ length: 10 }, (_, i) => {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rr = i % 2 ? r * 0.5 : r * 1.2;
+        return `${(x + rr * Math.cos(a)).toFixed(2)} ${(y + rr * Math.sin(a)).toFixed(2)}`;
+      });
+      return `M${pts.join("L")}Z`;
+    }
+    case 5:
+      return poly(6, 0, r * 1.1);
+    default: {
+      const t = r * 0.38;
+      return `M${x - t} ${y - r}h${2 * t}v${r - t}h${r - t}v${2 * t}h${t - r}v${r - t}h${-2 * t}v${t - r}h${t - r}v${-2 * t}h${r - t}Z`;
+    }
+  }
+}
+
 export function Board(props: BoardProps) {
   const { v, skin, names, acting, liveRooms, livePaths, focus, targets, blockerLive, selected, faces } = props;
   const { layout } = v;
   const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
-  const ends = pathEnds(layout);
-  const minX = Math.min(...boxes.map((b) => b.x - b.w / 2)) - 3;
-  const maxX = Math.max(...boxes.map((b) => b.x + b.w / 2)) + 3;
+  const route = routes(layout);
+  const xs = [...boxes.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...route.flatMap((r) => r.p.map((q) => q.x))];
+  const minX = Math.min(...xs) - 3;
+  const maxX = Math.max(...xs) + 3;
   const minY = Math.min(...boxes.map((b) => b.y - b.h / 2)) - 3;
   const maxY = Math.max(...boxes.map((b) => b.y + b.h / 2)) + 3;
   const vote = v.vote;
   const who = (s: number | null) => (s === null ? skin.nouns.neutral : s === v.you ? "you" : names[s]);
   const name = (r: number, short = false) => roomName(skin, layout.board, r, layout.summit, short);
   const keyOpen = offers(v, "backStairs");
+
+  // The move on show, if any: a vote everyone watches, or the viewer's own picked way up.
+  const pickedPath = selected?.path !== undefined && !selected.blocker ? selected.path : undefined;
+  const movePath = vote ? vote.path : pickedPath;
+  const mover: number | null | undefined = (() => {
+    if (movePath === undefined) return undefined;
+    const from = v.rooms[layout.paths[movePath].from] ?? [];
+    const seat = vote ? v.turn : v.you;
+    if (seat !== null && from.includes(seat)) return seat;
+    return from.includes(null) ? null : undefined;
+  })();
+  const landing = movePath !== undefined && mover !== undefined ? layout.paths[movePath].to : undefined;
+  // The blocker's picked new place, shown as a faint blocker on that path.
+  const blockerTo = selected?.blocker && selected.path !== undefined ? selected.path : undefined;
+
   // Back stairs underneath, coin stairs on top, and whatever the pick is about above them all.
-  const rank = (p: number) => ORDER[pathKind(layout, p)] + (livePaths.has(p) ? 5 : 0) + (focus?.has(p) ? 10 : 0);
+  const inFocus = (p: number) => !!focus?.has(p) || movePath === p || blockerTo === p;
+  const rank = (p: number) => ORDER[pathKind(layout, p)] + (inFocus(p) ? 10 : 0) + (movePath === p ? 10 : 0);
   const order = layout.paths.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
-  const mid = (i: number) => ({ x: (ends[i].x1 + ends[i].x2) / 2, y: (ends[i].y1 + ends[i].y2) / 2 });
   const pathState = (i: number) =>
     [
-      livePaths.has(i) ? "live" : acting ? "idle" : "",
-      focus && !focus.has(i) ? "dim" : "",
+      // Paths glow only once something is picked; on the open board the rooms do the talking.
+      focus && livePaths.has(i) && focus.has(i) ? "live" : acting ? "quiet" : "",
+      focus && !focus.has(i) && movePath !== i ? "dim" : "",
       selected?.path === i ? "selected" : "",
       vote?.path === i ? "voting" : "",
+      movePath === i || blockerTo === i ? "moving" : "",
     ].join(" ");
   const pathLabel = (i: number) => {
     const p = layout.paths[i];
@@ -143,90 +166,68 @@ export function Board(props: BoardProps) {
   };
   const roomState = (room: number) =>
     [
-      liveRooms.has(room) ? "live" : acting ? "idle" : "",
-      targets.has(room) ? "target" : "",
+      selected?.room === room
+        ? ""
+        : liveRooms.has(room)
+          ? "live"
+          : acting && !targets.has(room) && landing !== room
+            ? "idle"
+            : "",
+      targets.has(room) || landing === room ? "target" : "",
       selected?.room === room ? "selected" : "",
       vote?.room === room ? "voting" : "",
+      landing === room ? "landing" : "",
     ].join(" ");
   const tap = (fn: () => void) => ({ onClick: fn, onKeyDown: press(fn) });
+  // About how wide a card's title runs (icon, gap, name at 2 units a letter-height); a longer one
+  // is squeezed to fit its card.
+  const titleW = (room: number) => 2.9 + name(room, true).length * 1.02;
   const uid = useId().replace(/[^\w-]/g, "");
+
+  /** A piece: an aunty's own face, or a player's colour as a ring round their face or a disc with their shape. */
+  const piece = (s: number | null, at: Pt, key: string | number, cls: string): ReactNode => {
+    const look = s === null ? null : skin.seats[s % skin.seats.length];
+    const base = `ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${cls}`;
+    if (s === null)
+      return (
+        <g key={key} className={base}>
+          <circle className="ph-piece-ring" cx={at.x} cy={at.y} r={R} />
+          <AvatarFace code={skin.neutralLook} name={skin.nouns.neutral} x={at.x} y={at.y} r={R - 0.45} />
+        </g>
+      );
+    return (
+      <g key={key} className={`${base} ${faces ? "face" : ""}`}>
+        <circle className="ph-piece-ring" cx={at.x} cy={at.y} r={R} style={{ fill: look?.color }} />
+        {faces ? (
+          <AvatarFace code={props.looks[s] ?? ""} name={names[s] ?? ""} x={at.x} y={at.y} r={R - 0.6} />
+        ) : (
+          <path className="ph-shape" d={seatShape(s, at.x, at.y, 0.95)} style={{ fill: look?.ink }} />
+        )}
+      </g>
+    );
+  };
 
   return (
     <svg
-      className={`ph-board ${acting ? "acting" : ""} ${focus ? "picking" : ""}`}
+      className={`ph-board ${acting ? "acting" : ""} ${focus ? "picking" : ""} ${movePath !== undefined ? "showing" : ""}`}
       viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`}
       role="group"
       aria-label={`The board: ${layout.name}`}
     >
-      {/* Room boxes: the tap target for the room. */}
-      <g className="ph-layer-rooms">
-        {boxes.map((b, room) => (
-          <g
-            key={`r${room}`}
-            className={`ph-room ${room === layout.summit ? "top" : ""} ${roomState(room)}`}
-            data-room={room}
-            role="button"
-            tabIndex={0}
-            aria-pressed={selected?.room === room}
-            aria-label={`${name(room)}: ${(v.rooms[room] ?? []).length} of ${layout.rooms[room].cap} seats${(v.rooms[room] ?? []).length ? `, ${(v.rooms[room] ?? []).map(who).join(", ")}` : ""}`}
-            {...tap(() => props.onRoom(room))}
-          >
-            <rect className="ph-room-box" x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx={1.6} />
-          </g>
-        ))}
-      </g>
+      <defs>
+        <radialGradient id={`${uid}glow`}>
+          <stop className="ph-glow-stop" offset="0" stopOpacity="0.9" />
+          <stop className="ph-glow-stop" offset="0.5" stopOpacity="0.35" />
+          <stop className="ph-glow-stop" offset="1" stopOpacity="0" />
+        </radialGradient>
+      </defs>
 
-      {/* Where a path you can use meets a room, the room's edge glows there, and the glow fades
-          smoothly along the path to clear in its middle. Drawn only for live, picked and voting
-          paths (the CSS decides), between the boxes and the lines. */}
-      <g className="ph-layer-joints" aria-hidden="true">
-        <defs>
-          <radialGradient id={`${uid}j`}>
-            <stop className="ph-joint-stop" offset="0" stopOpacity="0.7" />
-            <stop className="ph-joint-stop" offset="0.45" stopOpacity="0.3" />
-            <stop className="ph-joint-stop" offset="1" stopOpacity="0" />
-          </radialGradient>
-          {ends.map((e, i) => (
-            <linearGradient
-              key={`g${i}`}
-              id={`${uid}l${i}`}
-              gradientUnits="userSpaceOnUse"
-              x1={e.x1}
-              y1={e.y1}
-              x2={e.x2}
-              y2={e.y2}
-            >
-              <stop className="ph-joint-stop" offset="0" stopOpacity="0.65" />
-              <stop className="ph-joint-stop" offset="0.4" stopOpacity="0" />
-              <stop className="ph-joint-stop" offset="0.6" stopOpacity="0" />
-              <stop className="ph-joint-stop" offset="1" stopOpacity="0.65" />
-            </linearGradient>
-          ))}
-        </defs>
-        {order.map((i) => {
-          const e = ends[i];
-          return (
-            <g key={`j${i}`} className={`ph-joint ${pathState(i)}`}>
-              <line className="ph-joint-line" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke={`url(#${uid}l${i})`} />
-              <circle className="ph-joint-end" cx={e.x1} cy={e.y1} r={3.2} fill={`url(#${uid}j)`} />
-              <circle className="ph-joint-end" cx={e.x2} cy={e.y2} r={3.2} fill={`url(#${uid}j)`} />
-            </g>
-          );
-        })}
-      </g>
-
-      {/* Paths, over the boxes so none hides behind a room. */}
+      {/* Paths: wires under the room cards, so a room never has a line across it. */}
       <g className="ph-layer-paths">
         {order.map((i) => {
-          const e = ends[i];
+          const r = route[i];
           const kind = pathKind(layout, i);
-          // The arrow head, just short of the room it goes up to.
-          const len = Math.hypot(e.x2 - e.x1, e.y2 - e.y1) || 1;
-          const ux = (e.x2 - e.x1) / len;
-          const uy = (e.y2 - e.y1) / len;
-          const tip = { x: e.x2 - ux * 0.3, y: e.y2 - uy * 0.3 };
-          const base = { x: tip.x - ux * 1.6, y: tip.y - uy * 1.6 };
-          const head = `${tip.x},${tip.y} ${base.x - uy * 0.85},${base.y + ux * 0.85} ${base.x + uy * 0.85},${base.y - ux * 0.85}`;
+          const deg = (Math.atan2(r.dir.y, r.dir.x) * 180) / Math.PI;
           return (
             <g
               key={`p${i}`}
@@ -238,74 +239,124 @@ export function Board(props: BoardProps) {
               aria-label={pathLabel(i)}
               {...tap(() => props.onPath(i))}
             >
-              <line className="ph-path-hit" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} />
-              <line className="ph-path-case" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} />
-              <line className="ph-path-line" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} />
-              <polygon className="ph-path-head" points={head} />
+              <path className="ph-path-hit" d={r.d} />
+              <path className="ph-path-glow" d={r.d} />
+              <path className="ph-path-case" d={r.d} />
+              <path className="ph-path-line" d={r.d} />
+              <g transform={`translate(${r.head.x} ${r.head.y}) rotate(${deg.toFixed(1)})`}>
+                <path className="ph-path-head" d="M0.9 0L-0.9 -1.05L-0.45 0L-0.9 1.05Z" />
+              </g>
             </g>
           );
         })}
       </g>
 
-      {/* Names and pieces: part of the room's tap target. */}
+      {/* Room cards: the tap target for the room, opaque over the wires. */}
+      <g className="ph-layer-rooms">
+        {boxes.map((b, room) => {
+          const top = room === layout.summit;
+          return (
+            <g
+              key={`r${room}`}
+              className={`ph-room ${top ? "top" : ""} ${roomState(room)}`}
+              data-room={room}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selected?.room === room}
+              aria-label={`${name(room)}: ${(v.rooms[room] ?? []).length} of ${layout.rooms[room].cap} seats${(v.rooms[room] ?? []).length ? `, ${(v.rooms[room] ?? []).map(who).join(", ")}` : ""}`}
+              {...tap(() => props.onRoom(room))}
+            >
+              <rect className="ph-room-halo" x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx={1.6} />
+              <rect className="ph-room-box" x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx={1.6} />
+              {top && (
+                <rect
+                  className="ph-room-inner"
+                  x={b.x - b.w / 2 + 0.8}
+                  y={b.y - b.h / 2 + 0.8}
+                  width={b.w - 1.6}
+                  height={b.h - 1.6}
+                  rx={1}
+                />
+              )}
+              {selected?.room === room && (
+                <g className="ph-room-check">
+                  <circle cx={b.x - b.w / 2} cy={b.y - b.h / 2} r={1.3} />
+                  <path d={`M${b.x - b.w / 2 - 0.6} ${b.y - b.h / 2}l0.45 0.45l0.8 -0.9`} />
+                </g>
+              )}
+            </g>
+          );
+        })}
+      </g>
+
+      {/* Sockets: where each wire plugs into a room's edge; they light up with their path. */}
+      <g className="ph-layer-sockets" aria-hidden="true">
+        {order.map((i) => {
+          const r = route[i];
+          return (
+            <g key={`k${i}`} className={`ph-socket ${pathKind(layout, i)} ${pathState(i)}`}>
+              <circle className="ph-socket-glow" cx={r.p[0].x} cy={r.p[0].y} r={2.6} fill={`url(#${uid}glow)`} />
+              <circle className="ph-socket-glow" cx={r.p[3].x} cy={r.p[3].y} r={2.6} fill={`url(#${uid}glow)`} />
+              <circle className="ph-socket-dot" cx={r.p[0].x} cy={r.p[0].y} r={0.62} />
+              <circle className="ph-socket-dot" cx={r.p[3].x} cy={r.p[3].y} r={0.62} />
+            </g>
+          );
+        })}
+      </g>
+
+      {/* Icons, names and pieces: part of the room's tap target. */}
       <g className="ph-layer-pieces">
         {boxes.map((b, room) => {
           const held = v.rooms[room] ?? [];
           const cap = layout.rooms[room].cap;
-          const left = b.x - b.w / 2;
-          const seatsW = b.cols * SEAT;
+          const top = room === layout.summit;
+          const icon = roomIcon(skin, layout.board, room, layout.summit);
+          // The piece that moves is lifted; it still sits in its seat.
+          const moving =
+            movePath !== undefined && layout.paths[movePath].from === room ? held.indexOf(mover ?? -2) : -1;
           return (
             <g
               key={`s${room}`}
-              className={`ph-room-inside ${room === layout.summit ? "top" : ""} ${roomState(room)}`}
+              className={`ph-room-inside ${top ? "top" : ""} ${roomState(room)}`}
               onClick={() => props.onRoom(room)}
               aria-hidden="true"
             >
               <rect
                 className="ph-room-pad"
-                x={left + 0.6}
+                x={b.x - b.w / 2 + 0.6}
                 y={b.y - b.h / 2 + 0.6}
                 width={b.w - 1.2}
                 height={b.h - 1.2}
               />
-              <text className="ph-room-name" x={b.x} y={b.y - b.h / 2 + 3.1}>
-                {name(room, true)}
+              {/* The icon and short name share the card's top line; on a phone the icon alone. */}
+              <text
+                className="ph-room-title"
+                x={b.x}
+                y={b.y - b.h / 2 + 3.1}
+                {...(titleW(room) > b.w - 1.6 ? { textLength: b.w - 1.6, lengthAdjust: "spacingAndGlyphs" } : {})}
+              >
+                <tspan className="ph-room-icon">{icon}</tspan>
+                <tspan className="ph-room-name" dx={0.4}>
+                  {name(room, true)}
+                </tspan>
+              </text>
+              <text className="ph-room-icon solo" x={b.x} y={b.y - b.h / 2 + 3.4}>
+                {icon}
               </text>
               {Array.from({ length: Math.max(cap, held.length) }, (_, k) => {
-                const col = k % b.cols;
-                const row = Math.floor(k / b.cols);
-                const cx = b.x - seatsW / 2 + SEAT / 2 + col * SEAT;
-                const cy = b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT;
+                const at = seatAt(b, k, cap);
                 const s = k < held.length ? held[k] : undefined;
-                if (s === undefined) return <circle key={k} className="ph-seat empty" cx={cx} cy={cy} r={R} />;
-                const look = s === null ? null : skin.seats[s % skin.seats.length];
-                // One squeezed in past the seats sits on the room's corner.
-                const extra = k >= cap;
-                const x = extra ? left + b.w - 0.6 : cx;
-                const y = extra ? b.y - b.h / 2 + 0.6 : cy;
-                const cls = `ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${extra ? "extra" : ""}`;
-                // An aunty has her own face; a player is their colour, as a ring round their face
-                // (the admin's choice) or a disc with their initial.
-                if (s === null)
-                  return (
-                    <g key={k} className={cls}>
-                      <circle className="ph-piece-ring" cx={x} cy={y} r={R} />
-                      <AvatarFace code={skin.neutralLook} name={skin.nouns.neutral} x={x} y={y} r={R - 0.45} />
-                    </g>
-                  );
-                return (
-                  <g key={k} className={`${cls} ${faces ? "face" : ""}`}>
-                    <circle className="ph-piece-ring" cx={x} cy={y} r={R} style={{ fill: look?.color }} />
-                    {faces ? (
-                      <AvatarFace code={props.looks[s] ?? ""} name={names[s] ?? ""} x={x} y={y} r={R - 0.6} />
-                    ) : (
-                      <text x={x} y={y + 0.85} style={{ fill: look?.ink }}>
-                        {(names[s]?.trim()[0] ?? "?").toUpperCase()}
-                      </text>
-                    )}
-                  </g>
-                );
+                if (s === undefined) {
+                  if (landing === room && k === held.length && mover !== undefined) return piece(mover, at, k, "ghost");
+                  return <circle key={k} className="ph-seat empty" cx={at.x} cy={at.y} r={R} />;
+                }
+                return piece(s, at, k, `${k >= cap ? "extra" : ""} ${k === moving ? "moving" : ""}`);
               })}
+              {/* A full room still shows where the newcomer squeezes in. */}
+              {landing === room &&
+                mover !== undefined &&
+                held.length >= Math.max(1, cap) &&
+                piece(mover, seatAt(b, held.length, cap), "ghost", "ghost extra")}
             </g>
           );
         })}
@@ -315,7 +366,7 @@ export function Board(props: BoardProps) {
       <g className="ph-layer-marks">
         {order.map((i) => {
           const kind = pathKind(layout, i);
-          const { x, y } = mid(i);
+          const { x, y } = route[i].mid;
           const token = v.tokensOn[i];
           if (v.blocker === i) return null;
           return (
@@ -327,16 +378,17 @@ export function Board(props: BoardProps) {
             >
               {kind === "back" ? (
                 <g className="ph-lock">
-                  <circle cx={x} cy={y} r={1.8} />
-                  <text x={x} y={y + 0.62}>
+                  <circle cx={x} cy={y} r={1.6} />
+                  <text x={x} y={y + 0.55}>
                     {keyOpen ? skin.favours.backStairs.glyph : "🔒"}
                   </text>
                 </g>
               ) : token ? (
-                <g className={`ph-token ${token.bonus ? `bonus ${token.bonus}` : ""}`}>
+                <g className={`ph-token v${Math.min(token.value, 5)} ${token.bonus ? `bonus ${token.bonus}` : ""}`}>
                   <circle className="ph-coin-hit" cx={x} cy={y} r={4} />
-                  <circle className="ph-coin" cx={x} cy={y} r={2.3} />
-                  <text x={x} y={y + 0.95}>
+                  <circle className="ph-coin-rim" cx={x} cy={y} r={2.3} />
+                  <circle className="ph-coin" cx={x} cy={y} r={1.85} />
+                  <text x={x} y={y + 0.85}>
                     {token.value}
                   </text>
                   {token.bonus && (
@@ -354,15 +406,27 @@ export function Board(props: BoardProps) {
             </g>
           );
         })}
+        {blockerTo !== undefined && blockerTo !== v.blocker && (
+          <g className="ph-blocker ghost" aria-hidden="true">
+            <circle className="ph-blocker-disc" cx={route[blockerTo].mid.x} cy={route[blockerTo].mid.y} r={2.9} />
+            <AvatarFace
+              code={skin.blockerLook}
+              name={skin.nouns.blocker}
+              x={route[blockerTo].mid.x}
+              y={route[blockerTo].mid.y}
+              r={2.5}
+            />
+          </g>
+        )}
         {v.blocker !== null &&
           (() => {
             const at = v.blocker;
-            const { x, y } = mid(at);
+            const { x, y } = route[at].mid;
             const covered = v.tokensOn[at];
             const p = layout.paths[at];
             return (
               <g
-                className={`ph-blocker ${blockerLive ? "live" : acting ? "idle" : ""} ${selected?.blocker ? "selected" : ""}`}
+                className={`ph-blocker ${blockerLive ? "live" : acting ? "idle" : ""} ${selected?.blocker ? "selected" : ""} ${blockerTo !== undefined && blockerTo !== at ? "moving" : ""}`}
                 role="button"
                 tabIndex={0}
                 aria-pressed={!!selected?.blocker}

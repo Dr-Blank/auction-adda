@@ -26,9 +26,10 @@ export interface PahunchSkin extends Skin {
   nouns: PahunchNouns;
   /**
    * Room names by board id, in the board's room order; `short` fits on the board (about ten
-   * letters). A board missing here gets numbers.
+   * letters), and `icon` is one emoji that says the room without words. A board missing here gets
+   * numbers.
    */
-  rooms: Record<string, { name: string; short: string }[]>;
+  rooms: Record<string, { name: string; short: string; icon: string }[]>;
   /** One colour per seat, and the ink that reads on it. */
   seats: { color: string; ink: string }[];
   /** The letter on a neutral's disc and on the blocker's badge, where a face does not fit. */
@@ -91,21 +92,21 @@ export const societyCommittee: PahunchSkin = {
   },
   rooms: {
     full: [
-      { name: "Notice board in-charge", short: "Notice board" },
-      { name: "Residents’ WhatsApp group", short: "WhatsApp" },
-      { name: "Gate pass desk", short: "Gate pass" },
-      { name: "Parking sub-committee", short: "Parking" },
-      { name: "Lift in-charge", short: "Lift" },
-      { name: "Cultural secretary", short: "Cultural" },
-      { name: "Sports in-charge", short: "Sports" },
-      { name: "Water tank in-charge", short: "Water tank" },
-      { name: "Festival committee", short: "Festival" },
-      { name: "Garden committee", short: "Garden" },
-      { name: "Security committee", short: "Security" },
-      { name: "Treasurer’s desk", short: "Treasurer" },
-      { name: "Maintenance committee", short: "Maintenance" },
-      { name: "Managing committee", short: "Managing" },
-      { name: "Chairman’s cabin", short: "Chairman" },
+      { name: "Notice board in-charge", short: "Notice board", icon: "📋" },
+      { name: "Residents’ WhatsApp group", short: "WhatsApp", icon: "💬" },
+      { name: "Gate pass desk", short: "Gate pass", icon: "🎫" },
+      { name: "Parking sub-committee", short: "Parking", icon: "🚙" },
+      { name: "Lift in-charge", short: "Lift", icon: "🛗" },
+      { name: "Cultural secretary", short: "Cultural", icon: "🎭" },
+      { name: "Sports in-charge", short: "Sports", icon: "🏏" },
+      { name: "Water tank in-charge", short: "Water tank", icon: "🚰" },
+      { name: "Festival committee", short: "Festival", icon: "🪔" },
+      { name: "Garden committee", short: "Garden", icon: "🌳" },
+      { name: "Security committee", short: "Security", icon: "🛡️" },
+      { name: "Treasurer’s desk", short: "Treasurer", icon: "💰" },
+      { name: "Maintenance committee", short: "Maintenance", icon: "🔧" },
+      { name: "Managing committee", short: "Managing", icon: "📊" },
+      { name: "Chairman’s cabin", short: "Chairman", icon: "👑" },
     ],
   },
   seats: [
@@ -189,4 +190,9 @@ export function roomName(skin: PahunchSkin, board: string, room: number, top: nu
   const named = skin.rooms[board]?.[room];
   if (named) return short ? named.short : named.name;
   return room === top ? "The top" : `Room ${room + 1}`;
+}
+
+/** A room's icon in this skin: its own emoji, or its number on a board the skin does not name. */
+export function roomIcon(skin: PahunchSkin, board: string, room: number, top: number): string {
+  return skin.rooms[board]?.[room]?.icon ?? (room === top ? "👑" : String(room + 1));
 }

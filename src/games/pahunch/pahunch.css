@@ -11,6 +11,17 @@
     "stage side";
   grid-template-rows: auto auto auto 1fr;
 }
+/* One heading face for Pahunch: the display caps of the top bar and "Latest", never the auction's
+   serif. */
+.ph-table h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+.ph-table h2.ph-vote-move {
+  font-family: inherit;
+  letter-spacing: normal;
+}
 
 /* ---- players ---- */
 .ph-players {
@@ -62,11 +73,7 @@
   height: 18px;
   border-radius: 50%;
   background: var(--seat);
-  color: var(--seat-ink);
-  font-size: 0.7rem;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
+  fill: var(--seat-ink);
   border: 2px solid var(--panel);
 }
 .ph-counts {
@@ -152,48 +159,85 @@
   outline: none;
 }
 
-/* Rooms. Quiet by default; a room you can use glows, one you can't fades while you move. */
+/* Room cards: opaque, over the wires. Each state has its own look, and never only a colour:
+   - the top room: a double edge and its crown;
+   - live (you can use it now): a bright edge with a soft breathing glow;
+   - picked: a solid bright edge and a tick;
+   - target or landing (where a move goes): a dashed bright edge and a faint piece in the seat;
+   - idle (you can't use it now): darker, its name faded; pieces stay full strength. */
 .ph-room-box {
   fill: var(--panel-2);
   stroke: var(--edge-3);
   stroke-width: 0.35;
-  transition: opacity 0.2s;
+  transition:
+    fill 0.2s,
+    stroke 0.2s;
+}
+.ph-room-halo {
+  fill: none;
+  stroke: none;
 }
 .ph-room.top .ph-room-box {
   fill: var(--deep);
   stroke: var(--accent-line);
-  stroke-width: 0.6;
+  stroke-width: 0.4;
+}
+.ph-room-inner {
+  fill: none;
+  stroke: var(--accent-line);
+  stroke-width: 0.22;
+  pointer-events: none;
 }
 .ph-room-pad {
   fill: transparent;
+}
+.ph-room-title,
+.ph-room-icon {
+  text-anchor: middle;
+  pointer-events: none;
+}
+.ph-room-icon {
+  font-size: 2.2px;
+}
+.ph-room-icon.solo {
+  display: none;
 }
 .ph-room-name {
   fill: var(--muted);
   font-size: 2px;
   font-weight: 400;
-  text-anchor: middle;
-  opacity: 0.85;
+  pointer-events: none;
 }
 .ph-room-inside.top .ph-room-name {
   fill: var(--accent-soft);
 }
 .ph-room.live .ph-room-box {
   stroke: var(--accent);
-  stroke-width: 0.6;
-  animation: ph-glow 1.8s ease-in-out infinite;
+  stroke-width: 0.55;
+}
+.ph-room.live .ph-room-halo {
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  filter: blur(0.9px);
+  animation: ph-breathe 1.8s ease-in-out infinite;
 }
 .ph-room.idle .ph-room-box {
-  opacity: 0.55;
+  fill: var(--deep-2);
 }
-.ph-room-inside.idle .ph-room-name {
-  opacity: 0.5;
+.ph-room-inside.idle .ph-room-name,
+.ph-room-inside.idle .ph-room-icon {
+  opacity: 0.45;
 }
 .ph-room.target .ph-room-box {
   stroke: var(--accent-soft);
   stroke-width: 0.5;
   stroke-dasharray: 1 0.7;
-  opacity: 1;
-  animation: none;
+}
+.ph-room.landing .ph-room-halo {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  opacity: 0.45;
+  filter: blur(0.9px);
 }
 .ph-room.selected .ph-room-box,
 .ph-room.voting .ph-room-box {
@@ -201,8 +245,18 @@
   stroke: var(--accent);
   stroke-width: 0.9;
   stroke-dasharray: none;
-  animation: none;
-  filter: drop-shadow(0 0 1.2px rgb(var(--accent-rgb) / 70%));
+}
+.ph-room-check circle {
+  fill: var(--accent);
+  stroke: var(--felt);
+  stroke-width: 0.3;
+}
+.ph-room-check path {
+  fill: none;
+  stroke: #1f1604;
+  stroke-width: 0.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .ph-room:focus-visible .ph-room-box {
   stroke: var(--text);
@@ -210,7 +264,7 @@
 }
 
 /* Pieces: always full strength, they are what the board is about. A player's piece is their
-   colour: a disc with their initial, or a strong ring round their face. */
+   colour: a disc with their shape, or a strong ring round their face. */
 .ph-piece-ring {
   stroke: var(--bg);
   stroke-width: 0.35;
@@ -228,6 +282,29 @@
   stroke: var(--text);
   stroke-width: 0.55;
 }
+.ph-shape {
+  pointer-events: none;
+}
+/* The piece that moves: lifted off its seat, edged bright. */
+.ph-seat.moving {
+  transform: translateY(-0.7px);
+  filter: drop-shadow(0 0.7px 0.5px rgb(0 0 0 / 75%));
+  animation: ph-lift 1.4s ease-in-out infinite;
+}
+.ph-seat.moving .ph-piece-ring {
+  stroke: var(--accent-soft);
+  stroke-width: 0.6;
+}
+/* Where it goes: a faint copy of it, already in its seat. */
+.ph-seat.ghost {
+  opacity: 0.5;
+  animation: ph-ghost 1.4s ease-in-out infinite;
+}
+.ph-seat.ghost .ph-piece-ring {
+  stroke: var(--accent-soft);
+  stroke-width: 0.4;
+  stroke-dasharray: 0.8 0.5;
+}
 .ph-seat text,
 .ph-token text,
 .ph-blocker text,
@@ -240,14 +317,26 @@
   pointer-events: none;
 }
 
-/* Paths: a dark casing under each line keeps crossings readable; each kind has its own line. */
+/* Paths: wires under the room cards. A dark casing under each line keeps crossings readable;
+   each kind has its own line. They stay quiet until a pick or a vote is about them. */
+.ph-path-hit,
+.ph-path-glow,
+.ph-path-case,
+.ph-path-line {
+  fill: none;
+}
 .ph-path-hit {
   stroke: transparent;
   stroke-width: 3.6;
 }
+.ph-path-glow {
+  stroke: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
 .ph-path-case {
   stroke: var(--felt);
-  stroke-width: 1.5;
+  stroke-width: 1.6;
   stroke-linecap: round;
 }
 .ph-path-line {
@@ -258,7 +347,8 @@
 .ph-path-head {
   fill: var(--edge);
   stroke: var(--felt);
-  stroke-width: 0.25;
+  stroke-width: 0.2;
+  transition: transform 0.2s;
 }
 .ph-path.slot .ph-path-line {
   stroke: #9a8262;
@@ -287,81 +377,131 @@
   stroke: var(--felt);
 }
 .ph-path,
-.ph-mark {
+.ph-mark,
+.ph-socket {
   transition: opacity 0.2s;
 }
-.ph-path.idle,
-.ph-mark.idle {
-  opacity: 0.4;
+.ph-path.quiet,
+.ph-socket.quiet {
+  opacity: 0.6;
 }
 .ph-path.live .ph-path-line {
   stroke: var(--accent);
   stroke-width: 0.85;
-  animation: ph-glow 1.8s ease-in-out infinite;
+}
+.ph-path.live .ph-path-glow {
+  stroke: var(--accent);
+  opacity: 0.25;
 }
 .ph-path.live .ph-path-head {
   fill: var(--accent);
 }
 .ph-path.dim,
-.ph-mark.dim {
-  opacity: 0.18;
+.ph-mark.dim,
+.ph-socket.dim {
+  opacity: 0.15;
 }
-.ph-path.selected .ph-path-line,
-.ph-path.voting .ph-path-line {
-  stroke: var(--accent);
+/* The move on show: its wire marches towards where the piece goes, with a big arrow there. */
+.ph-path.moving .ph-path-line,
+.ph-path.selected .ph-path-line {
+  stroke: var(--accent-soft);
   stroke-width: 1.1;
-  stroke-dasharray: 1.4 0.8;
-  animation: ph-march 1.2s linear infinite;
-  filter: drop-shadow(0 0 1px rgb(var(--accent-rgb) / 80%));
+  stroke-dasharray: 1.4 0.9;
+  animation: ph-march 1s linear infinite;
+}
+.ph-path.moving .ph-path-glow,
+.ph-path.selected .ph-path-glow {
+  stroke: var(--accent);
+  stroke-width: 2.8;
+  opacity: 0.3;
+  animation: none;
+}
+.ph-path.moving .ph-path-head,
+.ph-path.selected .ph-path-head {
+  fill: var(--accent-soft);
+  transform: scale(2.2);
 }
 .ph-path:focus-visible .ph-path-line {
   stroke: var(--text);
 }
 
-/* Where a usable path meets a room: a soft glow on the room's edge that fades along the path. */
-.ph-layer-joints {
+/* Sockets: where a wire plugs into a room's edge. Lit with their path. */
+.ph-layer-sockets {
   pointer-events: none;
 }
-.ph-joint-stop {
+.ph-socket-dot {
+  fill: var(--edge);
+  stroke: var(--felt);
+  stroke-width: 0.22;
+}
+.ph-socket.slot .ph-socket-dot {
+  fill: #9a8262;
+}
+.ph-socket.back .ph-socket-dot {
+  fill: var(--dim);
+}
+.ph-glow-stop {
   stop-color: var(--accent);
 }
-.ph-joint {
-  display: none;
+.ph-socket-glow {
+  opacity: 0;
 }
-.ph-board.picking .ph-joint.live,
-.ph-joint.selected,
-.ph-joint.voting {
-  display: inline;
+.ph-socket.live .ph-socket-dot,
+.ph-socket.moving .ph-socket-dot,
+.ph-socket.selected .ph-socket-dot {
+  fill: var(--accent-soft);
+}
+.ph-socket.live .ph-socket-glow {
   animation: ph-joint-pulse 1.8s ease-in-out infinite;
 }
-.ph-joint.dim {
-  display: none;
-}
-.ph-joint.selected,
-.ph-joint.voting {
-  animation: none;
-  opacity: 1;
-}
-.ph-joint-line {
-  stroke-width: 2.6;
-  stroke-linecap: round;
+.ph-socket.moving .ph-socket-glow,
+.ph-socket.selected .ph-socket-glow {
+  opacity: 0.9;
 }
 
-/* Coins, locks and the blocker. */
+/* Coins, locks and the blocker. A path's coin is the same coin as the izzat in your tray. */
 .ph-coin-hit {
   fill: transparent;
 }
+.ph-coin-rim {
+  fill: var(--panel-2);
+  stroke: var(--accent-line);
+  stroke-width: 0.45;
+}
+.ph-token.v2 .ph-coin-rim {
+  fill: #3f5f4a;
+}
+.ph-token.v3 .ph-coin-rim {
+  fill: #4d5f86;
+}
+.ph-token.v4 .ph-coin-rim {
+  fill: #7a4f8c;
+}
+.ph-token.v5 .ph-coin-rim {
+  fill: #9a5a2c;
+}
 .ph-coin {
-  fill: var(--accent);
-  stroke: var(--felt);
-  stroke-width: 0.4;
+  fill: none;
+  stroke: rgb(255 255 255 / 18%);
+  stroke-width: 0.2;
 }
 .ph-token text {
-  fill: #1f1604;
+  fill: var(--text);
 }
-.ph-mark.live .ph-coin {
+.ph-mark.live .ph-coin-rim,
+.ph-mark.moving .ph-coin-rim {
   stroke: var(--accent-soft);
   stroke-width: 0.5;
+}
+/* Back stairs say "locked" by their dashed line; the lock shows only when they matter. */
+.ph-mark.back {
+  display: none;
+}
+.ph-mark.back.open,
+.ph-mark.back.live,
+.ph-mark.back.moving,
+.ph-mark.back.selected {
+  display: inline;
 }
 .ph-coin-mark circle {
   fill: var(--panel);
@@ -422,6 +562,20 @@
 .ph-blocker:focus-visible .ph-blocker-ring {
   stroke: var(--text);
 }
+.ph-blocker.moving {
+  transform: translateY(-0.7px);
+  filter: drop-shadow(0 0.7px 0.5px rgb(0 0 0 / 75%));
+}
+/* Once something is picked, the other rooms you could use stop breathing, so the pick leads. */
+.ph-board.picking .ph-room.live .ph-room-halo {
+  animation: none;
+  opacity: 0.15;
+}
+.ph-blocker.ghost {
+  opacity: 0.5;
+  pointer-events: none;
+  animation: ph-ghost 1.4s ease-in-out infinite;
+}
 .ph-under circle {
   fill: var(--accent);
   stroke: var(--felt);
@@ -434,7 +588,30 @@
 
 @keyframes ph-march {
   to {
-    stroke-dashoffset: -2.2;
+    stroke-dashoffset: -2.3;
+  }
+}
+@keyframes ph-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+@keyframes ph-lift {
+  50% {
+    transform: translateY(-1.1px);
+  }
+}
+@keyframes ph-ghost {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.65;
   }
 }
 @keyframes ph-glow {
@@ -464,38 +641,117 @@
   background: var(--panel-2);
   padding: 10px 14px;
 }
-.ph-vote h2 {
-  margin: 0 0 4px;
-  font-size: 1.05rem;
+.ph-vote-move {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  font: inherit;
 }
-.ph-tally {
-  margin: 0 0 6px;
+.ph-vote-rooms {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+.ph-vote-arrow {
+  color: var(--accent);
+  font-size: 1.3rem;
 }
 .ph-clock {
+  margin-left: auto;
   color: var(--accent-soft);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* One pip per yes needed: filled as the yeses come in. */
+.ph-pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.ph-pips span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+}
+.ph-pips span.on {
+  background: var(--accent);
+}
+/* A face in its seat colour, with badges: how many it has in the room, and what it said. */
+.ph-face {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--seat, var(--dim));
+}
+.ph-face .avatar {
+  width: 40px;
+  height: 40px;
 }
 .ph-voters {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 6px;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: 12px 18px;
 }
-.ph-voters .avatar.ph-dot-face {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  margin-right: 6px;
-  vertical-align: middle;
+.ph-count,
+.ph-said {
+  position: absolute;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
 }
-.ph-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 6px;
-  background: var(--seat, var(--dim));
+.ph-count {
+  top: -6px;
+  left: -8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.ph-said {
+  bottom: -6px;
+  right: -8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.ph-voter.yes .ph-said,
+.ph-voter.own .ph-said {
+  background: #3f7a4a;
+  border-color: #6fbf7a;
+  color: #fff;
+}
+.ph-voter.no .ph-said {
+  background: #8a3a2c;
+  border-color: #d9735e;
+  color: #fff;
+}
+.ph-voter.wait .ph-face {
+  opacity: 0.8;
+}
+.ph-said.ph-paid {
+  background: var(--accent);
+  border-color: var(--accent-line);
+  color: #1f1604;
+}
+.ph-table .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ---- your tray ---- */
@@ -895,16 +1151,44 @@ button.ph-chip.on {
   }
 }
 @media (max-width: 700px) {
-  .ph-seat-chip {
-    flex-basis: 100px;
-    flex-wrap: wrap;
-    padding: 4px 6px 4px 4px;
+  /* Short chips: face and favour side by side, then name and counts under them. */
+  .seats.ph-players .ph-seat-chip {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      "face fav"
+      "more more"
+      "away away";
+    justify-content: center;
+    align-items: center;
+    gap: 2px 6px;
+    padding: 4px 4px 2px;
+  }
+  .ph-seat-chip > .avatar-wrap {
+    grid-area: face;
+  }
+  .ph-seat-chip > .ph-seat-more {
+    grid-area: more;
+    min-height: 32px;
+  }
+  .ph-seat-chip > .ph-fav-btn {
+    grid-area: fav;
+    margin: 0;
+    padding: 2px 6px;
+  }
+  .ph-seat-chip > :not(.avatar-wrap, .ph-seat-more, .ph-fav-btn, .sheet-back) {
+    grid-area: away;
   }
   .ph-board {
     max-height: none;
   }
-  .ph-room-name {
-    font-size: 2.1px;
+  /* Too small to read here: the card shows its icon alone, and a tap names it. */
+  .ph-room-title {
+    display: none;
+  }
+  .ph-room-icon.solo {
+    display: inline;
+    font-size: 3.2px;
   }
   .ph-turn {
     font-size: 1rem;
@@ -914,14 +1198,20 @@ button.ph-chip.on {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ph-room.live .ph-room-box,
-  .ph-path.live .ph-path-line,
+  .ph-room.live .ph-room-halo,
+  .ph-path.live .ph-path-glow,
   .ph-blocker.live .ph-blocker-ring,
   .ph-path.selected .ph-path-line,
-  .ph-path.voting .ph-path-line,
-  .ph-joint,
+  .ph-path.moving .ph-path-line,
+  .ph-socket-glow,
+  .ph-seat.moving,
+  .ph-seat.ghost,
+  .ph-blocker.ghost,
   .ph-fav-btn.live {
     animation: none;
+  }
+  .ph-socket.live .ph-socket-glow {
+    opacity: 0.6;
   }
 }
 

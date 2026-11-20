@@ -127,7 +127,8 @@ const taken = new Set();
 const shot = async (name) => {
   if (taken.has(name)) return;
   taken.add(name);
-  const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: !phone });
+  // Not beyond the viewport: that capture re-renders the page and catches a sheet mid fade-in.
+  const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   fs.writeFileSync(path.join(out, `${name}.png`), Buffer.from(r.result.data, "base64"));
   console.log("shot", name);
 };
@@ -266,22 +267,32 @@ for (let tick = 0; tick < 4000; tick++) {
     await shot("their-move");
     // A tap on the board explains what was tapped.
     if (await clickFirst(".ph-room")) {
-      await sleep(300);
+      // Sheets fade in: wait until they are fully shown.
+      await sleep(900);
       const open = await evaluate(`!!document.querySelector('[role="dialog"]')`);
       if (!open) fail("a tap on a room while others move opened no sheet");
+      // An open sheet is solid and on top: nothing of the board shows through it.
+      const sheet = await evaluate(`(() => {
+        const s = document.querySelector('.sheet');
+        const r = s.getBoundingClientRect();
+        const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return JSON.stringify({ opacity: getComputedStyle(s).opacity, back: getComputedStyle(s).backgroundColor, onTop: s.contains(top), top: top?.className?.baseVal ?? top?.className });
+      })()`);
+      const seen = JSON.parse(sheet);
+      if (Number(seen.opacity) < 1 || !seen.onTop) fail(`the room sheet is not solid on top: ${sheet}`);
       await shot("board-info");
       await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await sleep(200);
     }
     // The sheets, once each, while someone else moves.
     await clickFirst('.icon-btn[aria-label="Log"]');
-    await sleep(300);
+    await sleep(900);
     await shot("log");
     await clickFirst('[role="dialog"] .sheet-close, [role="dialog"] button[aria-label="Close"]');
     await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
     await sleep(200);
     if (await clickFirst(".ph-tray .ph-give")) {
-      await sleep(300);
+      await sleep(900);
       await shot("give");
       await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await sleep(200);
