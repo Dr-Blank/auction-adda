@@ -14,7 +14,7 @@ use rand::rngs::StdRng;
 
 use crate::board::{Layout, Rooms, boards};
 use crate::bot::choose_action;
-use crate::types::{Action, LogEntry, Player, RuleError, Seat, State, Vote};
+use crate::types::{Action, LogEntry, Options, Player, RuleError, Seat, State, Vote};
 use crate::view::view_for;
 
 const LOCKED: &str = "The back stairs are locked";
@@ -27,11 +27,19 @@ fn damaged() -> RuleError {
     RuleError::new("The game state is damaged")
 }
 
-/// A new game for `n` seats on board `variant`.
+/// A new game for `n` seats on board `variant`, with the default options.
 ///
 /// # Errors
 /// When the board does not exist or does not seat `n`.
 pub fn new_game(n: u8, seed: u32, variant: u8) -> Result<State, RuleError> {
+    new_game_with(n, seed, variant, Options::default())
+}
+
+/// A new game for `n` seats on board `variant`.
+///
+/// # Errors
+/// When the board does not exist or does not seat `n`.
+pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<State, RuleError> {
     let Some(board) = boards().get(usize::from(variant)) else {
         return fail("No such board");
     };
@@ -57,6 +65,8 @@ pub fn new_game(n: u8, seed: u32, variant: u8) -> Result<State, RuleError> {
     Ok(State {
         n,
         seed,
+        options,
+        tried: Vec::new(),
         layout,
         rooms,
         tokens_on,
@@ -125,14 +135,21 @@ pub(crate) fn check_enter(layout: &Layout, rooms: &Rooms, hand: u8, room: u8) ->
     Ok(())
 }
 
-pub(crate) fn check_climb(
-    layout: &Layout,
-    rooms: &Rooms,
-    blocker: u8,
-    seat: Seat,
-    tokens: &[u8],
-    path: u8,
-) -> Result<Climb, RuleError> {
+/// Where a climb starts from: the board, and what this turn has already tried.
+pub(crate) struct Board<'a> {
+    pub layout: &'a Layout,
+    pub rooms: &'a Rooms,
+    pub blocker: u8,
+    pub tried: &'a [u8],
+}
+
+pub(crate) fn check_climb(b: &Board<'_>, seat: Seat, tokens: &[u8], path: u8) -> Result<Climb, RuleError> {
+    let Board {
+        layout,
+        rooms,
+        blocker,
+        tried,
+    } = *b;
     let Some(p) = layout.path(path) else {
         return fail("No such path");
     };
@@ -152,6 +169,9 @@ pub(crate) fn check_climb(
     let need = layout.need(p.from);
     if own >= need {
         return Ok(Climb::Own);
+    }
+    if tried.contains(&p.from) {
+        return fail("That room already said no this turn");
     }
     let others = rooms
         .get(usize::from(p.from))
@@ -248,9 +268,7 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
                 if seat != s.turn {
                     return fail("Only the climber can give up the climb");
                 }
-                s.log.push(LogEntry::Fail { p: seat });
-                s.vote = None;
-                next_turn(&mut s);
+                failed(&mut s);
             }
             Action::Unknown => return fail("Unknown move"),
             _ => return fail("Wait for the vote to finish"),
@@ -274,7 +292,13 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         }
         Action::Climb { path } => {
             let tokens = &s.players.get(me).ok_or_else(damaged)?.tokens;
-            match check_climb(&s.layout, &s.rooms, s.blocker, seat, tokens, path)? {
+            let board = Board {
+                layout: &s.layout,
+                rooms: &s.rooms,
+                blocker: s.blocker,
+                tried: &s.tried,
+            };
+            match check_climb(&board, seat, tokens, path)? {
                 Climb::Blocked | Climb::Own => climb(&mut s, seat, path, true)?,
                 Climb::Ask { need, own } => {
                     let room = s.layout.path(path).ok_or_else(damaged)?.from;
@@ -414,11 +438,22 @@ fn settle(s: &mut State, last: Option<Seat>) -> Result<(), RuleError> {
     }
     let tokens = &s.players.get(usize::from(mover)).ok_or_else(damaged)?.tokens;
     if voters_left(&s.rooms, &vote, mover).is_empty() && !can_bribe(&s.layout, &s.rooms, &vote, tokens) {
-        s.log.push(LogEntry::Fail { p: mover });
-        s.vote = None;
-        next_turn(s);
+        failed(s);
     }
     Ok(())
+}
+
+/// The running vote did not pass: the climber stays. The turn passes when the options say so;
+/// else the mover moves again, but not by another vote out of that room.
+fn failed(s: &mut State) {
+    s.log.push(LogEntry::Fail { p: s.turn });
+    if let Some(v) = s.vote.take() {
+        if s.options.fail_ends_turn {
+            next_turn(s);
+        } else if !s.tried.contains(&v.room) {
+            s.tried.push(v.room);
+        }
+    }
 }
 
 /// `ones` 1-point tokens from the supply, while it lasts.
@@ -483,6 +518,7 @@ fn end_move(s: &mut State) {
 
 fn next_turn(s: &mut State) {
     s.turn = (s.turn + 1) % s.n;
+    s.tried.clear();
 }
 
 /// A player's points.
@@ -562,9 +598,7 @@ pub fn time_up(prev: &State) -> Result<State, RuleError> {
         s.log.push(LogEntry::Vote { p: seat, yes: 0, of });
     }
     if s.vote.is_some() {
-        s.log.push(LogEntry::Fail { p: s.turn });
-        s.vote = None;
-        next_turn(&mut s);
+        failed(&mut s);
     }
     Ok(s)
 }

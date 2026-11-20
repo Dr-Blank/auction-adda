@@ -98,6 +98,18 @@ impl GameId {
         with_game!(self, G => G::new_game_on(n, seed, variant).map(Match::from))
     }
 
+    /// The switches an admin can set for this game.
+    #[must_use]
+    pub fn options(self) -> Vec<game::GameOption> {
+        with_game!(self, G => G::options())
+    }
+
+    /// # Errors
+    /// When the variant does not exist or does not seat `n`.
+    pub fn new_game_with(self, n: u8, seed: u32, variant: u8, options: &game::Options) -> Result<Match, RuleError> {
+        with_game!(self, G => G::new_game_with(n, seed, variant, options).map(Match::from))
+    }
+
     #[must_use]
     pub fn min_players(self) -> u8 {
         with_game!(self, G => *G::players().start())

@@ -1,10 +1,10 @@
 {
   "type": "state",
   "room": {
-    "code": "BQ444J",
+    "code": "YGXSJN",
     "theme": "society-committee",
     "cast": {
-      "seed": 1265090761,
+      "seed": 1365418751,
       "genres": []
     },
     "started": false,
@@ -74,12 +74,13 @@
         "🔥",
         "😬",
         "🙏"
-      ]
+      ],
+      "gameOptions": {}
     },
     "variant": 0,
     "watchers": [
       {
-        "id": 4,
+        "id": 3,
         "name": "Esha",
         "ban": null
       }

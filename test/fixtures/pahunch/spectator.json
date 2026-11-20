@@ -1,14 +1,24 @@
 {
   "type": "state",
   "room": {
-    "code": "BQ444J",
+    "code": "YGXSJN",
     "theme": "society-committee",
     "cast": {
-      "seed": 1265090761,
+      "seed": 1365418751,
       "genres": []
     },
     "started": true,
     "seats": [
+      {
+        "name": "Chitra",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "2a2b2c2d2e2f2g2h",
+        "ready": false,
+        "wins": 0
+      },
       {
         "name": "Bilal",
         "connected": true,
@@ -38,19 +48,9 @@
         "avatar": "3a3b3c3d3e3f3g3h",
         "ready": false,
         "wins": 0
-      },
-      {
-        "name": "Chitra",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "2a2b2c2d2e2f2g2h",
-        "ready": false,
-        "wins": 0
       }
     ],
-    "admin": 1,
+    "admin": 2,
     "canUndo": false,
     "minPlayers": 3,
     "maxPlayers": 5,
@@ -74,12 +74,13 @@
         "🔥",
         "😬",
         "🙏"
-      ]
+      ],
+      "gameOptions": {}
     },
     "variant": 0,
     "watchers": [
       {
-        "id": 4,
+        "id": 3,
         "name": "Esha",
         "ban": null
       }
@@ -91,6 +92,11 @@
   "game": {
     "n": 4,
     "you": null,
+    "options": {
+      "failEndsTurn": false,
+      "favours": true
+    },
+    "tried": [],
     "layout": {
       "board": "full",
       "name": "Full board",
@@ -300,18 +306,18 @@
       [],
       [
         null,
-        0,
-        2,
+        1,
+        3,
+        3
+      ],
+      [
+        2
+      ],
+      [
         2
       ],
       [
         1
-      ],
-      [
-        1
-      ],
-      [
-        0
       ],
       [],
       [
@@ -323,7 +329,7 @@
       ],
       [
         null,
-        3
+        0
       ],
       [],
       [],
@@ -336,49 +342,49 @@
       null,
       null,
       null,
+      4,
+      null,
+      4,
+      4,
       5,
       null,
+      null,
       3,
       3,
-      5,
+      null,
+      2,
+      3,
+      null,
+      null,
       null,
       null,
       4,
-      4,
-      null,
-      3,
-      4,
       null,
       null,
-      null,
-      null,
-      3,
-      null,
-      null,
-      4
+      5
     ],
     "blocker": 20,
     "bag": 21,
     "supply": 51,
     "players": [
       {
-        "hand": 4,
-        "tokens": null
-      },
-      {
-        "hand": 4,
-        "tokens": null
-      },
-      {
-        "hand": 4,
-        "tokens": null
-      },
-      {
         "hand": 5,
+        "tokens": null
+      },
+      {
+        "hand": 4,
+        "tokens": null
+      },
+      {
+        "hand": 4,
+        "tokens": null
+      },
+      {
+        "hand": 4,
         "tokens": null
       }
     ],
-    "turn": 2,
+    "turn": 3,
     "vote": {
       "room": 1,
       "path": 7,
@@ -386,82 +392,82 @@
       "answers": [
         null,
         null,
-        2,
-        null
+        null,
+        2
       ],
       "bribed": 0,
       "start": 12
     },
     "pending": [
-      0
+      1
     ],
     "log": [
       {
         "t": "start",
-        "first": 0
+        "first": 1
       },
       {
         "t": "enter",
-        "p": 0,
+        "p": 1,
         "room": 1
       },
       {
         "t": "nudge",
-        "p": 1,
+        "p": 2,
         "path": 12
       },
       {
         "t": "reward",
-        "p": 1,
+        "p": 2,
         "ones": 1
       },
       {
         "t": "enter",
-        "p": 2,
-        "room": 1
-      },
-      {
-        "t": "enter",
         "p": 3,
-        "room": 2
+        "room": 1
       },
       {
         "t": "enter",
         "p": 0,
-        "room": 0
+        "room": 2
       },
       {
         "t": "enter",
         "p": 1,
-        "room": 3
+        "room": 0
       },
       {
         "t": "enter",
         "p": 2,
+        "room": 3
+      },
+      {
+        "t": "enter",
+        "p": 3,
         "room": 1
       },
       {
         "t": "climb",
-        "p": 3,
+        "p": 0,
         "path": 10,
         "token": false,
         "free": true
       },
       {
         "t": "climb",
-        "p": 0,
+        "p": 1,
         "path": 0,
         "token": false,
         "free": true
       },
       {
         "t": "enter",
-        "p": 1,
+        "p": 2,
         "room": 2
       },
       {
         "t": "ask",
-        "p": 2,
+        "p": 3,
         "path": 7,
         "need": 3
       }

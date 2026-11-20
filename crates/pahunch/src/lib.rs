@@ -9,12 +9,26 @@ mod view;
 
 use std::ops::RangeInclusive;
 
-use game::Game;
+use game::{Game, GameOption};
+
+/// The admin's switches, as the lobby lists them.
+const OPTIONS: [GameOption; 2] = [
+    GameOption {
+        id: "failEndsTurn",
+        label: "A failed vote ends the turn",
+        default: false,
+    },
+    GameOption {
+        id: "favours",
+        label: "Favours",
+        default: true,
+    },
+];
 use rand::Rng;
 
 pub use board::{Board, Layout, PathDef, RoomDef, Rooms, Seating, boards};
 pub use bot::choose_action;
-pub use rules::{apply_action, apply_skip, end_early, new_game, pending, reseat, score};
+pub use rules::{apply_action, apply_skip, end_early, new_game, new_game_with, pending, reseat, score};
 pub use types::*;
 pub use view::view_for;
 
@@ -47,6 +61,19 @@ impl Game for Pahunch {
 
     fn new_game_on(n: u8, seed: u32, variant: u8) -> Result<State, RuleError> {
         new_game(n, seed, variant)
+    }
+
+    fn options() -> Vec<GameOption> {
+        OPTIONS.to_vec()
+    }
+
+    fn new_game_with(n: u8, seed: u32, variant: u8, options: &game::Options) -> Result<State, RuleError> {
+        let on = |id| game::option(&OPTIONS, options, id);
+        let options = Options {
+            fail_ends_turn: on("failEndsTurn"),
+            favours: on("favours"),
+        };
+        new_game_with(n, seed, variant, options)
     }
 
     fn seats(s: &State) -> u8 {

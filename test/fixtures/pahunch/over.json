@@ -1,14 +1,24 @@
 {
   "type": "state",
   "room": {
-    "code": "BQ444J",
+    "code": "YGXSJN",
     "theme": "society-committee",
     "cast": {
-      "seed": 1265090761,
+      "seed": 1365418751,
       "genres": []
     },
     "started": true,
     "seats": [
+      {
+        "name": "Chitra",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "2a2b2c2d2e2f2g2h",
+        "ready": false,
+        "wins": 1
+      },
       {
         "name": "Bilal",
         "connected": true,
@@ -27,7 +37,7 @@
         "bot": false,
         "avatar": "3k9a1c0b2d4e5f6g",
         "ready": false,
-        "wins": 1
+        "wins": 0
       },
       {
         "name": "Dev",
@@ -38,19 +48,9 @@
         "avatar": "3a3b3c3d3e3f3g3h",
         "ready": false,
         "wins": 0
-      },
-      {
-        "name": "Chitra",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "2a2b2c2d2e2f2g2h",
-        "ready": false,
-        "wins": 0
       }
     ],
-    "admin": 1,
+    "admin": 2,
     "canUndo": false,
     "minPlayers": 3,
     "maxPlayers": 5,
@@ -74,23 +74,29 @@
         "🔥",
         "😬",
         "🙏"
-      ]
+      ],
+      "gameOptions": {}
     },
     "variant": 0,
     "watchers": [
       {
-        "id": 4,
+        "id": 3,
         "name": "Esha",
         "ban": null
       }
     ],
     "games": 1
   },
-  "you": 1,
+  "you": 2,
   "left": null,
   "game": {
     "n": 4,
-    "you": 1,
+    "you": 2,
+    "options": {
+      "failEndsTurn": false,
+      "favours": true
+    },
+    "tried": [],
     "layout": {
       "board": "full",
       "name": "Full board",
@@ -298,55 +304,58 @@
     },
     "rooms": [
       [
-        0
+        2
       ],
       [
-        3,
+        null,
         0,
         2
       ],
-      [],
+      [
+        1
+      ],
       [
         1,
-        0,
-        1
-      ],
-      [],
-      [
-        1
-      ],
-      [
-        1
-      ],
-      [
-        1
-      ],
-      [
-        0,
-        3
-      ],
-      [
-        null,
-        3
-      ],
-      [
-        2,
-        null,
         0
       ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        null
+      ],
       [],
       [
+        2,
+        0,
+        3
+      ],
+      [
+        3,
+        3,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [],
+      [
+        2,
         null
       ],
       [
         0
       ],
       [
-        1,
-        null,
+        3,
+        0,
         2,
         3,
-        2
+        1
       ]
     ],
     "tokensOn": [
@@ -354,30 +363,30 @@
       null,
       null,
       null,
-      4,
+      2,
       null,
+      4,
       3,
       5,
+      null,
+      null,
+      3,
+      3,
+      null,
+      3,
       3,
       null,
       null,
-      5,
+      null,
+      null,
       4,
-      null,
-      3,
-      3,
-      null,
-      null,
-      null,
-      null,
-      3,
       null,
       null,
       5
     ],
     "blocker": 20,
-    "bag": 6,
-    "supply": 34,
+    "bag": 1,
+    "supply": 28,
     "players": [
       {
         "hand": 0,
@@ -387,10 +396,18 @@
           1,
           1,
           1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
           2,
           2,
-          4,
-          4
+          3,
+          3,
+          5
         ]
       },
       {
@@ -403,25 +420,14 @@
           1,
           1,
           1,
-          2,
-          3,
-          4
-        ]
-      },
-      {
-        "hand": 2,
-        "tokens": [
-          1,
-          1,
-          1,
-          1,
           1,
           3,
+          4,
           5
         ]
       },
       {
-        "hand": 2,
+        "hand": 1,
         "tokens": [
           1,
           1,
@@ -430,166 +436,181 @@
           1,
           1,
           1,
+          3,
+          3,
+          5,
+          5
+        ]
+      },
+      {
+        "hand": 1,
+        "tokens": [
+          1,
+          1,
+          1,
           1,
           1,
           3,
+          4,
+          4,
+          4,
           4
         ]
       }
     ],
-    "turn": 2,
+    "turn": 1,
     "vote": null,
     "pending": [],
     "log": [
       {
         "t": "start",
-        "first": 0
+        "first": 1
       },
       {
         "t": "enter",
-        "p": 0,
+        "p": 1,
         "room": 1
       },
       {
         "t": "nudge",
-        "p": 1,
+        "p": 2,
         "path": 12
       },
       {
         "t": "reward",
-        "p": 1,
+        "p": 2,
         "ones": 1
       },
       {
         "t": "enter",
-        "p": 2,
-        "room": 1
-      },
-      {
-        "t": "enter",
         "p": 3,
-        "room": 2
+        "room": 1
       },
       {
         "t": "enter",
         "p": 0,
-        "room": 0
+        "room": 2
       },
       {
         "t": "enter",
         "p": 1,
-        "room": 3
+        "room": 0
       },
       {
         "t": "enter",
         "p": 2,
+        "room": 3
+      },
+      {
+        "t": "enter",
+        "p": 3,
         "room": 1
       },
       {
         "t": "climb",
-        "p": 3,
+        "p": 0,
         "path": 10,
         "token": false,
         "free": true
       },
       {
         "t": "climb",
-        "p": 0,
+        "p": 1,
         "path": 0,
         "token": false,
         "free": true
       },
       {
         "t": "enter",
-        "p": 1,
+        "p": 2,
         "room": 2
       },
       {
         "t": "ask",
-        "p": 2,
+        "p": 3,
         "path": 7,
         "need": 3
       },
       {
         "t": "vote",
-        "p": 0,
+        "p": 1,
         "yes": 1,
         "of": 1
       },
       {
         "t": "reward",
-        "p": 0,
+        "p": 1,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 2,
+        "p": 3,
         "path": 7,
         "token": true,
-        "took": 3,
+        "took": 4,
         "free": false
       },
       {
         "t": "enter",
-        "p": 3,
+        "p": 0,
         "room": 1
       },
       {
         "t": "enter",
-        "p": 0,
+        "p": 1,
         "room": 0
       },
       {
         "t": "climb",
-        "p": 1,
+        "p": 2,
         "path": 10,
         "token": false,
         "free": true
       },
       {
         "t": "ask",
-        "p": 2,
+        "p": 3,
         "path": 4,
         "need": 2
       },
       {
         "t": "bribe",
-        "p": 2
+        "p": 3
       },
       {
         "t": "climb",
-        "p": 2,
+        "p": 3,
         "path": 4,
         "token": true,
-        "took": 5,
+        "took": 4,
         "free": false
       },
       {
         "t": "enter",
-        "p": 3,
+        "p": 0,
         "room": 1
       },
       {
         "t": "ask",
-        "p": 0,
+        "p": 1,
         "path": 7,
         "need": 3
       },
       {
         "t": "vote",
-        "p": 3,
+        "p": 0,
         "yes": 0,
         "of": 2
       },
       {
         "t": "vote",
-        "p": 2,
+        "p": 3,
         "yes": 1,
         "of": 1
       },
       {
         "t": "fail",
-        "p": 0
+        "p": 1
       },
       {
         "t": "enter",
@@ -599,8 +620,8 @@
       {
         "t": "ask",
         "p": 2,
-        "path": 8,
-        "need": 3
+        "path": 15,
+        "need": 2
       },
       {
         "t": "vote",
@@ -609,8 +630,33 @@
         "of": 1
       },
       {
-        "t": "vote",
+        "t": "reward",
+        "p": 0,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 2,
+        "path": 15,
+        "token": true,
+        "took": 3,
+        "free": false
+      },
+      {
+        "t": "ask",
         "p": 3,
+        "path": 7,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
         "yes": 2,
         "of": 2
       },
@@ -621,164 +667,129 @@
       },
       {
         "t": "reward",
-        "p": 3,
+        "p": 1,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 2,
+        "p": 3,
+        "path": 7,
+        "token": true,
+        "took": 2,
+        "free": false
+      },
+      {
+        "t": "enter",
+        "p": 0,
+        "room": 3
+      },
+      {
+        "t": "ask",
+        "p": 1,
+        "path": 8,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 0,
+        "yes": 2,
+        "of": 2
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 2
+      },
+      {
+        "t": "climb",
+        "p": 1,
         "path": 8,
         "token": true,
         "took": 5,
         "free": false
       },
       {
+        "t": "nudge",
+        "p": 2,
+        "path": 4
+      },
+      {
+        "t": "reward",
+        "p": 2,
+        "ones": 1
+      },
+      {
         "t": "ask",
         "p": 3,
-        "path": 14,
+        "path": 6,
         "need": 2
       },
       {
-        "t": "vote",
-        "p": 1,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "fail",
+        "t": "bribe",
         "p": 3
       },
       {
-        "t": "nudge",
-        "p": 0,
-        "path": 18
-      },
-      {
-        "t": "reward",
-        "p": 0,
-        "ones": 1
-      },
-      {
         "t": "climb",
-        "p": 1,
-        "path": 12,
+        "p": 3,
+        "path": 6,
         "token": true,
         "took": 4,
-        "free": true
-      },
-      {
-        "t": "nudge",
-        "p": 2,
-        "path": 7
-      },
-      {
-        "t": "reward",
-        "p": 2,
-        "ones": 1
+        "free": false
       },
       {
         "t": "ask",
-        "p": 3,
-        "path": 15,
+        "p": 0,
+        "path": 11,
         "need": 2
       },
       {
         "t": "vote",
-        "p": 1,
+        "p": 2,
         "yes": 1,
         "of": 1
       },
       {
         "t": "reward",
-        "p": 1,
+        "p": 2,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 3,
-        "path": 15,
-        "token": true,
-        "took": 4,
-        "free": false
-      },
-      {
-        "t": "ask",
         "p": 0,
-        "path": 7,
-        "need": 3
-      },
-      {
-        "t": "vote",
-        "p": 3,
-        "yes": 2,
-        "of": 2
-      },
-      {
-        "t": "reward",
-        "p": 3,
-        "ones": 2
-      },
-      {
-        "t": "climb",
-        "p": 0,
-        "path": 7,
-        "token": true,
-        "took": 4,
-        "free": false
-      },
-      {
-        "t": "ask",
-        "p": 1,
-        "path": 14,
-        "need": 2
-      },
-      {
-        "t": "bribe",
-        "p": 1
-      },
-      {
-        "t": "climb",
-        "p": 1,
-        "path": 14,
+        "path": 11,
         "token": true,
         "took": 3,
         "free": false
       },
       {
-        "t": "enter",
-        "p": 2,
-        "room": 2
-      },
-      {
-        "t": "nudge",
-        "p": 3,
-        "path": 4
-      },
-      {
-        "t": "reward",
-        "p": 3,
-        "ones": 1
-      },
-      {
         "t": "climb",
-        "p": 0,
+        "p": 1,
         "path": 3,
         "token": false,
         "free": true
       },
       {
         "t": "climb",
-        "p": 1,
-        "path": 20,
+        "p": 2,
+        "path": 21,
         "token": false,
         "free": true
       },
       {
-        "t": "climb",
-        "p": 2,
-        "path": 10,
-        "token": false,
-        "free": true
+        "t": "ask",
+        "p": 3,
+        "path": 4,
+        "need": 2
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "fail",
+        "p": 3
       },
       {
         "t": "enter",
@@ -791,58 +802,18 @@
         "room": 3
       },
       {
-        "t": "enter",
-        "p": 1,
-        "room": 3
-      },
-      {
-        "t": "ask",
-        "p": 2,
-        "path": 14,
-        "need": 2
-      },
-      {
-        "t": "fail",
-        "p": 2
-      },
-      {
         "t": "nudge",
-        "p": 3,
-        "path": 6
+        "p": 1,
+        "path": 15
       },
       {
         "t": "reward",
-        "p": 3,
-        "ones": 1
-      },
-      {
-        "t": "enter",
-        "p": 0,
-        "room": 1
-      },
-      {
-        "t": "enter",
         "p": 1,
-        "room": 1
-      },
-      {
-        "t": "enter",
-        "p": 2,
-        "room": 1
-      },
-      {
-        "t": "nudge",
-        "p": 3,
-        "path": 19
-      },
-      {
-        "t": "reward",
-        "p": 3,
         "ones": 1
       },
       {
         "t": "ask",
-        "p": 0,
+        "p": 2,
         "path": 11,
         "need": 2
       },
@@ -850,7 +821,7 @@
         "t": "vote",
         "p": 1,
         "yes": 1,
-        "of": 2
+        "of": 1
       },
       {
         "t": "reward",
@@ -859,92 +830,62 @@
       },
       {
         "t": "climb",
-        "p": 0,
+        "p": 2,
         "path": 11,
         "token": true,
-        "took": 4,
+        "took": 3,
         "free": false
       },
       {
-        "t": "climb",
-        "p": 1,
-        "path": 18,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "climb",
-        "p": 2,
-        "path": 17,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "climb",
+        "t": "enter",
         "p": 3,
-        "path": 21,
-        "token": false,
+        "room": 3
+      },
+      {
+        "t": "climb",
+        "p": 0,
+        "path": 14,
+        "token": true,
+        "took": 2,
         "free": true
+      },
+      {
+        "t": "enter",
+        "p": 1,
+        "room": 1
+      },
+      {
+        "t": "enter",
+        "p": 2,
+        "room": 1
       },
       {
         "t": "ask",
-        "p": 0,
-        "path": 8,
-        "need": 3
+        "p": 3,
+        "path": 11,
+        "need": 2
       },
       {
         "t": "vote",
         "p": 1,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
         "yes": 1,
         "of": 1
       },
       {
-        "t": "vote",
-        "p": 2,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "vote",
-        "p": 3,
-        "yes": 0,
-        "of": 2
-      },
-      {
-        "t": "fail",
-        "p": 0
-      },
-      {
-        "t": "nudge",
-        "p": 1,
-        "path": 4
-      },
-      {
         "t": "reward",
-        "p": 1,
+        "p": 0,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 2,
-        "path": 20,
-        "token": false,
-        "free": true
-      },
-      {
-        "t": "ask",
         "p": 3,
-        "path": 23,
-        "need": 2
-      },
-      {
-        "t": "bribe",
-        "p": 3
-      },
-      {
-        "t": "climb",
-        "p": 3,
-        "path": 23,
+        "path": 11,
         "token": true,
         "took": 4,
         "free": false
@@ -955,137 +896,53 @@
         "room": 3
       },
       {
-        "t": "climb",
-        "p": 1,
-        "path": 12,
-        "token": true,
-        "took": 2,
-        "free": true
-      },
-      {
         "t": "ask",
-        "p": 2,
-        "path": 15,
+        "p": 1,
+        "path": 4,
         "need": 2
       },
       {
         "t": "vote",
-        "p": 0,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "fail",
-        "p": 2
-      },
-      {
-        "t": "ask",
         "p": 3,
-        "path": 7,
-        "need": 3
-      },
-      {
-        "t": "vote",
-        "p": 1,
         "yes": 1,
         "of": 1
       },
       {
         "t": "reward",
-        "p": 1,
+        "p": 3,
         "ones": 1
       },
       {
         "t": "climb",
-        "p": 3,
-        "path": 7,
+        "p": 1,
+        "path": 4,
         "token": true,
         "took": 3,
         "free": false
       },
       {
         "t": "ask",
-        "p": 0,
-        "path": 14,
-        "need": 2
-      },
-      {
-        "t": "vote",
-        "p": 2,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "reward",
-        "p": 2,
-        "ones": 1
-      },
-      {
-        "t": "climb",
-        "p": 0,
-        "path": 14,
-        "token": true,
-        "took": 2,
-        "free": false
-      },
-      {
-        "t": "ask",
-        "p": 1,
-        "path": 8,
-        "need": 3
-      },
-      {
-        "t": "vote",
-        "p": 0,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "vote",
-        "p": 2,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "vote",
-        "p": 3,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "reward",
-        "p": 2,
-        "ones": 1
-      },
-      {
-        "t": "reward",
-        "p": 3,
-        "ones": 1
-      },
-      {
-        "t": "climb",
-        "p": 1,
-        "path": 8,
-        "token": true,
-        "took": 4,
-        "free": false
-      },
-      {
-        "t": "ask",
         "p": 2,
         "path": 14,
         "need": 2
       },
       {
-        "t": "bribe",
-        "p": 2
+        "t": "vote",
+        "p": 0,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
       },
       {
         "t": "climb",
         "p": 2,
         "path": 14,
         "token": true,
-        "took": 3,
+        "took": 5,
         "free": false
       },
       {
@@ -1098,19 +955,301 @@
       {
         "t": "climb",
         "p": 0,
-        "path": 4,
-        "token": true,
-        "took": 2,
+        "path": 20,
+        "token": false,
         "free": true
       },
       {
-        "t": "enter",
+        "t": "climb",
         "p": 1,
-        "room": 3
+        "path": 17,
+        "token": false,
+        "free": true
+      },
+      {
+        "t": "ask",
+        "p": 2,
+        "path": 7,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
+        "yes": 2,
+        "of": 2
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
+      },
+      {
+        "t": "reward",
+        "p": 1,
+        "ones": 1
       },
       {
         "t": "climb",
         "p": 2,
+        "path": 7,
+        "token": true,
+        "took": 5,
+        "free": false
+      },
+      {
+        "t": "enter",
+        "p": 3,
+        "room": 1
+      },
+      {
+        "t": "ask",
+        "p": 0,
+        "path": 7,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 3,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 3,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 0,
+        "path": 7,
+        "token": true,
+        "took": 5,
+        "free": false
+      },
+      {
+        "t": "enter",
+        "p": 1,
+        "room": 2
+      },
+      {
+        "t": "enter",
+        "p": 2,
+        "room": 1
+      },
+      {
+        "t": "ask",
+        "p": 3,
+        "path": 4,
+        "need": 2
+      },
+      {
+        "t": "vote",
+        "p": 2,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 3,
+        "path": 4,
+        "token": true,
+        "took": 4,
+        "free": false
+      },
+      {
+        "t": "ask",
+        "p": 0,
+        "path": 14,
+        "need": 2
+      },
+      {
+        "t": "vote",
+        "p": 3,
+        "yes": 2,
+        "of": 2
+      },
+      {
+        "t": "reward",
+        "p": 3,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 0,
+        "path": 14,
+        "token": true,
+        "took": 2,
+        "free": false
+      },
+      {
+        "t": "ask",
+        "p": 1,
+        "path": 8,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 2,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
+      },
+      {
+        "t": "reward",
+        "p": 2,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 1,
+        "path": 8,
+        "token": true,
+        "took": 4,
+        "free": false
+      },
+      {
+        "t": "climb",
+        "p": 2,
+        "path": 20,
+        "token": false,
+        "free": true
+      },
+      {
+        "t": "ask",
+        "p": 3,
+        "path": 6,
+        "need": 2
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 1,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 3,
+        "path": 6,
+        "token": true,
+        "took": 3,
+        "free": false
+      },
+      {
+        "t": "climb",
+        "p": 0,
+        "path": 11,
+        "token": true,
+        "took": 3,
+        "free": true
+      },
+      {
+        "t": "ask",
+        "p": 1,
+        "path": 6,
+        "need": 2
+      },
+      {
+        "t": "fail",
+        "p": 1
+      },
+      {
+        "t": "climb",
+        "p": 1,
+        "path": 0,
+        "token": false,
+        "free": true
+      },
+      {
+        "t": "enter",
+        "p": 2,
+        "room": 0
+      },
+      {
+        "t": "ask",
+        "p": 3,
+        "path": 7,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 2,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 0,
+        "yes": 0,
+        "of": 1
+      },
+      {
+        "t": "bribe",
+        "p": 3
+      },
+      {
+        "t": "reward",
+        "p": 2,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 3,
+        "path": 7,
+        "token": true,
+        "took": 3,
+        "free": false
+      },
+      {
+        "t": "nudge",
+        "p": 0,
+        "path": 21
+      },
+      {
+        "t": "reward",
+        "p": 0,
+        "ones": 1
+      },
+      {
+        "t": "climb",
+        "p": 1,
         "path": 20,
         "token": false,
         "free": true
@@ -1118,14 +1257,14 @@
       {
         "t": "end",
         "winners": [
-          1
+          0
         ]
       }
     ],
     "logStart": 0,
     "over": true,
     "winners": [
-      1
+      0
     ]
   }
 }

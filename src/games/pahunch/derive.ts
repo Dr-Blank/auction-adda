@@ -54,6 +54,7 @@ export function climbs(v: PahunchView, me: number): ClimbOption[] {
     const n = need(v.layout, p.from);
     if (path === v.blocker) return [{ path, kind: "blocked", need: n, own }];
     if (own >= n) return [{ path, kind: "own", need: n, own }];
+    if (v.tried.includes(p.from)) return [];
     const others = (v.rooms[p.from] ?? []).filter((x) => x !== null && x !== me).length;
     const neutrals = Math.min(count(v.rooms, p.from, null), bribeTokens(v.layout, tokens));
     return own + others + neutrals >= n ? [{ path, kind: "ask", need: n, own }] : [];

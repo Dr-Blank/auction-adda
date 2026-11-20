@@ -240,7 +240,13 @@ export function Rename({ name, send }: { name: string; send: (m: ClientMsg) => v
 }
 
 /** An on/off setting: a switch for the admin, the state for everyone else. */
-function Toggle(props: { label: string; hint: string; on: boolean; admin: boolean; onChange: (on: boolean) => void }) {
+export function Toggle(props: {
+  label: string;
+  hint: string;
+  on: boolean;
+  admin: boolean;
+  onChange: (on: boolean) => void;
+}) {
   return (
     <label className={`toggle ${props.on ? "on" : ""}`}>
       <input

@@ -4,7 +4,7 @@
 use rand::seq::IndexedRandom;
 use rand::{Rng, RngExt};
 
-use crate::rules::{Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, voters_left};
+use crate::rules::{Board, Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, voters_left};
 use crate::types::{Action, View};
 
 /// The move for the viewer of `v`, or `None` when it owes none.
@@ -38,8 +38,14 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
     let paths = || 0..u8::try_from(v.layout.paths.len()).unwrap_or(0);
     let rooms = 0..u8::try_from(v.layout.rooms.len()).unwrap_or(0);
     let hand = v.players.get(usize::from(me))?.hand;
+    let board = Board {
+        layout: &v.layout,
+        rooms: &v.rooms,
+        blocker: v.blocker,
+        tried: &v.tried,
+    };
     let climbs: Vec<(u8, Climb)> = paths()
-        .filter_map(|p| Some((p, check_climb(&v.layout, &v.rooms, v.blocker, me, &tokens, p).ok()?)))
+        .filter_map(|p| Some((p, check_climb(&board, me, &tokens, p).ok()?)))
         .collect();
     let enters: Vec<u8> = rooms
         .filter(|&r| check_enter(&v.layout, &v.rooms, hand, r).is_ok())

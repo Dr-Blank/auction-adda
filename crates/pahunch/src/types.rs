@@ -116,11 +116,47 @@ pub enum LogEntry {
     },
 }
 
+/// The admin's switches for one game, fixed when it starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename = "PahunchOptions")]
+pub struct Options {
+    /// A failed vote ends the mover's turn; off, they choose another move.
+    pub fail_ends_turn: bool,
+    /// Every player has a favour to lend.
+    pub favours: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            fail_ends_turn: false,
+            favours: true,
+        }
+    }
+}
+
+impl Options {
+    /// Games saved before options existed played this way.
+    #[must_use]
+    pub const fn legacy() -> Self {
+        Self {
+            fail_ends_turn: true,
+            favours: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
     pub n: u8,
     pub seed: u32,
+    #[serde(default = "Options::legacy")]
+    pub options: Options,
+    /// Rooms that voted the mover down this turn: no second vote there until the turn passes.
+    #[serde(default)]
+    pub tried: Vec<u8>,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
@@ -183,6 +219,9 @@ pub struct PlayerView {
 pub struct View {
     pub n: u8,
     pub you: Option<Seat>,
+    pub options: Options,
+    /// Rooms that voted the mover down this turn.
+    pub tried: Vec<u8>,
     pub layout: Layout,
     pub rooms: Rooms,
     pub tokens_on: Vec<Option<u8>>,

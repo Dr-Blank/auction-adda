@@ -1,4 +1,5 @@
-import { saveTimer } from "../../client/net.ts";
+import { Toggle } from "../../client/Lobby.tsx";
+import { saveSettings, saveTimer } from "../../client/net.ts";
 import GAMES_JSON from "../../generated/games.json" with { type: "json" };
 import type { ClientMsg, RoomInfo } from "../../generated/index.ts";
 import type { RoomProps } from "../types.ts";
@@ -90,11 +91,49 @@ export function BoardPicker({ room, me, send }: RoomProps) {
   );
 }
 
-/** The lobby's setup for Pahunch: the board, then the vote clock. */
+/** The game's switches, as the server lists them (id, label, default). */
+const OPTIONS = ((GAMES_JSON as { options?: Record<string, { id: string; label: string; default: boolean }[]> }).options
+  ?.pahunch ?? []) as { id: string; label: string; default: boolean }[];
+
+/** What each switch does. A switch without a line here is not shown yet. */
+const HINTS: Record<string, string> = {
+  failEndsTurn:
+    "Off: after a vote fails you choose another move, but not a second vote out of that room. On: the turn passes at once.",
+};
+
+/** The game's own switches: the admin flips them in the lobby, everyone sees them. */
+export function GameOptions({ room, me, send }: RoomProps) {
+  const admin = room.admin === me;
+  const shown = OPTIONS.filter((o) => HINTS[o.id]);
+  if (shown.length === 0) return null;
+  const set = (id: string, on: boolean) => {
+    const settings = { ...room.settings, gameOptions: { ...room.settings.gameOptions, [id]: on } };
+    saveSettings(settings);
+    send({ type: "settings", settings });
+  };
+  return (
+    <div className="room-settings">
+      <h3>House rules</h3>
+      {shown.map((o) => (
+        <Toggle
+          key={o.id}
+          label={o.label}
+          hint={HINTS[o.id] ?? ""}
+          on={room.settings.gameOptions[o.id] ?? o.default}
+          admin={admin}
+          onChange={(on) => set(o.id, on)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** The lobby's setup for Pahunch: the board, the house rules, then the vote clock. */
 export function Setup({ room, me, send }: RoomProps) {
   return (
     <>
       <BoardPicker room={room} me={me} send={send} />
+      <GameOptions room={room} me={me} send={send} />
       <VoteClock room={room} me={me} send={send} />
     </>
   );

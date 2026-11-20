@@ -5,6 +5,7 @@
 pub mod check;
 mod random;
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 
@@ -26,6 +27,27 @@ impl RuleError {
     pub fn new(message: impl Into<String>) -> Self {
         Self(message.into())
     }
+}
+
+/// A switch the admin can set before a game (a house rule, an expansion). The room keeps the
+/// admin's choices by `id`; a missing one takes `default`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct GameOption {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub default: bool,
+}
+
+/// The admin's choices, by option id.
+pub type Options = BTreeMap<String, bool>;
+
+/// The value of option `id` among `options`: the admin's choice, else its default.
+#[must_use]
+pub fn option(all: &[GameOption], options: &Options, id: &str) -> bool {
+    options
+        .get(id)
+        .copied()
+        .unwrap_or_else(|| all.iter().find(|o| o.id == id).is_some_and(|o| o.default))
 }
 
 /// `items` (one per seat) in a new seat order: the item of seat `i` goes to `to[i]`.
@@ -83,6 +105,20 @@ pub trait Game {
         } else {
             Err(RuleError::new("No such setup"))
         }
+    }
+
+    /// The switches an admin can set for this game; empty (the default) = none.
+    #[must_use]
+    fn options() -> Vec<GameOption> {
+        Vec::new()
+    }
+
+    /// A new game on `variant` with the admin's `options` (missing ones take their default).
+    ///
+    /// # Errors
+    /// As [`new_game_on`](Game::new_game_on).
+    fn new_game_with(n: u8, seed: u32, variant: u8, _options: &Options) -> Result<Self::State, RuleError> {
+        Self::new_game_on(n, seed, variant)
     }
 
     /// How many seats the game was dealt for.

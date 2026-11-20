@@ -230,7 +230,8 @@ fn the_vote_clock_says_no_for_whoever_did_not_answer() {
         yes: 0,
         of: 1
     }));
-    assert_eq!(v.turn, voter);
+    assert_eq!(v.turn, mover, "the mover chooses another move");
+    assert_eq!(v.tried, vec![1]);
 }
 
 #[test]
@@ -265,6 +266,23 @@ fn the_admin_picks_the_board_in_the_lobby() {
         last_error(&t.clients[0]).as_deref(),
         Some("Pick the setup in the lobby")
     );
+}
+
+#[test]
+fn the_admins_house_rules_reach_the_game() {
+    let mut t = table(3, None);
+    let mut settings = serde_json::to_value(&room(&t.clients[0]).settings).unwrap();
+    settings["gameOptions"] = json!({ "failEndsTurn": true });
+    t.admin(json!({ "type": "settings", "settings": settings }));
+    assert_eq!(last_error(&t.clients[0]), None);
+    assert_eq!(
+        room(&t.clients[1]).settings.game_options.get("failEndsTurn"),
+        Some(&true)
+    );
+    t.admin(json!({ "type": "start" }));
+    let v = view(&t.clients[1]);
+    assert!(v.options.fail_ends_turn);
+    assert!(v.options.favours, "a missing option takes its default");
 }
 
 #[test]

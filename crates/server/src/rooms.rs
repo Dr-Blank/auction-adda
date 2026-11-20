@@ -1166,7 +1166,7 @@ impl Rooms {
                     return fail(format!("Needs {}–{} players", kind.min_players(), kind.max_players()));
                 }
                 let (seed, variant) = (new_seed(), room.next_variant());
-                room.new_game(kind.new_game_on(n, seed, variant)?);
+                room.new_game(kind.new_game_with(n, seed, variant, &room.settings.game_options)?);
                 room.reshuffle = shuffle_seats;
                 info!(room = %code, seat = me, "Game started with {n} players (seed {seed}, setup {variant})");
             }
@@ -1176,7 +1176,7 @@ impl Rooms {
                 };
                 room.require_admin(me, "start a rematch")?;
                 let (n, seed, variant) = (game.seats(), new_seed(), room.next_variant());
-                room.new_game(game.id().new_game_on(n, seed, variant)?);
+                room.new_game(game.id().new_game_with(n, seed, variant, &room.settings.game_options)?);
                 room.reshuffle = shuffle_seats;
                 // Same genres, new names.
                 room.cast.seed = new_seed();

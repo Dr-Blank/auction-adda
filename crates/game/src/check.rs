@@ -11,7 +11,7 @@ use rand::rngs::StdRng;
 use rand::seq::IndexedRandom;
 use rand::{RngExt, SeedableRng};
 
-use crate::{Game, Seat};
+use crate::{Game, Options, Seat};
 
 /// Steps after which a game counts as never ending.
 const MAX_STEPS: usize = 100_000;
@@ -37,25 +37,46 @@ pub fn random_games<G: Game>(games: u32) -> Result<(), String> {
     if G::new_game_on(*players.start(), 1, variants).is_ok() {
         return Err(format!("variant {variants} started, past the {variants} listed"));
     }
+    // The defaults, then every option the other way.
+    let defaults: Options = G::options().iter().map(|o| (o.id.to_owned(), o.default)).collect();
+    let flipped: Options = defaults.iter().map(|(k, &v)| (k.clone(), !v)).collect();
+    let sets = if defaults.is_empty() {
+        vec![defaults]
+    } else {
+        vec![defaults, flipped]
+    };
     for n in players {
         for variant in 0..variants {
-            for k in 0..games {
-                let seed = k.wrapping_mul(2_654_435_761).wrapping_add(u32::from(n));
-                play::<G>(n, seed, variant)
-                    .map_err(|e| format!("{n} seats, variant {variant}, game {k} (seed {seed}): {e}"))?;
+            for options in &sets {
+                for k in 0..games {
+                    let seed = k.wrapping_mul(2_654_435_761).wrapping_add(u32::from(n));
+                    let with = if options.is_empty() {
+                        String::new()
+                    } else {
+                        format!(", options {options:?}")
+                    };
+                    play::<G>(n, seed, variant, options)
+                        .map_err(|e| format!("{n} seats, variant {variant}{with}, game {k} (seed {seed}): {e}"))?;
+                }
             }
         }
     }
     Ok(())
 }
 
-fn play<G: Game>(n: u8, seed: u32, variant: u8) -> Result<(), String> {
+fn play<G: Game>(n: u8, seed: u32, variant: u8, options: &Options) -> Result<(), String> {
     let mut rng = StdRng::seed_from_u64(u64::from(seed));
-    let mut s = G::new_game_on(n, seed, variant).map_err(|e| format!("new game: {e}"))?;
-    if G::new_game_on(n, seed, variant).ok().as_ref() != Some(&s) {
+    let mut s = G::new_game_with(n, seed, variant, options).map_err(|e| format!("new game: {e}"))?;
+    if G::new_game_with(n, seed, variant, options).ok().as_ref() != Some(&s) {
         return Err("the same seed dealt two different games".into());
     }
-    if variant == 0 && G::new_game(n, seed).ok().as_ref() != Some(&s) {
+    let default = G::options()
+        .iter()
+        .all(|o| options.get(o.id).is_none_or(|&v| v == o.default));
+    if default && G::new_game_on(n, seed, variant).ok().as_ref() != Some(&s) {
+        return Err("the default options are not the game without options".into());
+    }
+    if default && variant == 0 && G::new_game(n, seed).ok().as_ref() != Some(&s) {
         return Err("variant 0 is not the default game".into());
     }
     if G::seats(&s) != n {

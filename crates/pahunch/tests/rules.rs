@@ -130,14 +130,70 @@ fn a_vote_passes_and_pays_the_needed_yes() {
 }
 
 #[test]
-fn a_no_keeps_the_climber_and_ends_the_turn() {
+fn a_no_keeps_the_climber_and_the_mover_moves_again() {
     let mut s = fresh(5);
     s.rooms[1] = vec![Some(0), Some(1)];
+    s.rooms[2] = vec![Some(0), Some(0)];
     let t = act(&act(&s, 0, Action::Climb { path: 1 }), 1, Action::Vote { yes: 0 });
     assert_eq!(t.rooms[1], vec![Some(0), Some(1)]);
     assert!(t.vote.is_none());
     assert_eq!(t.log.last(), Some(&LogEntry::Fail { p: 0 }));
-    assert_eq!(t.turn, 1);
+    assert_eq!((t.turn, t.tried.clone()), (0, vec![1]));
+    assert_eq!(Pahunch::pending(&t), vec![0]);
+    assert_eq!(
+        refused(&t, 0, Action::Climb { path: 2 }),
+        "That room already said no this turn"
+    );
+    // Another room, or a climb that needs no vote, is fine; the next turn forgets.
+    let u = act(&t, 0, Action::Climb { path: 3 });
+    assert_eq!((u.turn, u.tried.clone()), (1, vec![]));
+}
+
+#[test]
+fn with_the_setting_on_a_no_ends_the_turn() {
+    let mut s = fresh(5);
+    s.options.fail_ends_turn = true;
+    s.rooms[1] = vec![Some(0), Some(1)];
+    let t = act(&act(&s, 0, Action::Climb { path: 1 }), 1, Action::Vote { yes: 0 });
+    assert_eq!((t.turn, t.tried.clone()), (1, vec![]));
+}
+
+#[test]
+fn a_bribe_stays_spent_when_the_vote_fails() {
+    // Room 3 seats 5: leaving takes 3.
+    let mut s = fresh(5);
+    s.rooms[3] = vec![None, Some(0), Some(1), Some(2)];
+    s.players[0].tokens = vec![3];
+    let t = act(&s, 0, Action::Climb { path: 5 });
+    let t = act(&t, 0, Action::Bribe { token: 3 });
+    let t = act(&act(&t, 1, Action::Vote { yes: 0 }), 2, Action::Vote { yes: 0 });
+    assert!(t.vote.is_none());
+    assert!(t.players[0].tokens.is_empty());
+    assert_eq!(t.turn, 0);
+}
+
+#[test]
+fn a_game_saved_before_options_keeps_its_old_rules() {
+    let s = fresh(3);
+    let mut json = serde_json::to_value(&s).unwrap();
+    let o = json.as_object_mut().unwrap();
+    o.remove("options");
+    o.remove("tried");
+    let old: State = serde_json::from_value(json).unwrap();
+    assert!(old.options.fail_ends_turn);
+    assert!(!old.options.favours);
+    assert!(old.tried.is_empty());
+}
+
+#[test]
+fn the_admins_options_reach_the_game() {
+    let none = game::Options::new();
+    let s = Pahunch::new_game_with(3, 1, 0, &none).unwrap();
+    assert_eq!(s.options, pahunch::Options::default());
+    let on: game::Options = [("failEndsTurn".to_owned(), true), ("favours".to_owned(), false)].into();
+    let t = Pahunch::new_game_with(3, 1, 0, &on).unwrap();
+    assert!(t.options.fail_ends_turn && !t.options.favours);
+    assert_eq!(Pahunch::options().len(), 2);
 }
 
 #[test]
@@ -197,7 +253,7 @@ fn the_mover_can_give_up_the_climb() {
     );
     let u = act(&t, 0, Action::Withdraw);
     assert!(u.vote.is_none());
-    assert_eq!(u.turn, 1);
+    assert_eq!((u.turn, u.tried.clone()), (0, vec![1]));
 }
 
 #[test]
@@ -359,7 +415,7 @@ fn the_vote_clock_runs_during_a_vote_and_silence_says_no() {
     let w = Pahunch::time_up(&u).unwrap();
     assert!(w.vote.is_none());
     assert_eq!(w.rooms[0].len(), 5);
-    assert_eq!(w.turn, 1);
+    assert_eq!((w.turn, w.tried.clone()), (0, vec![0]));
     assert!(Pahunch::time_up(&w).is_err());
 }
 

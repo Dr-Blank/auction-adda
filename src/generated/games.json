@@ -1,4 +1,19 @@
 {
+  "options": {
+    "auction": [],
+    "pahunch": [
+      {
+        "default": false,
+        "id": "failEndsTurn",
+        "label": "A failed vote ends the turn"
+      },
+      {
+        "default": true,
+        "id": "favours",
+        "label": "Favours"
+      }
+    ]
+  },
   "players": {
     "auction": [
       3,

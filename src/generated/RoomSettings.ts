@@ -27,4 +27,9 @@ shuffleEachRound: boolean,
 /**
  * Emoji players can send over their seat (`react`), at most `MAX_REACTIONS`; empty = off.
  */
-reactions: Array<string>, };
+reactions: Array<string>, 
+/**
+ * The game's own switches (house rules), by id as `games.json` lists them; a missing one
+ * takes its default. Read when a game starts.
+ */
+gameOptions: { [key in string]: boolean }, };

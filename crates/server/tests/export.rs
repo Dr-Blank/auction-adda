@@ -55,8 +55,11 @@ fn export_typescript() {
         .map(|g| (id(g), json!([g.min_players(), g.max_players()])))
         .collect();
     let variants: Map<String, Value> = GameId::ALL.iter().map(|g| (id(g), json!(g.variants()))).collect();
-    let games = serde_json::to_string_pretty(&json!({ "themes": themes, "players": players, "variants": variants }))
-        .unwrap()
+    let options: Map<String, Value> = GameId::ALL.iter().map(|g| (id(g), json!(g.options()))).collect();
+    let games = serde_json::to_string_pretty(
+        &json!({ "themes": themes, "players": players, "variants": variants, "options": options }),
+    )
+    .unwrap()
         + "\n";
     fs::write(dir.join("games.json"), games).unwrap();
 }

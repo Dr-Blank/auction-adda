@@ -1,14 +1,24 @@
 {
   "type": "state",
   "room": {
-    "code": "BQ444J",
+    "code": "YGXSJN",
     "theme": "society-committee",
     "cast": {
-      "seed": 1436832806,
+      "seed": 1119194421,
       "genres": []
     },
     "started": true,
     "seats": [
+      {
+        "name": "Bilal",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "1a1b1c1d1e1f1g1h",
+        "ready": false,
+        "wins": 0
+      },
       {
         "name": "Dev",
         "connected": true,
@@ -27,16 +37,6 @@
         "bot": false,
         "avatar": "3k9a1c0b2d4e5f6g",
         "ready": false,
-        "wins": 1
-      },
-      {
-        "name": "Bilal",
-        "connected": true,
-        "awayMs": null,
-        "open": false,
-        "bot": false,
-        "avatar": "1a1b1c1d1e1f1g1h",
-        "ready": false,
         "wins": 0
       },
       {
@@ -47,10 +47,10 @@
         "bot": false,
         "avatar": "2a2b2c2d2e2f2g2h",
         "ready": false,
-        "wins": 0
+        "wins": 1
       }
     ],
-    "admin": 1,
+    "admin": 2,
     "canUndo": false,
     "minPlayers": 3,
     "maxPlayers": 5,
@@ -74,23 +74,29 @@
         "🔥",
         "😬",
         "🙏"
-      ]
+      ],
+      "gameOptions": {}
     },
     "variant": 0,
     "watchers": [
       {
-        "id": 4,
+        "id": 3,
         "name": "Esha",
         "ban": null
       }
     ],
     "games": 1
   },
-  "you": 1,
+  "you": 2,
   "left": null,
   "game": {
     "n": 4,
-    "you": 1,
+    "you": 2,
+    "options": {
+      "failEndsTurn": false,
+      "favours": true
+    },
+    "tried": [],
     "layout": {
       "board": "full",
       "name": "Full board",
@@ -297,32 +303,33 @@
       "minBribe": 2
     },
     "rooms": [
-      [],
+      [
+        0
+      ],
       [
         null,
         3,
         1,
-        2
+        0
       ],
       [
         3
       ],
       [
-        0,
+        null,
+        1,
         0
       ],
+      [],
       [
         2
       ],
       [],
       [],
+      [
+        null
+      ],
       [],
-      [
-        null
-      ],
-      [
-        null
-      ],
       [],
       [
         null
@@ -338,15 +345,15 @@
       null,
       5,
       null,
-      4,
-      4,
-      4,
-      null,
-      null,
-      3,
-      3,
-      null,
       2,
+      2,
+      3,
+      null,
+      null,
+      3,
+      2,
+      null,
+      4,
       3,
       null,
       null,
@@ -358,9 +365,16 @@
       3
     ],
     "blocker": 20,
-    "bag": 21,
-    "supply": 50,
+    "bag": 20,
+    "supply": 49,
     "players": [
+      {
+        "hand": 3,
+        "tokens": [
+          1,
+          1
+        ]
+      },
       {
         "hand": 4,
         "tokens": [
@@ -374,25 +388,20 @@
         "tokens": [
           1,
           1,
-          1
+          4
         ]
       },
       {
         "hand": 4,
         "tokens": [
           1,
-          1
-        ]
-      },
-      {
-        "hand": 4,
-        "tokens": [
+          1,
           1,
           1
         ]
       }
     ],
-    "turn": 3,
+    "turn": 1,
     "vote": null,
     "pending": [],
     "log": [
@@ -403,47 +412,17 @@
       {
         "t": "enter",
         "p": 3,
-        "room": 1
+        "room": 2
       },
       {
         "t": "enter",
         "p": 0,
-        "room": 3
-      },
-      {
-        "t": "nudge",
-        "p": 1,
-        "path": 15
-      },
-      {
-        "t": "reward",
-        "p": 1,
-        "ones": 1
-      },
-      {
-        "t": "enter",
-        "p": 2,
         "room": 0
       },
       {
         "t": "enter",
-        "p": 3,
-        "room": 2
-      },
-      {
-        "t": "nudge",
-        "p": 0,
-        "path": 11
-      },
-      {
-        "t": "reward",
-        "p": 0,
-        "ones": 1
-      },
-      {
-        "t": "enter",
         "p": 1,
-        "room": 1
+        "room": 3
       },
       {
         "t": "enter",
@@ -451,26 +430,9 @@
         "room": 1
       },
       {
-        "t": "ask",
+        "t": "enter",
         "p": 3,
-        "path": 7,
-        "need": 3
-      },
-      {
-        "t": "vote",
-        "p": 1,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "vote",
-        "p": 2,
-        "yes": 1,
-        "of": 1
-      },
-      {
-        "t": "fail",
-        "p": 3
+        "room": 1
       },
       {
         "t": "enter",
@@ -480,18 +442,12 @@
       {
         "t": "ask",
         "p": 1,
-        "path": 7,
-        "need": 3
+        "path": 11,
+        "need": 2
       },
       {
         "t": "vote",
-        "p": 2,
-        "yes": 0,
-        "of": 1
-      },
-      {
-        "t": "vote",
-        "p": 3,
+        "p": 0,
         "yes": 0,
         "of": 1
       },
@@ -500,16 +456,71 @@
         "p": 1
       },
       {
+        "t": "enter",
+        "p": 1,
+        "room": 1
+      },
+      {
+        "t": "ask",
+        "p": 2,
+        "path": 8,
+        "need": 3
+      },
+      {
+        "t": "vote",
+        "p": 3,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "vote",
+        "p": 1,
+        "yes": 1,
+        "of": 1
+      },
+      {
+        "t": "reward",
+        "p": 1,
+        "ones": 1
+      },
+      {
+        "t": "reward",
+        "p": 3,
+        "ones": 1
+      },
+      {
         "t": "climb",
         "p": 2,
-        "path": 0,
-        "token": false,
-        "free": true
+        "path": 8,
+        "token": true,
+        "took": 4,
+        "free": false
+      },
+      {
+        "t": "nudge",
+        "p": 3,
+        "path": 15
+      },
+      {
+        "t": "reward",
+        "p": 3,
+        "ones": 1
+      },
+      {
+        "t": "enter",
+        "p": 0,
+        "room": 1
+      },
+      {
+        "t": "ask",
+        "p": 1,
+        "path": 7,
+        "need": 3
       },
       {
         "t": "end",
         "winners": [],
-        "by": 1
+        "by": 2
       }
     ],
     "logStart": 0,

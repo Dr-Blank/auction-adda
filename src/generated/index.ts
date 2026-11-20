@@ -17,6 +17,7 @@ export type * from './MyRoom.ts';
 export type * from './PahunchAction.ts';
 export type * from './PahunchLayout.ts';
 export type * from './PahunchLog.ts';
+export type * from './PahunchOptions.ts';
 export type * from './PahunchPath.ts';
 export type * from './PahunchPlayer.ts';
 export type * from './PahunchRoom.ts';

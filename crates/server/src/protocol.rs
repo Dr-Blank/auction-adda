@@ -1,5 +1,7 @@
 //! Messages between the browser and the server. The client gets these types from `src/generated/`.
 
+use std::collections::BTreeMap;
+
 use game::Seat;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -95,6 +97,9 @@ pub struct RoomSettings {
     pub shuffle_each_round: bool,
     /// Emoji players can send over their seat (`react`), at most `MAX_REACTIONS`; empty = off.
     pub reactions: Vec<String>,
+    /// The game's own switches (house rules), by id as `games.json` lists them; a missing one
+    /// takes its default. Read when a game starts.
+    pub game_options: BTreeMap<String, bool>,
 }
 
 /// The reactions a new room offers.
@@ -110,6 +115,7 @@ impl Default for RoomSettings {
             rename: false,
             shuffle_each_round: false,
             reactions: DEFAULT_REACTIONS.map(str::to_owned).to_vec(),
+            game_options: BTreeMap::new(),
         }
     }
 }
