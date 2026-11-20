@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { TOKENS } from "../config.ts";
-import type { Card, RoundSummary, Sale, View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
-import { dealNote, reducedMotion } from "./derive.ts";
-import { TOUCH, useCountUp } from "./hooks.ts";
-import { play } from "./sound.ts";
+import { reducedMotion, TOUCH, useCountUp } from "../../client/hooks.ts";
+import { play } from "../../client/sound.ts";
+import type { Card, RoundSummary, Sale, View } from "../../generated/index.ts";
+import { TOKENS } from "./config.ts";
+import { dealNote } from "./derive.ts";
+import type { Theme } from "./themes/types.ts";
 
 interface Props {
   s: RoundSummary;

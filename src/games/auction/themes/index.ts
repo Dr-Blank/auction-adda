@@ -1,4 +1,4 @@
-import type { Cast, ThemeId } from "../generated/index.ts";
+import type { Cast, ThemeId } from "../../../generated/index.ts";
 import { boxOffice } from "./box-office/index.tsx";
 import { castTheme } from "./cast.ts";
 import { leatherWillow } from "./leather-willow/index.tsx";

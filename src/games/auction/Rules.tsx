@@ -1,6 +1,6 @@
-import { CARD_TABLE, DEALS, ROUNDS, SUIT_LIMIT, TOKENS } from "../config.ts";
-import type { AuctionType } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
+import type { AuctionType } from "../../generated/index.ts";
+import { CARD_TABLE, DEALS, ROUNDS, SUIT_LIMIT, TOKENS } from "./config.ts";
+import type { Theme } from "./themes/types.ts";
 
 const TYPES: AuctionType[] = ["open", "once", "sealed", "fixed", "double"];
 

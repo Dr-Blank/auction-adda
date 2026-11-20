@@ -1,8 +1,8 @@
 // Facts the table screen shows that are not stored directly in the view.
 
-import { DEALS, ROUNDS, SUITS, TOKENS } from "../config.ts";
-import type { Card, LogEntry, View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
+import type { Card, LogEntry, View } from "../../generated/index.ts";
+import { DEALS, ROUNDS, SUITS, TOKENS } from "./config.ts";
+import type { Theme } from "./themes/types.ts";
 
 /** What the deal at the start of `round` gives every player (all get the same), and why nothing when nothing. */
 export function dealNote(theme: Theme, n: number, round: number): string {
@@ -202,6 +202,3 @@ export function groupLog(log: LogEntry[], start: number): LogGroup[] {
   });
   return groups.reverse();
 }
-
-export const reducedMotion = () =>
-  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { SUITS } from "../src/config.ts";
+import { SUITS } from "../src/games/auction/config.ts";
+import { castGenres } from "../src/games/auction/themes/cast.ts";
+import { getTheme, THEMES } from "../src/games/auction/themes/index.ts";
 import DECK from "../src/generated/deck.json" with { type: "json" };
 import type { Card } from "../src/generated/index.ts";
-import { castGenres } from "../src/themes/cast.ts";
-import { getTheme, THEMES } from "../src/themes/index.ts";
 
 const deck = DECK as Card[];
 const SEEDS = Array.from({ length: 200 }, (_, i) => i * 7_777 + 1);

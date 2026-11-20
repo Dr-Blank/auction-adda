@@ -1,40 +1,47 @@
-import { useEffect, useState } from "react";
-import { SUITS } from "../config.ts";
+import { Fragment, useEffect, useState } from "react";
+import { GAME_LIST } from "../games/index.ts";
+import type { GameClient, Skin } from "../games/types.ts";
 import type { ClientMsg, RoomInfo, RoomSettings, ThemeId } from "../generated/index.ts";
-import { castGenres } from "../themes/cast.ts";
-import { getDef, THEME_IDS, THEMES } from "../themes/index.ts";
-import type { Theme } from "../themes/types.ts";
 import { Avatar, LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
 import { CheckIcon, CopyIcon, LockIcon, PencilIcon, QrIcon, ShareIcon, TrophyIcon } from "./Icons.tsx";
 import type { Reaction, RoomState } from "./net.ts";
-import { savedName, saveGenres, saveName, saveSettings, saveTheme, saveTimer, useSavedLook } from "./net.ts";
+import { savedName, saveName, saveSettings, saveTheme, useSavedLook } from "./net.ts";
 import { Qr } from "./Qr.tsx";
 import { Floats, ReactBar, ReactionPicker } from "./Reactions.tsx";
-import { Rules } from "./Rules.tsx";
 import { Sheet } from "./Sheet.tsx";
 
 interface Props {
   state: RoomState;
   send: (m: ClientMsg) => void;
   join: (room: string, name?: string) => void;
-  theme: Theme;
+  /** The room's game, and its theme's look. */
+  game: GameClient;
+  skin: Skin;
   reactions: Reaction[];
 }
 
-/** The themes as radio cards. */
+/** The themes as radio cards; picking one picks its game. With more than one game, by game. */
 export function ThemePicker({ value, onChange }: { value: string; onChange: (id: ThemeId) => void }) {
   return (
     <fieldset>
       <legend>Theme</legend>
-      {THEME_IDS.map((id) => (
-        <label key={id} className={`theme-pick ${value === id ? "on" : ""}`}>
-          <input type="radio" name="theme" checked={value === id} onChange={() => onChange(id)} />
-          <span>
-            <b>{THEMES[id].title}</b>
-            <small>{THEMES[id].tagline}</small>
-          </span>
-        </label>
+      {GAME_LIST.map((g) => (
+        <Fragment key={g.id}>
+          {GAME_LIST.length > 1 && <h3 className="theme-game">{g.title}</h3>}
+          {g.themes.map((id) => {
+            const skin = g.skin(id);
+            return (
+              <label key={id} className={`theme-pick ${value === id ? "on" : ""}`}>
+                <input type="radio" name="theme" checked={value === id} onChange={() => onChange(id)} />
+                <span>
+                  <b>{skin.title}</b>
+                  <small>{skin.tagline}</small>
+                </span>
+              </label>
+            );
+          })}
+        </Fragment>
       ))}
     </fieldset>
   );
@@ -234,49 +241,6 @@ export function Rename({ name, send }: { name: string; send: (m: ClientMsg) => v
   );
 }
 
-const FIRST_CHOICES = [0, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
-const EXTEND_CHOICES = [3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120];
-const secs = (n: number) => (n === 0 ? "No limit" : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
-
-/**
- * The open-auction clock: a long first stretch when a lot goes up (so nobody misses it), then a
- * short top-up after each bid. The admin picks both and their browser keeps them for next time.
- */
-export function BidTimer({ room, me, send }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void }) {
-  const first = room.bidTimerS;
-  const extend = room.bidExtendS;
-  const set = (seconds: number, ext: number) => {
-    saveTimer(seconds, ext);
-    send({ type: "timer", seconds, extend: ext });
-  };
-  const pick = (value: number, choices: number[], onPick: (n: number) => void) =>
-    room.admin === me ? (
-      <select value={value} onChange={(e) => onPick(Number(e.target.value))}>
-        {[...new Set([...choices, value])]
-          .sort((x, y) => x - y)
-          .map((n) => (
-            <option key={n} value={n}>
-              {secs(n)}
-            </option>
-          ))}
-      </select>
-    ) : (
-      <b>{secs(value)}</b>
-    );
-  return (
-    <div className="bid-timer">
-      <h3>Open-auction clock</h3>
-      <label>When a lot goes up {pick(first, FIRST_CHOICES, (n) => set(n, extend))}</label>
-      {first > 0 && <label>After a bid, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n))}</label>}
-      <small className="muted">
-        {first === 0
-          ? "Open auctions wait until every bidder says done. Good for tables that call results on voice."
-          : `Players still in have ${secs(first)} once a lot goes up. A bid with less than ${secs(extend)} left tops the clock up to ${secs(extend)}. When it runs out, they are done.`}
-      </small>
-    </div>
-  );
-}
-
 /** An on/off setting: a switch for the admin, the state for everyone else. */
 function Toggle(props: { label: string; hint: string; on: boolean; admin: boolean; onChange: (on: boolean) => void }) {
   return (
@@ -396,104 +360,6 @@ export function WatcherList({ room, me, send }: { room: RoomInfo; me: number | n
   );
 }
 
-/** This game's suits; the admin picks which genres play and can draw new names. */
-export function CastPicker({
-  room,
-  me,
-  send,
-  theme,
-}: {
-  room: RoomInfo;
-  me: number | null;
-  send: (m: ClientMsg) => void;
-  theme: Theme;
-}) {
-  const { genres } = getDef(room.theme);
-  const playing = castGenres(genres.length, room.cast);
-  // A pick of fewer than SUITS genres stays here until it is complete.
-  const [draft, setDraft] = useState<number[] | null>(null);
-  const isAdmin = room.admin === me;
-  const chosen = draft ?? playing;
-  const toggle = (g: number) => {
-    const next = chosen.includes(g) ? chosen.filter((x) => x !== g) : [...chosen, g];
-    if (next.length === SUITS) {
-      setDraft(null);
-      saveGenres(room.theme, next);
-      send({ type: "cast", genres: next, reroll: false });
-    } else if (next.length < SUITS) {
-      setDraft(next);
-    }
-  };
-  const { suit } = theme.nouns;
-  const suits = `${suit}s`;
-  return (
-    <section className="cast">
-      <h2>This game’s {suits}</h2>
-      <ul className="cast-suits">
-        {theme.suits.map((s, i) => (
-          <li key={s.key}>
-            {theme.renderSuit(i, 36)}
-            <span>
-              <b>{s.name}</b>
-              <small>
-                {s.glyph} {s.genre}
-              </small>
-            </span>
-          </li>
-        ))}
-      </ul>
-      {isAdmin && (
-        <>
-          {genres.length > SUITS && (
-            <div className="cast-genres" role="group" aria-label={`Pick ${SUITS} ${suits}`}>
-              {genres.map((g, i) => (
-                <button
-                  key={i}
-                  className={`chip-btn ${chosen.includes(i) ? "on" : ""}`}
-                  aria-pressed={chosen.includes(i)}
-                  style={{ ["--suit" as string]: g.color, ["--suit-ink" as string]: g.ink }}
-                  onClick={() => toggle(i)}
-                >
-                  {g.glyph} {g.labels[0]}
-                </button>
-              ))}
-            </div>
-          )}
-          {draft && (
-            <p className="muted small">
-              Pick {SUITS - draft.length} more to make {SUITS}.
-            </p>
-          )}
-          <div className="row">
-            <button
-              className="btn small"
-              onClick={() => send({ type: "cast", genres: room.cast.genres, reroll: true })}
-            >
-              New names
-            </button>
-            {genres.length > SUITS && (
-              <button
-                className="btn small"
-                onClick={() => {
-                  setDraft(null);
-                  saveGenres(room.theme, []);
-                  send({ type: "cast", genres: [], reroll: true });
-                }}
-              >
-                Random {suits}
-              </button>
-            )}
-          </div>
-        </>
-      )}
-      <p className="muted small">
-        {room.cast.genres.length ? `The admin picked these ${suits}.` : `Picked at random from ${genres.length}.`} Every{" "}
-        {suit} gets new names each game.
-      </p>
-    </section>
-  );
-}
-
 /**
  * The admin has been away a while: every player may take the role, and shortly after, the server
  * hands it to the first player still here.
@@ -575,7 +441,7 @@ function StartRow({ room, canStart, send }: { room: RoomInfo; canStart: boolean;
   );
 }
 
-export function Lobby({ state, send, join, theme, reactions }: Props) {
+export function Lobby({ state, send, join, game, skin, reactions }: Props) {
   const { room, you } = state;
   const [name, setName] = useState(savedName);
   const [look, setLook] = useSavedLook();
@@ -589,7 +455,7 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
     <main className="center-card lobby">
       <Brand as="h1" />
       <p className="muted">
-        {theme.title} · room <RoomCode code={room.code} />
+        {skin.title} · room <RoomCode code={room.code} />
       </p>
 
       <AdminAway state={state} send={send} />
@@ -691,17 +557,16 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
       <WatcherList room={room} me={you} send={send} />
       <p className="admin-note">
         <span className="admin-mark">★</span> <b>{isAdmin ? "You are" : `${adminName} is`} the room admin.</b> The admin
-        starts the game and can fill empty seats with bots. Playing on voice? The admin can end an auction with the
-        result the table agreed (and undo a wrong call). Hand the role over any time from the Room menu.
+        starts the game and can fill empty seats with bots. {game.adminNote} Hand the role over any time from the Room
+        menu.
       </p>
       <details className="advanced">
         <summary>
-          Advanced <small className="muted">room settings, clock, {theme.nouns.suit}s and names</small>
+          Advanced <small className="muted">room settings, {game.setupSummary(room)}</small>
         </summary>
         {isAdmin && <p className="muted small">Your browser keeps what you pick here for the next room you create.</p>}
         <RoomSettingsPanel room={room} me={you} send={send} />
-        <BidTimer room={room} me={you} send={send} />
-        <CastPicker room={room} me={you} send={send} theme={theme} />
+        <game.Setup room={room} me={you} send={send} />
       </details>
 
       {you === null ? (
@@ -772,7 +637,7 @@ export function Lobby({ state, send, join, theme, reactions }: Props) {
         </div>
       )}
 
-      <Rules theme={theme} />
+      <game.Rules room={room} />
     </main>
   );
 }

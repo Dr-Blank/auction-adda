@@ -1,5 +1,5 @@
 // Game constants. The numbers live in crates/engine/config.json, which the Rust engine reads too.
-import config from "../crates/engine/config.json" with { type: "json" };
+import config from "../../../crates/engine/config.json" with { type: "json" };
 
 export const SUITS = config.suits;
 export const ROUNDS = config.rounds;

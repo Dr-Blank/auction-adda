@@ -1,10 +1,10 @@
 import type React from "react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { ClientMsg, RoomInfo, View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
-import { PHONE, useMedia } from "./hooks.ts";
-import { Sheet } from "./Sheet.tsx";
+import { PHONE, useMedia } from "../../client/hooks.ts";
+import { Sheet } from "../../client/Sheet.tsx";
+import type { ClientMsg, RoomInfo, View } from "../../generated/index.ts";
+import type { Theme } from "./themes/types.ts";
 
 interface Props {
   g: View;

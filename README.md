@@ -32,6 +32,8 @@ The TypeScript types of every message live in `src/generated/`, written by `carg
 
 The engine is checked against games recorded from the original TypeScript engine (`crates/engine/fixtures/`). After a deliberate rule change, rewrite them with `BLESS=1 cargo test -p engine --test fixtures` and review the diff.
 
+`npm test` also renders the lobby and the table from real `state` messages (`test/fixtures/states/`) and compares the HTML with `test/__snapshots__/`. A snapshot change is a change players see: review it, then accept it with `npx vitest run -u`. After a protocol change, record new states with `node scripts/capture-states.ts` against a server on port 8799 (the script's header says how).
+
 ### Try it alone
 
 Open the app, create a room and press _Add a bot_ on an empty seat in the lobby until there are enough players, then _Start_. The server plays those seats with random legal moves.
@@ -109,16 +111,33 @@ Each one is also a command-line option; `auction-adda --help` lists them. Relati
 ## Layout
 
 ```text
-crates/engine/  rules: pure Rust, no I/O, no clock; config.json holds the game constants
-crates/server/  rooms, WebSocket protocol, persistence, static files (the auction-adda binary)
-src/generated/  TypeScript types written from the Rust types by cargo test (do not edit)
-src/themes/     skins; box-office is the first
-src/client/     React UI
-scripts/        random-playing bots (bot.ts picks a move, bots.ts runs them), screenshots
-test/           the server as a black box over real sockets, theme checks
+crates/game/          what every game shares: seats, rule errors, the seeded generator, the Game
+                      trait, and `check`, which plays any game at random against the rules all
+                      games keep (tests/toy.rs is the smallest game, as a template)
+crates/engine/        Auction Adda's rules: pure Rust, no I/O, no clock; config.json holds the constants
+crates/server/        rooms, WebSocket protocol, persistence, static files (the auction-adda binary);
+                      games.rs is the one place that names each game
+src/generated/        TypeScript types and games.json written from the Rust types by cargo test (do not edit)
+src/client/           the room around any game: home, lobby, seats' admin, reactions, the room menu,
+                      the podium (chrome.tsx)
+src/games/            one folder per game (its table, rules, lobby setup and themes); index.ts lists them
+src/games/auction/    Auction Adda; its skins are in themes/, box-office is the first
+scripts/              random-playing bots (bot.ts picks a move, bots.ts runs them), screenshots, state capture
+test/                 the server as a black box over real sockets, rendered pages, theme and registry checks
 ```
 
-A new theme is a folder in `src/themes/`, an entry in `src/themes/index.ts` and a variant of `ThemeId` in `crates/server/src/protocol.rs`; the compiler refuses a theme that is missing on either side. The rules do not change. Theme names, titles and art must be invented: no real people, films, studios or logos.
+A new theme is a folder in `src/games/auction/themes/`, an entry in its `index.ts` and a variant of `ThemeId` in `crates/server/src/protocol.rs` (listed in `ThemeId::ALL`, with `ThemeId::game` naming its game); the compiler and the tests refuse a theme that is missing on either side. The rules do not change. Theme names, titles and art must be invented: no real people, films, studios or logos.
+
+### Adding a game
+
+A room plays the game of its theme, so a new game is new themes plus:
+
+1. A rules crate in `crates/` that implements `game::Game` (pure, seeded, no I/O). Its tests call `game::check::random_games::<YourGame>(n)`, which plays it at random and checks what the server relies on: who owes a move, skips, reseating, ending early, the state surviving the room file.
+2. Its variants in `crates/server/src/games.rs` (the header lists every spot; the compiler finds the matches) and its themes in `ThemeId`. `cargo test` then writes its types and `src/generated/games.json`.
+3. A folder in `src/games/` exporting a `GameClient` (`src/games/types.ts`): its table page, lobby setup, rules, themes. Register it in `src/games/index.ts`. The shared parts of a table page are in `src/client/chrome.tsx`.
+4. Random moves for the socket bots, if `scripts/bots.ts` should play it.
+
+Rules, names and art of a new game must be its own: game mechanics are free to reuse, but rule text, board art, names and logos of existing games are not.
 
 ## Licence
 

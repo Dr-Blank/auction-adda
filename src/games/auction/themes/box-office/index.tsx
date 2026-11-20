@@ -1,6 +1,6 @@
 import type { JSX } from "react";
-import type { Card } from "../../generated/index.ts";
-import { rng } from "../../rng.ts";
+import type { Card } from "../../../../generated/index.ts";
+import { rng } from "../../../../rng.ts";
 import type { CardLook, CardSize, Genre, SuitSkin, ThemeDef } from "../types.ts";
 import "./poster.css";
 

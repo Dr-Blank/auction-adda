@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { ROUNDS } from "../config.ts";
+import { GAME_LIST, gameOf, skinOf, THEME_IDS } from "../games/index.ts";
 import type { ClientMsg, MyRoom, ThemeId } from "../generated/index.ts";
-import { getDef, getTheme, THEME_IDS } from "../themes/index.ts";
 import { LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
 import { RoomCode, ThemePicker } from "./Lobby.tsx";
@@ -21,9 +20,14 @@ function span(ms: number): string {
 function stageText(r: MyRoom): string {
   if (r.stage.t === "lobby") return "In the lobby";
   if (r.stage.t === "over") return "Game over";
-  const theme = getTheme(r.theme);
-  return `${theme.roundNames[r.stage.round]} · ${theme.nouns.round} ${r.stage.round + 1} of ${ROUNDS}`;
+  return gameOf(r.theme).stage(r, r.stage.round);
 }
+
+/** What the site is: the game's own line while there is one game. */
+const BLURB =
+  GAME_LIST.length === 1
+    ? GAME_LIST[0].blurb
+    : "Card and board games for friends on voice chat. Everyone joins from their own device.";
 
 /** Rooms this browser has a seat in, admin rooms first, with when each expires. */
 function MyRooms({ rooms }: { rooms: MyRoom[] }) {
@@ -44,7 +48,7 @@ function MyRooms({ rooms }: { rooms: MyRoom[] }) {
                       ★
                     </span>
                   )}
-                  <b>{getDef(r.theme).title}</b>
+                  <b>{skinOf(r.theme).title}</b>
                   <RoomCode code={r.code} />
                 </span>
                 <small className="muted">
@@ -91,9 +95,7 @@ export function Home({
   return (
     <main className="center-card home">
       <Brand as="h1" />
-      <p className="muted">
-        An auction card game for 3–5 friends. Everyone joins from their own device; keep the voice chat going.
-      </p>
+      <p className="muted">{BLURB}</p>
 
       {myRooms && <MyRooms rooms={myRooms} />}
 

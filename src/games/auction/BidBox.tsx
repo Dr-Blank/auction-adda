@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { Theme } from "../themes/types.ts";
-import { TOUCH } from "./hooks.ts";
+import { TOUCH } from "../../client/hooks.ts";
+import type { Theme } from "./themes/types.ts";
 
 interface Props {
   min: number;

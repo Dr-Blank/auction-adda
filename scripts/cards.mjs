@@ -15,6 +15,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 
+/** The card game's themes (Auction Adda's): the only game with cards to render so far. */
+const THEME_DIR = "src/games/auction/themes";
 const [out = "./shots/cards", perGenre = "4"] = process.argv.slice(2);
 const seed = Number(process.env.SEED ?? 1);
 fs.mkdirSync(out, { recursive: true });
@@ -23,8 +25,8 @@ fs.mkdirSync(out, { recursive: true });
 const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 try {
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const { THEMES, getTheme } = await vite.ssrLoadModule("/src/themes/index.ts");
-  const { SUITS } = await vite.ssrLoadModule("/src/config.ts");
+  const { THEMES, getTheme } = await vite.ssrLoadModule(`/${THEME_DIR}/index.ts`);
+  const { SUITS } = await vite.ssrLoadModule("/src/games/auction/config.ts");
   const deck = JSON.parse(fs.readFileSync("src/generated/deck.json", "utf8"));
   const ids = process.env.THEME ? [process.env.THEME] : Object.keys(THEMES);
 
@@ -53,13 +55,13 @@ try {
     }
 
     const css = (p) => `<link rel="stylesheet" href="${pathToFileURL(path.resolve(p)).href}">`;
-    const themeCss = fs.readdirSync(`src/themes/${id}`).filter((f) => f.endsWith(".css"));
+    const themeCss = fs.readdirSync(`${THEME_DIR}/${id}`).filter((f) => f.endsWith(".css"));
     const chrome = Object.entries(getTheme(id).chrome)
       .map(([k, v]) => `${k}:${v}`)
       .join(";");
     const html = `<!doctype html><meta charset="utf-8"><title>${def.title} cards</title>
       ${css("node_modules/@fontsource/anton/latin-400.css")}${css("src/client/styles.css")}
-      ${themeCss.map((f) => css(`src/themes/${id}/${f}`)).join("")}
+      ${themeCss.map((f) => css(`${THEME_DIR}/${id}/${f}`)).join("")}
       <style>
         body { padding: 24px; background: var(--bg); color: var(--text); ${chrome} }
         .row { display: flex; gap: 24px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }

@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import type { AuctionType, Card } from "../generated/index.ts";
+import type { AuctionType, Card } from "../../../generated/index.ts";
 
 /** One suit as a game shows it: its genre and the names drawn for it. */
 export interface SuitSkin {

@@ -1,10 +1,9 @@
 import { type JSX, useEffect, useState } from "react";
-import { DEFAULT_THEME, getTheme } from "../themes/index.ts";
+import { DEFAULT_THEME, skinOf } from "../games/index.ts";
 import { goHome } from "./Brand.tsx";
 import { Home } from "./Home.tsx";
-import { Lobby } from "./Lobby.tsx";
 import { useRoom } from "./net.ts";
-import { Table } from "./Table.tsx";
+import { Room } from "./Room.tsx";
 
 function roomFromAddress(): string | null {
   const code = location.hash.slice(1).trim().toUpperCase();
@@ -37,15 +36,15 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  const theme = getTheme(net.state?.room.theme ?? DEFAULT_THEME, net.state?.room.cast);
+  const skin = skinOf(net.state?.room.theme ?? DEFAULT_THEME, net.state?.room.cast);
 
   // The theme's colours for the whole page, background included.
   useEffect(() => {
     const root = document.documentElement.style;
-    const vars = Object.entries(theme.chrome);
+    const vars = Object.entries(skin.chrome);
     for (const [k, v] of vars) root.setProperty(k, v);
     return () => vars.forEach(([k]) => root.removeProperty(k));
-  }, [theme.chrome]);
+  }, [skin.chrome]);
 
   let body: JSX.Element;
   if (!code) {
@@ -64,10 +63,8 @@ export function App() {
     );
   } else if (!net.state) {
     body = <main className="center-card">Connecting…</main>;
-  } else if (!net.state.game) {
-    body = <Lobby state={net.state} send={net.send} join={net.join} theme={theme} reactions={net.reactions} />;
   } else {
-    body = <Table state={net.state} send={net.send} theme={theme} reactions={net.reactions} />;
+    body = <Room state={net.state} send={net.send} join={net.join} reactions={net.reactions} />;
   }
 
   return (

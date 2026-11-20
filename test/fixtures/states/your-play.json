@@ -1,0 +1,349 @@
+{
+  "type": "state",
+  "room": {
+    "code": "HDMHDN",
+    "theme": "box-office",
+    "cast": {
+      "seed": 299527463,
+      "genres": []
+    },
+    "started": true,
+    "seats": [
+      {
+        "name": "Chitra",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "2a2b2c2d2e2f2g2h",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Asha",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3k9a1c0b2d4e5f6g",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Dev",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "3a3b3c3d3e3f3g3h",
+        "ready": false,
+        "wins": 0
+      },
+      {
+        "name": "Bilal",
+        "connected": true,
+        "awayMs": null,
+        "open": false,
+        "bot": false,
+        "avatar": "1a1b1c1d1e1f1g1h",
+        "ready": true,
+        "wins": 0
+      }
+    ],
+    "admin": 1,
+    "canUndo": false,
+    "minPlayers": 3,
+    "maxPlayers": 5,
+    "skipAfterMs": 30000,
+    "adminClaimMs": 20000,
+    "adminAutoMs": 30000,
+    "bidTimerS": 30,
+    "bidExtendS": 10,
+    "bidMsLeft": null,
+    "bidMsWindow": null,
+    "frozenBy": null,
+    "settings": {
+      "locked": false,
+      "freeze": "admin",
+      "rename": false,
+      "shuffleEachRound": false,
+      "reactions": [
+        "👏",
+        "😂",
+        "😮",
+        "🔥",
+        "😬",
+        "🙏"
+      ]
+    },
+    "watchers": [
+      {
+        "id": 2,
+        "name": "Esha",
+        "ban": null
+      }
+    ],
+    "games": 0
+  },
+  "you": 1,
+  "left": null,
+  "game": {
+    "n": 4,
+    "you": 1,
+    "round": 0,
+    "turn": 0,
+    "played": [
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "tokens": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "players": [
+      {
+        "handCount": 9,
+        "money": null,
+        "bought": [
+          {
+            "id": 65,
+            "suit": 4,
+            "n": 11,
+            "type": "fixed"
+          }
+        ]
+      },
+      {
+        "handCount": 8,
+        "money": 117,
+        "bought": []
+      },
+      {
+        "handCount": 8,
+        "money": null,
+        "bought": [
+          {
+            "id": 37,
+            "suit": 2,
+            "n": 12,
+            "type": "double"
+          },
+          {
+            "id": 0,
+            "suit": 0,
+            "n": 0,
+            "type": "open"
+          }
+        ]
+      },
+      {
+        "handCount": 8,
+        "money": null,
+        "bought": []
+      }
+    ],
+    "hand": [
+      {
+        "id": 3,
+        "suit": 0,
+        "n": 3,
+        "type": "once"
+      },
+      {
+        "id": 19,
+        "suit": 1,
+        "n": 7,
+        "type": "sealed"
+      },
+      {
+        "id": 25,
+        "suit": 2,
+        "n": 0,
+        "type": "open"
+      },
+      {
+        "id": 30,
+        "suit": 2,
+        "n": 5,
+        "type": "once"
+      },
+      {
+        "id": 41,
+        "suit": 3,
+        "n": 2,
+        "type": "open"
+      },
+      {
+        "id": 50,
+        "suit": 3,
+        "n": 11,
+        "type": "fixed"
+      },
+      {
+        "id": 56,
+        "suit": 4,
+        "n": 2,
+        "type": "open"
+      },
+      {
+        "id": 60,
+        "suit": 4,
+        "n": 6,
+        "type": "once"
+      }
+    ],
+    "auction": null,
+    "pending": [
+      0
+    ],
+    "log": [
+      {
+        "t": "round",
+        "round": 0,
+        "first": 1
+      },
+      {
+        "t": "play",
+        "p": 1,
+        "cards": [
+          {
+            "id": 65,
+            "suit": 4,
+            "n": 11,
+            "type": "fixed"
+          }
+        ],
+        "kind": "fixed"
+      },
+      {
+        "t": "price",
+        "p": 1,
+        "amount": 17
+      },
+      {
+        "t": "pass",
+        "p": 2
+      },
+      {
+        "t": "pass",
+        "p": 3
+      },
+      {
+        "t": "sold",
+        "to": 0,
+        "from": 1,
+        "price": 17,
+        "cards": [
+          {
+            "id": 65,
+            "suit": 4,
+            "n": 11,
+            "type": "fixed"
+          }
+        ]
+      },
+      {
+        "t": "offer",
+        "p": 2,
+        "cards": [
+          {
+            "id": 37,
+            "suit": 2,
+            "n": 12,
+            "type": "double"
+          }
+        ]
+      },
+      {
+        "t": "decline",
+        "p": 3
+      },
+      {
+        "t": "decline",
+        "p": 0
+      },
+      {
+        "t": "decline",
+        "p": 1
+      },
+      {
+        "t": "free",
+        "p": 2,
+        "cards": [
+          {
+            "id": 37,
+            "suit": 2,
+            "n": 12,
+            "type": "double"
+          }
+        ]
+      },
+      {
+        "t": "play",
+        "p": 3,
+        "cards": [
+          {
+            "id": 0,
+            "suit": 0,
+            "n": 0,
+            "type": "open"
+          }
+        ],
+        "kind": "open"
+      },
+      {
+        "t": "bid",
+        "p": 2,
+        "amount": 3
+      },
+      {
+        "t": "sold",
+        "to": 2,
+        "from": 3,
+        "price": 3,
+        "cards": [
+          {
+            "id": 0,
+            "suit": 0,
+            "n": 0,
+            "type": "open"
+          }
+        ]
+      }
+    ],
+    "logStart": 0,
+    "summaries": [],
+    "over": false,
+    "winners": [],
+    "deckCount": 34
+  }
+}

@@ -1,15 +1,16 @@
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Card, ClientMsg, RoomInfo, View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
-import { Avatar } from "./Avatar.tsx";
+import { Avatar } from "../../client/Avatar.tsx";
+import { connectionFact, SeatAwayRow, SeatSheetActions, seatRights } from "../../client/chrome.tsx";
+import { COMPACT, TOUCH } from "../../client/hooks.ts";
+import { Rename } from "../../client/Lobby.tsx";
+import type { Reaction } from "../../client/net.ts";
+import { Floats, ReactBar } from "../../client/Reactions.tsx";
+import { Sheet } from "../../client/Sheet.tsx";
+import type { Card, ClientMsg, RoomInfo, View } from "../../generated/index.ts";
 import { aroundTable, countBySuit, doing, hammerOrder, lastWords, purchases } from "./derive.ts";
-import { COMPACT, TOUCH } from "./hooks.ts";
-import { Rename } from "./Lobby.tsx";
-import type { Reaction } from "./net.ts";
-import { Floats, ReactBar } from "./Reactions.tsx";
-import { Sheet } from "./Sheet.tsx";
+import type { Theme } from "./themes/types.ts";
 
 export interface Bubble {
   text: string;
@@ -24,11 +25,6 @@ interface SeatProps {
   reactions: Reaction[];
   awayFor: (seat: number) => number | null;
   send: (m: ClientMsg) => void;
-}
-
-function clock(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -65,23 +61,7 @@ export function Seat({
   const seat = room.seats[i];
   const p = g.players[i];
   const away = awayFor(i);
-  const isAdmin = me !== null && room.admin === me && i !== me;
-  // Skip and free seat: the admin's, once the player has been away long enough.
-  const canAct = isAdmin && !seat.bot && away !== null && away >= room.skipAfterMs;
-  // A bot standing in for a player shows as disconnected; one that took a kicked player's seat does not.
-  const standIn = seat.bot && !seat.connected;
-  const canBot = isAdmin && !g.over && !seat.connected && !seat.bot;
-  const canKick = isAdmin && !g.over && !(seat.bot && seat.connected);
-  // A bot seat the admin may open for someone with the link (the bot plays until they take it), or close again.
-  const canFree = isAdmin && !g.over && seat.bot && !seat.open;
-  const canKeep = isAdmin && !g.over && seat.bot && seat.open;
-  const status = seat.bot
-    ? seat.open
-      ? "Bot playing · seat open"
-      : "Bot playing"
-    : seat.open
-      ? "Seat open"
-      : `Away ${clock(away ?? 0)}`;
+  const rights = seatRights(room, me, i, away, g.over);
   const [kicking, setKicking] = useState(false);
   const owing = g.pending.includes(i);
   const now = doing(g, i);
@@ -104,8 +84,6 @@ export function Seat({
   ];
   const [info, setInfo] = useState(false);
   const names = room.seats.map((s, k) => (k === me ? "you" : s.name));
-  // The banner above the table offers the role to everyone; the seat sheet does too.
-  const adminAway = me !== null && me !== i && room.admin === i && away !== null && away >= room.adminClaimMs;
 
   // Everything the seat says through icons and tooltips, as sentences (for the info sheet).
   const { card, cards, round } = theme.nouns;
@@ -135,19 +113,7 @@ export function Seat({
         ? `Your money: ${theme.money(p.money ?? 0)}. Only you can see it.`
         : `Money stays hidden until the game ends.`,
   );
-  facts.push(
-    seat.bot && seat.open
-      ? "🤖 A bot plays this seat until someone takes it over from the room link."
-      : standIn
-        ? `🤖 A bot plays this seat at random until ${name} comes back.`
-        : seat.bot
-          ? "🤖 A bot: the server plays this seat at random."
-          : seat.connected
-            ? "Connected."
-            : seat.open
-              ? "Seat open: anyone with the room link can take it over."
-              : `Away for ${clock(away ?? 0)}.`,
-  );
+  facts.push(connectionFact(room, i, name, away, rights));
 
   return (
     <div
@@ -229,34 +195,7 @@ export function Seat({
           </div>
         )}
         <Owned g={g} seat={i} name={name} names={names} theme={theme} />
-        {(!seat.connected || seat.open) && (
-          <div className="away-row">
-            <span className="muted small">{status}</span>
-            {canBot && (
-              <button
-                className="btn small"
-                onClick={() => send({ type: "bot", seat: i })}
-                title="A bot plays until they come back"
-              >
-                Bot plays
-              </button>
-            )}
-            {canAct && owing && (
-              <button className="btn small" onClick={() => send({ type: "skip", seat: i })}>
-                Skip their move
-              </button>
-            )}
-            {canAct && !seat.open && (
-              <button
-                className="btn small"
-                onClick={() => send({ type: "release", seat: i })}
-                title="Lets someone else take over this seat from the room link"
-              >
-                Free seat
-              </button>
-            )}
-          </div>
-        )}
+        <SeatAwayRow room={room} i={i} owing={owing} rights={rights} send={send} />
       </div>
       {info && (
         <Sheet
@@ -279,59 +218,16 @@ export function Seat({
               <li key={f}>{f}</li>
             ))}
           </ul>
-          {!seat.connected && (canAct || adminAway) && (
-            <div className="row">
-              {canAct && owing && (
-                <button className="btn" onClick={() => send({ type: "skip", seat: i })}>
-                  Skip their move
-                </button>
-              )}
-              {canAct && !seat.open && (
-                <button className="btn" onClick={() => send({ type: "release", seat: i })}>
-                  Free seat (someone else can take it from the room link)
-                </button>
-              )}
-              {adminAway && (
-                <button className="btn" onClick={() => send({ type: "admin", seat: me! })}>
-                  Become admin
-                </button>
-              )}
-            </div>
-          )}
-          {(canBot || canKick || canFree || canKeep) && (
-            <div className="row">
-              {canBot && (
-                <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
-                  Let a bot play until they come back
-                </button>
-              )}
-              {canFree && (
-                <button className="btn" onClick={() => send({ type: "release", seat: i })}>
-                  Free seat: the bot plays until someone takes it from the room link
-                </button>
-              )}
-              {canKeep && (
-                <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
-                  Keep the bot (close the seat)
-                </button>
-              )}
-              {canKick &&
-                (kicking ? (
-                  <>
-                    <button className="btn primary" onClick={() => send({ type: "kick", seat: i })}>
-                      Kick {seat.name}: a bot plays the seat for good
-                    </button>
-                    <button className="btn" onClick={() => setKicking(false)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button className="btn" onClick={() => setKicking(true)}>
-                    Kick
-                  </button>
-                ))}
-            </div>
-          )}
+          <SeatSheetActions
+            room={room}
+            me={me}
+            i={i}
+            owing={owing}
+            rights={rights}
+            send={send}
+            kicking={kicking}
+            setKicking={setKicking}
+          />
           <h3 className="details-head">
             Bought this {round} · {p.bought.length} {p.bought.length === 1 ? card : cards}
           </h3>

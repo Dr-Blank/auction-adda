@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { SUIT_LIMIT, TOKENS } from "../config.ts";
-import type { View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
+import { COMPACT, useMedia } from "../../client/hooks.ts";
+import { Sheet } from "../../client/Sheet.tsx";
+import type { View } from "../../generated/index.ts";
+import { SUIT_LIMIT, TOKENS } from "./config.ts";
 import { countBySuit, provisionalValues, rankSuits } from "./derive.ts";
-import { COMPACT, useMedia } from "./hooks.ts";
-import { Sheet } from "./Sheet.tsx";
+import type { Theme } from "./themes/types.ts";
 
 /** How long the reel of a shelved star stays full and flashing after the round closes. */
 const SHELVE_MS = 2200;

@@ -6,8 +6,9 @@
     "useIgnoreFile": true
   },
   "files": {
-    // src/generated is written by `cargo test` (ts-rs); the fixtures are blessed engine output.
-    "includes": ["**", "!!**/dist", "!!src/generated", "!!crates/engine/fixtures"]
+    // src/generated is written by `cargo test` (ts-rs); the fixtures are blessed engine output and
+    // states recorded by scripts/capture-states.ts.
+    "includes": ["**", "!!**/dist", "!!src/generated", "!!crates/engine/fixtures", "!!test/fixtures"]
   },
   "formatter": {
     "enabled": true,

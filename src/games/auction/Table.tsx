@@ -1,52 +1,37 @@
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ROUNDS } from "../config.ts";
-import type {
-  Action,
-  AuctionType,
-  AuctionView,
-  Card,
-  ClientMsg,
-  LogEntry,
-  RoomInfo,
-  View,
-} from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
-import { Avatar } from "./Avatar.tsx";
-import { BidBox, BidClock } from "./BidBox.tsx";
-import { Brand } from "./Brand.tsx";
-import { dealNote, groupLog, hammerOrder, rail, reducedMotion } from "./derive.ts";
-import { PHONE, useCountUp, useMedia } from "./hooks.ts";
-import { CrownIcon, FreezeIcon, ResumeIcon } from "./Icons.tsx";
+import { useEffect, useRef, useState } from "react";
+import { Avatar } from "../../client/Avatar.tsx";
+import { Brand } from "../../client/Brand.tsx";
 import {
-  AdminAway,
-  BidTimer,
-  ConfirmButton,
-  Rename,
-  RoomCode,
-  RoomSettingsPanel,
-  ShareLink,
-  WatcherList,
-  Wins,
-} from "./Lobby.tsx";
-import type { Reaction, RoomState } from "./net.ts";
-import { savedAvatar, savedName, saveName } from "./net.ts";
+  FreezeButton,
+  freezeRights,
+  GameOver,
+  MuteButton,
+  RoomMenu,
+  standings,
+  TableNotices,
+  useAwayFor,
+  useDock,
+  useYourMove,
+} from "../../client/chrome.tsx";
+import { PHONE, reducedMotion, useCountUp, useMedia } from "../../client/hooks.ts";
+import { Sheet } from "../../client/Sheet.tsx";
+import { play } from "../../client/sound.ts";
+import type { Action, AuctionType, AuctionView, Card, ClientMsg, LogEntry, View } from "../../generated/index.ts";
+import type { TableProps } from "../types.ts";
+import { BidBox, BidClock } from "./BidBox.tsx";
+import { ROUNDS } from "./config.ts";
+import { dealNote, groupLog, hammerOrder, rail } from "./derive.ts";
 import { Premiere } from "./Premiere.tsx";
 import { AuctionTypes, Rules } from "./Rules.tsx";
 import { Ruling } from "./Ruling.tsx";
 import { Seasons } from "./Seasons.tsx";
 import type { Bubble } from "./Seats.tsx";
 import { Seat, Seats } from "./Seats.tsx";
-import { Sheet } from "./Sheet.tsx";
+import { BidTimer } from "./Setup.tsx";
 import { StarChart } from "./StarChart.tsx";
-import { isMuted, play, setMuted } from "./sound.ts";
-
-interface Props {
-  state: RoomState;
-  send: (m: ClientMsg) => void;
-  theme: Theme;
-  reactions: Reaction[];
-}
+import { getTheme } from "./themes/index.ts";
+import type { Theme } from "./themes/types.ts";
 
 const canPair = (double: Card, second: Card) =>
   second.id !== double.id && second.suit === double.suit && second.type !== "double";
@@ -85,10 +70,11 @@ interface Moment {
   bids: number[] | null;
 }
 
-export function Table({ state, send, theme, reactions }: Props) {
+export function Table({ state, send, reactions }: TableProps) {
   const g = state.game!;
   const me = g.you;
   const { room } = state;
+  const theme = getTheme(room.theme, room.cast);
   const a = g.auction;
   const names = room.seats.map((s) => s.name);
   const who = (i: number) => (i === me ? "You" : names[i]);
@@ -123,29 +109,7 @@ export function Table({ state, send, theme, reactions }: Props) {
 
   // ---- "your move" cue ----
   const owing = me !== null && g.pending.includes(me);
-  useEffect(() => {
-    const yours = "● Your move — Auction Adda";
-    if (owing) play("turn");
-    // In another tab the title flashes, so the tab strip shows it; back here it holds still.
-    let flash = 0;
-    const show = () => {
-      clearInterval(flash);
-      document.title = owing ? yours : "Auction Adda";
-      if (!owing || !document.hidden) return;
-      let on = true;
-      flash = window.setInterval(() => {
-        on = !on;
-        document.title = on ? yours : "○ YOUR MOVE";
-      }, 1000);
-    };
-    show();
-    document.addEventListener("visibilitychange", show);
-    return () => {
-      clearInterval(flash);
-      document.removeEventListener("visibilitychange", show);
-      document.title = "Auction Adda";
-    };
-  }, [owing]);
+  useYourMove(owing);
 
   // ---- events: speech bubbles, sold moments, sounds ----
   const [bubbles, setBubbles] = useState<(Bubble | null)[]>(() => Array(g.n).fill(null));
@@ -256,18 +220,8 @@ export function Table({ state, send, theme, reactions }: Props) {
   }, [showDeal]);
 
   // ---- absent players ----
-  const anyAway = room.seats.some((s) => !s.connected);
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!anyAway) return;
-    const timer = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(timer);
-  }, [anyAway]);
-  const awayFor = (i: number) => {
-    const ms = room.seats[i].awayMs;
-    return ms === null ? null : ms + (Date.now() - state.receivedAt);
-  };
-  const frozen = room.frozenBy !== null && !g.over;
+  const awayFor = useAwayFor(state);
+  const { frozen, canFreeze } = freezeRights(room, me, g.over);
   /** The open-auction clock: when everyone still in becomes done. */
   const bidClock =
     room.bidMsLeft !== null && room.bidMsWindow !== null
@@ -282,7 +236,6 @@ export function Table({ state, send, theme, reactions }: Props) {
   const [menu, setMenu] = useState(false);
   const [seasons, setSeasons] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [muted, setMutedState] = useState(isMuted);
   const [inspect, setInspect] = useState<Card | null>(null);
   const shownMoney = useCountUp(myMoney);
   const phone = useMedia(PHONE);
@@ -325,14 +278,30 @@ export function Table({ state, send, theme, reactions }: Props) {
           · Next seller: <b>{who(nextSeller)}</b>
         </span>
       );
-    if (g.over)
+    if (g.over) {
+      const end = g.log.findLast((e) => e.t === "end");
+      const endedBy = end?.t === "end" ? end.by : undefined;
       return {
         body: (
           <GameOver
-            g={g}
             room={room}
+            you={g.you}
             names={names}
-            theme={theme}
+            winners={g.winners}
+            standings={standings(
+              g.players.map((p) => p.money ?? 0),
+              g.winners,
+            )}
+            format={theme.money}
+            endedNote={
+              endedBy != null && (
+                <p className="ended-early">
+                  {names[endedBy]} ended the game during{" "}
+                  {theme.roundNames[g.round] ?? `${theme.nouns.round} ${g.round + 1}`}. The money as it stood decides;
+                  that {theme.nouns.round} was not scored.
+                </p>
+              )
+            }
             isAdmin={me !== null && room.admin === me}
             admin={me !== null ? names[room.admin] : undefined}
             onRematch={() => send({ type: "rematch" })}
@@ -341,6 +310,7 @@ export function Table({ state, send, theme, reactions }: Props) {
         ),
         bar: null,
       };
+    }
 
     if (!a) {
       if (!myPlay)
@@ -643,37 +613,10 @@ export function Table({ state, send, theme, reactions }: Props) {
     return { body, bar };
   }
 
-  const openSeats = room.seats.flatMap((s, i) => (s.open ? [i] : []));
   const { body, bar } = stage();
   const isAdmin = me !== null && room.admin === me;
-  const canFreeze = me !== null && !g.over && (isAdmin || room.settings.freeze === "anyone");
-  const canUnfreeze = frozen && me !== null && (isAdmin || me === room.frozenBy);
-  const freeze = (on: boolean) => send({ type: "freeze", on });
-
-  // Phones dock the action bar to the bottom edge while you owe a move. Its height varies (bid box,
-  // two buttons, a sentence), so measure it: the hand sits right above it and the page ends clear of it.
-  // On the root, not the table: the toasts live outside the table and must also clear it.
-  const dockEl = useRef<HTMLDivElement>(null);
   const docked = owing && !!bar;
-  useLayoutEffect(() => {
-    const root = document.documentElement.style;
-    const dock = dockEl.current;
-    if (!dock || !docked) {
-      root.setProperty("--dock", "0px");
-      return () => root.removeProperty("--dock");
-    }
-    const measure = () =>
-      root.setProperty("--dock", `${getComputedStyle(dock).position === "fixed" ? dock.offsetHeight : 0}px`);
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(dock);
-    addEventListener("resize", measure);
-    return () => {
-      watch.disconnect();
-      removeEventListener("resize", measure);
-      root.removeProperty("--dock");
-    };
-  }, [docked]);
+  const dockEl = useDock(docked);
   const recent = g.log
     .filter((e) => e.t === "sold" || e.t === "free" || e.t === "shelved" || e.t === "round" || e.t === "undo")
     .slice(-4)
@@ -716,30 +659,11 @@ export function Table({ state, send, theme, reactions }: Props) {
             🏆 <span className="lbl">Last results</span>
           </button>
         )}
-        {canFreeze && !frozen && (
-          <button
-            className="icon-btn"
-            onClick={() => freeze(true)}
-            title="Freeze the game: the clock, the bots and all moves wait"
-            aria-label="Freeze the game"
-          >
-            <FreezeIcon /> <span className="lbl">Freeze</span>
-          </button>
-        )}
+        {canFreeze && !frozen && <FreezeButton onClick={() => send({ type: "freeze", on: true })} />}
         <button className="icon-btn" onClick={() => setLogOpen(true)} title="Auction log" aria-label="Auction log">
           ☰ <span className="lbl">Log</span>
         </button>
-        <button
-          className="icon-btn"
-          onClick={() => {
-            setMuted(!muted);
-            setMutedState(!muted);
-          }}
-          title={muted ? "Sound off" : "Sound on"}
-          aria-label={muted ? "Turn sound on" : "Turn sound off"}
-        >
-          {muted ? "🔇" : "🔊"}
-        </button>
+        <MuteButton />
         <button
           className="icon-btn"
           onClick={() => setMenu(!menu)}
@@ -754,38 +678,18 @@ export function Table({ state, send, theme, reactions }: Props) {
             room={room}
             me={me}
             names={names}
-            theme={theme}
             send={send}
             over={g.over}
             onClose={() => setMenu(false)}
+            adminHint="Can end an auction with a result agreed on voice (“Call it from voice” on the stage)."
+            endAsk="End the game for everyone? The money as it stands decides."
+            settings={<BidTimer room={room} me={me} send={send} />}
+            rules={<Rules theme={theme} n={names.length} />}
           />
         )}
       </header>
 
-      <div className="notices">
-        {frozen && room.frozenBy !== null && (
-          <div className="notice frozen-notice">
-            <FreezeIcon />
-            <span>
-              {room.frozenBy === me ? "You" : <b>{names[room.frozenBy]}</b>} froze the game. The clock, the bots and all
-              moves wait.
-            </span>
-            {canUnfreeze && (
-              <button className="btn primary small" onClick={() => freeze(false)}>
-                <ResumeIcon /> Unfreeze
-              </button>
-            )}
-          </div>
-        )}
-        {me === null && <Spectator openSeats={openSeats} left={state.left} names={names} send={send} />}
-        <AdminAway state={state} send={send} />
-        {me !== null && openSeats.length > 0 && (
-          <div className="notice">
-            <span>A seat is free. Send this link to whoever takes over:</span>
-            <ShareLink code={room.code} />
-          </div>
-        )}
-      </div>
+      <TableNotices state={state} send={send} names={names} over={g.over} hidden="Hands and money stay hidden." />
 
       <Seats g={g} room={room} theme={theme} bubbles={bubbles} reactions={reactions} awayFor={awayFor} send={send} />
 
@@ -1017,101 +921,6 @@ function SoldMoment({ m, names, me, theme, onUndo, onDone }: MomentProps) {
   );
 }
 
-function RoomMenu(props: {
-  room: RoomInfo;
-  me: number | null;
-  names: string[];
-  theme: Theme;
-  send: (m: ClientMsg) => void;
-  onClose: () => void;
-  over: boolean;
-}) {
-  const { room, me, names, theme, send, onClose } = props;
-  // Only a connected player can take the role.
-  const eligible = room.seats.flatMap((s, i) => (i !== me && !s.bot && s.connected ? [i] : []));
-  const [picked, setTo] = useState<number | null>(null);
-  const to = picked !== null && eligible.includes(picked) ? picked : eligible[0];
-  return (
-    <Sheet
-      title={
-        <>
-          Room <RoomCode code={room.code} />
-        </>
-      }
-      label="Room"
-      onClose={onClose}
-    >
-      <ShareLink code={room.code} />
-      {me !== null && room.settings.rename && (
-        <p className="rename-row">
-          Your name: <b>{names[me]}</b> <Rename name={names[me]} send={send} />
-        </p>
-      )}
-      <div className="menu-admin">
-        <p>
-          <span className="admin-mark">★</span> Admin: <b>{room.admin === me ? "you" : names[room.admin]}</b>
-          <br />
-          <small className="muted">
-            Can end an auction with a result agreed on voice (“Call it from voice” on the stage).
-          </small>
-        </p>
-        {room.admin === me && to !== undefined && (
-          <div className="row">
-            <select value={to} onChange={(e) => setTo(Number(e.target.value))} aria-label="New admin">
-              {eligible.map((i) => (
-                <option key={i} value={i}>
-                  {names[i]}
-                </option>
-              ))}
-            </select>
-            <button className="btn small" onClick={() => send({ type: "admin", seat: to })}>
-              Make admin
-            </button>
-          </div>
-        )}
-      </div>
-      <WatcherList room={room} me={me} send={send} />
-      <RoomSettingsPanel room={room} me={me} send={send} />
-      <BidTimer room={room} me={me} send={send} />
-      {me !== null && !props.over && (
-        <div className="menu-danger">
-          <ConfirmButton
-            label="Leave my seat"
-            ask="Leave the game? A bot plays your seat; you can take it back from this browser."
-            yes="Leave"
-            onConfirm={() => {
-              send({ type: "leave" });
-              onClose();
-            }}
-          />
-        </div>
-      )}
-      {room.admin === me && (
-        <div className="menu-danger">
-          {!props.over && (
-            <ConfirmButton
-              label="End game now"
-              ask="End the game for everyone? The money as it stands decides."
-              yes="End game"
-              onConfirm={() => {
-                send({ type: "end" });
-                onClose();
-              }}
-            />
-          )}
-          <ConfirmButton
-            label="Close room"
-            ask="Delete this room for everyone?"
-            yes="Close room"
-            onConfirm={() => send({ type: "close" })}
-          />
-        </div>
-      )}
-      <Rules theme={theme} n={names.length} />
-    </Sheet>
-  );
-}
-
 function LogDrawer(props: {
   g: View;
   names: string[];
@@ -1315,213 +1124,6 @@ function Inspect({ card, theme, onClose }: { card: Card; theme: Theme; onClose: 
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Places from the top: winners first, then by money; equal money (and equal standing) shares a place. */
-function standings(g: View): { i: number; money: number; place: number }[] {
-  const won = (i: number) => g.winners.includes(i);
-  const order = g.players
-    .map((p, i) => ({ i, money: p.money ?? 0 }))
-    .sort((x, y) => Number(won(y.i)) - Number(won(x.i)) || y.money - x.money);
-  const out: { i: number; money: number; place: number }[] = [];
-  order.forEach((o, k) => {
-    const prev = out[k - 1];
-    const tied = prev && prev.money === o.money && won(prev.i) === won(o.i);
-    out.push({ ...o, place: tied ? prev.place : k + 1 });
-  });
-  return out;
-}
-
-/** When each step rises (first, second, third): third, then second, then first. Its money counts up as it lands. */
-const RISE_MS = [650, 350, 0];
-
-function PodiumStep(props: {
-  i: number;
-  money: number;
-  place: number;
-  /** Position on the podium: 0 first, 1 second, 2 third. */
-  step: number;
-  room: RoomInfo;
-  you: number | null;
-  theme: Theme;
-  series: boolean;
-}) {
-  const { i, place, step, room, theme } = props;
-  const seat = room.seats[i];
-  const delay = RISE_MS[step] ?? 0;
-  const money = useCountUp(props.money, { from: 0, delay: delay + 250, duration: 1200 });
-  return (
-    <li className={`place place-${step + 1}`} style={{ ["--d" as string]: `${delay}ms` }}>
-      {place === 1 && (
-        <span className="crown" title="Winner">
-          <CrownIcon />
-        </span>
-      )}
-      <Avatar code={seat?.avatar ?? ""} name={seat?.name ?? ""} />
-      <span className="who">
-        {seat?.name}
-        {i === props.you && <em> (you)</em>}
-      </span>
-      <b className="money">{theme.money(money)}</b>
-      {props.series && <Wins n={seat?.wins ?? 0} />}
-      <span className="block" aria-label={`Place ${place}`}>
-        {place}
-      </span>
-    </li>
-  );
-}
-
-/** Paper falling over the podium, once. Its look is drawn when it mounts, so a re-render keeps it still. */
-function Confetti() {
-  const [bits] = useState(() =>
-    Array.from({ length: 42 }, (_, k) => ({
-      left: Math.random() * 100,
-      delay: 900 + Math.random() * 900,
-      fall: 2200 + Math.random() * 1400,
-      spin: Math.round(Math.random() * 720 - 360),
-      drift: Math.round(Math.random() * 80 - 40),
-      hue: k % 5,
-    })),
-  );
-  if (reducedMotion()) return null;
-  return (
-    <div className="confetti" aria-hidden="true">
-      {bits.map((b, k) => (
-        <i
-          key={k}
-          className={`c${b.hue}`}
-          style={{
-            left: `${b.left}%`,
-            animationDelay: `${b.delay}ms`,
-            animationDuration: `${b.fall}ms`,
-            ["--spin" as string]: `${b.spin}deg`,
-            ["--drift" as string]: `${b.drift}px`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function GameOver(props: {
-  g: View;
-  room: RoomInfo;
-  names: string[];
-  theme: Theme;
-  isAdmin: boolean;
-  /** Name of the admin, shown to the other players while they wait for a rematch. */
-  admin?: string;
-  onRematch: () => void;
-  onSetup: () => void;
-}) {
-  const { g, room, names, theme } = props;
-  const order = standings(g);
-  const top = order.slice(0, 3);
-  // Second, first, third, left to right.
-  const podium = [top[1], top[0], top[2]].flatMap((o) => (o ? [{ ...o, step: top.indexOf(o) }] : []));
-  const rest = order.slice(3);
-  // After one game the tally only repeats the podium.
-  const series = room.games > 1;
-  const end = g.log.findLast((e) => e.t === "end");
-  const endedBy = end?.t === "end" ? end.by : undefined;
-  return (
-    <div className="gameover">
-      <Confetti />
-      {endedBy != null && (
-        <p className="ended-early">
-          {names[endedBy]} ended the game during {theme.roundNames[g.round] ?? `${theme.nouns.round} ${g.round + 1}`}.
-          The money as it stood decides; that {theme.nouns.round} was not scored.
-        </p>
-      )}
-      <h2>
-        {g.winners.map((i) => names[i]).join(" & ")} {g.winners.length > 1 ? "share the win" : "wins"}!
-      </h2>
-      {series && (
-        <p className="muted series-note">Game {room.games} in this room. The trophies count each seat's wins.</p>
-      )}
-      <ol className="podium">
-        {podium.map((o) => (
-          <PodiumStep key={o.i} {...o} room={room} you={g.you} theme={theme} series={series} />
-        ))}
-      </ol>
-      {rest.length > 0 && (
-        <ol className="also-ran" start={4}>
-          {rest.map(({ i, money, place }) => (
-            <li key={i} value={place}>
-              <span>
-                {room.seats[i]?.name}
-                {i === g.you && <em> (you)</em>}
-              </span>
-              <b>{theme.money(money)}</b>
-              {series && <Wins n={room.seats[i]?.wins ?? 0} />}
-            </li>
-          ))}
-        </ol>
-      )}
-      {props.isAdmin ? (
-        <div className="row gameover-next">
-          <button type="button" className="btn primary big" onClick={props.onRematch}>
-            Play again
-          </button>
-          <button
-            type="button"
-            className="btn big"
-            onClick={props.onSetup}
-            title="Back to the lobby with the same players: change the theme, cast, clock or players"
-          >
-            Change setup
-          </button>
-        </div>
-      ) : (
-        props.admin && <p className="muted">Waiting for {props.admin} (admin) to start a new game.</p>
-      )}
-    </div>
-  );
-}
-
-function Spectator({
-  openSeats,
-  left,
-  names,
-  send,
-}: {
-  openSeats: number[];
-  /** The seat this browser left to a bot. */
-  left: number | null;
-  names: string[];
-  send: (m: ClientMsg) => void;
-}) {
-  const [name, setName] = useState(savedName);
-  if (left !== null)
-    return (
-      <div className="notice">
-        <span>You left your seat ({names[left]}); a bot is playing it.</span>
-        <button className="btn primary small" onClick={() => send({ type: "back" })}>
-          Take my seat back
-        </button>
-      </div>
-    );
-  if (openSeats.length === 0)
-    return <div className="notice">You are watching this game. Hands and money stay hidden.</div>;
-  return (
-    <div className="notice">
-      <span>A seat is free. Take it over:</span>
-      <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="Your name" />
-      {openSeats.map((i) => (
-        <button
-          key={i}
-          className="btn primary small"
-          disabled={!name.trim()}
-          onClick={() => {
-            saveName(name.trim());
-            send({ type: "claim", seat: i, name, avatar: savedAvatar() });
-          }}
-        >
-          Take {names[i]}’s seat
-        </button>
-      ))}
     </div>
   );
 }

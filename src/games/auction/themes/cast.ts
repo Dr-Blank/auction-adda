@@ -1,6 +1,6 @@
+import type { Card, Cast } from "../../../generated/index.ts";
+import { rng } from "../../../rng.ts";
 import { SUITS } from "../config.ts";
-import type { Card, Cast } from "../generated/index.ts";
-import { rng } from "../rng.ts";
 import { DEFAULT_TAGLINES, themeText } from "./defaults.ts";
 import type { SuitSkin, Theme, ThemeDef } from "./types.ts";
 

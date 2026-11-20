@@ -1,10 +1,10 @@
 import type { CSSProperties } from "react";
-import { DEALS, ROUNDS, SUIT_LIMIT, TOKENS } from "../config.ts";
-import type { View } from "../generated/index.ts";
-import type { Theme } from "../themes/types.ts";
+import { CardsIcon, CheckIcon } from "../../client/Icons.tsx";
+import { Sheet } from "../../client/Sheet.tsx";
+import type { View } from "../../generated/index.ts";
+import { DEALS, ROUNDS, SUIT_LIMIT, TOKENS } from "./config.ts";
 import { provisionalValues } from "./derive.ts";
-import { CardsIcon, CheckIcon } from "./Icons.tsx";
-import { Sheet } from "./Sheet.tsx";
+import type { Theme } from "./themes/types.ts";
 
 const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { reducedMotion } from "./derive.ts";
+
+/** The player asked for less motion: animations end at once. */
+export const reducedMotion = () =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** One column: the chart becomes a strip pinned to the top edge. Matches the 960 px rules in styles.css. */
 export const COMPACT = "(max-width: 960px)";
