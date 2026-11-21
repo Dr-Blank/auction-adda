@@ -1,6 +1,6 @@
 import "./pahunch.css";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar } from "../../client/Avatar.tsx";
 import { Brand } from "../../client/Brand.tsx";
 import {
@@ -19,7 +19,7 @@ import {
   useDock,
   useYourMove,
 } from "../../client/chrome.tsx";
-import { Rename } from "../../client/Lobby.tsx";
+import { Rename, Toggle } from "../../client/Lobby.tsx";
 import type { Reaction, RoomState } from "../../client/net.ts";
 import { Floats, ReactBar } from "../../client/Reactions.tsx";
 import { Sheet } from "../../client/Sheet.tsx";
@@ -36,7 +36,7 @@ import type {
 } from "../../generated/index.ts";
 import type { TableProps } from "../types.ts";
 import type { Pick } from "./Board.tsx";
-import { Board, pathKind, seatShape } from "./Board.tsx";
+import { Board, pathKind, seatShape, viewOf } from "./Board.tsx";
 import type { ClimbOption, Extras } from "./derive.ts";
 import {
   askBlock,
@@ -44,6 +44,7 @@ import {
   blockTargets,
   bribeChoices,
   carryTargets,
+  climbFavours,
   climbs,
   count,
   enterRooms,
@@ -63,6 +64,7 @@ import { Rules } from "./Rules.tsx";
 import { VoteClock } from "./Setup.tsx";
 import type { PahunchSkin } from "./skin.ts";
 import { roomIcon, roomName, skinFor } from "./skin.ts";
+import { S } from "./strings.ts";
 
 interface Ctx {
   v: PahunchView;
@@ -215,7 +217,6 @@ interface Move {
   key: string;
   verb: string;
   note: string;
-  primary: boolean;
   action?: PahunchAction;
   goTo?: Pick;
   /** The room it starts from (a new climber: the room it enters). */
@@ -273,11 +274,125 @@ function climbFacts(ctx: Ctx, c: ClimbOption): string[] {
   return out;
 }
 
+/** A message waiting in the confirm strip, and what it does in words. */
+interface Asking {
+  msg: ClientMsg;
+  what: string;
+}
+
+/** A move in words, glyph first: what the confirm strip asks about. */
+function describe(ctx: Ctx, a: PahunchAction): string {
+  const { v, skin, names, who } = ctx;
+  const paths = v.layout.paths;
+  const { climber, neutral, blocker, points } = skin.nouns;
+  const favour = (owner: number) => {
+    const k = v.players[owner]?.favour;
+    return k ? `${skin.favours[k].glyph} ${skin.favours[k].name}` : "";
+  };
+  switch (a.type) {
+    case "enter":
+      return S.enter(climber, ctx.short(a.room));
+    case "climb": {
+      const p = paths[a.path];
+      const c =
+        ctx.me === null
+          ? undefined
+          : climbs(v, ctx.me, { swap: a.swap, carry: a.carry }).find((x) => x.path === a.path);
+      const line =
+        c?.kind === "ask"
+          ? S.askVotes(ctx.short(p.from), ctx.short(p.to))
+          : S.climb(ctx.short(p.from), ctx.short(p.to));
+      const extra = [
+        a.swap !== undefined
+          ? S.swapFor(skin.favours.swapToken.glyph, v.tokensOn[a.path]?.value ?? 0, v.tokensOn[a.swap]?.value ?? 0)
+          : null,
+        a.carry ? S.carryWith(skin.favours.carry.glyph, a.carry.t === "seat" ? who(a.carry.seat) : neutral) : null,
+      ].filter(Boolean);
+      return [line, ...extra].join(" · ");
+    }
+    case "vote":
+      return a.yes > 0 ? S.voteYes(a.yes) : S.voteNo;
+    case "bribe":
+      return S.bribe(neutral, a.token);
+    case "take":
+      return S.take;
+    case "withdraw":
+      return S.withdraw;
+    case "nudge":
+      return S.nudge(neutral, ctx.short(paths[a.path].from), ctx.short(paths[a.path].to));
+    case "block":
+      return S.block(blocker, ctx.short(paths[a.path].from), ctx.short(paths[a.path].to));
+    case "done":
+      return S.endTurn;
+    case "lend":
+      return ctx.me === null ? "" : a.on ? S.lend(favour(ctx.me), who(v.turn)) : S.unlend(favour(ctx.me));
+    case "request":
+      return a.on
+        ? S.request(names[a.owner] ?? "", favour(a.owner))
+        : v.lent.includes(a.owner)
+          ? S.turnDown(names[a.owner] ?? "", favour(a.owner))
+          : S.unrequest(names[a.owner] ?? "", favour(a.owner));
+    case "decline":
+      return ctx.me === null ? "" : S.decline(favour(ctx.me));
+    case "give":
+      return S.give(tokensWord(a.tokens.length), `${score(a.tokens)} ${points}`, names[a.to] ?? "");
+    case "plead":
+      return S.plead(names[a.of] ?? "", a.count);
+    case "offer":
+      return S.offer(names[a.to] ?? "", a.give.join("+"), a.want.join("+"));
+    case "accept":
+      return S.accept(names[a.from] ?? "");
+    case "refuse":
+      return S.refuse(names[a.from] ?? "");
+    case "recall":
+      return a.deal === "plea" ? S.recallPlea(names[a.to] ?? "") : S.recallOffer(names[a.to] ?? "");
+  }
+}
+
+/**
+ * The second tap: what the move does, then two equal buttons. Escape goes back. It takes the
+ * action bar's place, so a double tap on a move never confirms it.
+ */
+function ConfirmBar({
+  what,
+  label,
+  onYes,
+  onNo,
+}: {
+  what: ReactNode;
+  label: string;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onNo();
+    };
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [onNo]);
+  return (
+    <div className="ph-moves ph-confirm" role="group" aria-label={S.confirmLabel(label)}>
+      <p className="ph-confirm-what">{what}</p>
+      <div className="ph-move-grid ph-confirm-grid">
+        <button type="button" className="btn ph-move ph-confirm-yes" onClick={onYes}>
+          <b>{S.confirm}</b>
+        </button>
+        <button type="button" className="btn ph-move" onClick={onNo}>
+          <b>{S.back}</b>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Table({ state, send, reactions }: TableProps) {
   const ctx = useCtx(state);
   const { v, skin, names, me } = ctx;
   const { room } = state;
-  const act = (action: PahunchAction) => send({ type: "action", action });
+  // Every move waits in the confirm strip for a second tap, away from the button it came from.
+  const [asking, setAsking] = useState<Asking | null>(null);
+  const act = (action: PahunchAction) => setAsking({ msg: { type: "action", action }, what: describe(ctx, action) });
   const owing = me !== null && v.pending.includes(me);
   useYourMove(owing);
   const awayFor = useAwayFor(state);
@@ -309,12 +424,13 @@ export function Table({ state, send, reactions }: TableProps) {
     else if (fresh.some((e) => e.t === "climb")) play("bid");
     if (fresh.some((e) => e.t === "end")) play("fanfare");
   }, [v.log, v.logStart, me]);
-  // A new turn, vote or phase clears the pick.
-  const moment = `${v.turn}:${v.vote === null}:${v.moved}`;
+  // A new turn, vote or phase clears the pick, and a move waiting to be confirmed.
+  const moment = `${v.turn}:${v.vote === null}:${v.moved}:${v.over}`;
   useEffect(() => {
     if (moment) {
       setPickRaw(null);
       setExtras({});
+      setAsking(null);
     }
   }, [moment]);
 
@@ -335,7 +451,6 @@ export function Table({ state, send, reactions }: TableProps) {
         key: `e${r}`,
         verb: `✚ Add a ${climber}`,
         note: `→ ${ctx.short(r)}`,
-        primary: true,
         action: { type: "enter", room: r },
         room: r,
         to: r,
@@ -346,7 +461,6 @@ export function Table({ state, send, reactions }: TableProps) {
         key: `c${c.path}`,
         verb: extra ? "↑ Move on" : c.kind === "ask" ? "🗳️ Ask for votes" : "↑ Move up",
         note: climbNote(ctx, c),
-        primary: c.kind !== "ask",
         action: extra
           ? { type: "climb", path: c.path }
           : {
@@ -365,7 +479,6 @@ export function Table({ state, send, reactions }: TableProps) {
         key: `n${p}`,
         verb: `⇡ Nudge an ${neutral}`,
         note: `→ ${ctx.short(paths[p].to)} · +1`,
-        primary: false,
         action: { type: "nudge", path: p },
         room: paths[p].from,
         path: p,
@@ -377,7 +490,6 @@ export function Table({ state, send, reactions }: TableProps) {
     key: `b${p}`,
     verb: `➜ Send ${blocker} here`,
     note: `${ctx.short(paths[p].from)} → ${ctx.short(paths[p].to)}${blockFavour ? ` · ${skin.favours.extraBlock.glyph} then move` : ""}`,
-    primary: true,
     action: { type: "block", path: p },
     path: p,
     to: paths[p].to,
@@ -391,7 +503,6 @@ export function Table({ state, send, reactions }: TableProps) {
       key: `d${p}`,
       verb: `↑ ${ctx.short(paths[p].to)}`,
       note: c ? climbNote(ctx, c, false) : `⇡ nudge an ${neutral} · +1`,
-      primary: c !== undefined && c.kind !== "ask",
       goTo: { path: p },
       room: paths[p].from,
       path: p,
@@ -418,7 +529,6 @@ export function Table({ state, send, reactions }: TableProps) {
                 key: "md",
                 verb: `Move ${blocker}…`,
                 note: `to another ${skin.nouns.path}`,
-                primary: false,
                 goTo: { blocker: true },
                 path: p.path,
                 to: paths[p.path].to,
@@ -516,12 +626,30 @@ export function Table({ state, send, reactions }: TableProps) {
         </>
       );
   }
-  const docked = owing && bar !== null;
+  // The last move can be taken back by whoever made it, or by the admin, until anything else happens.
+  const undoBy = room.undoBy ?? null;
+  const canUndo = room.canUndo && me !== null && !frozen && (isAdmin || undoBy === me);
+  const undoWhat = undoBy === me ? S.undoMine : undoBy !== null ? S.undoTheirs(names[undoBy] ?? "") : S.undoAny;
+  if (asking)
+    bar = (
+      <ConfirmBar
+        what={<Rich ctx={ctx} text={asking.what} />}
+        label={asking.what}
+        onYes={() => {
+          send(asking.msg);
+          setAsking(null);
+        }}
+        onNo={() => setAsking(null)}
+      />
+    );
+  const docked = asking !== null || (owing && bar !== null);
   const dockEl = useDock(docked);
   const clock = useClock(state);
 
   const top = atTop(v);
   const capTop = v.layout.rooms[v.layout.summit]?.cap ?? 0;
+  const view = viewOf(v.layout);
+  const boardRatio = view.w / view.h;
   const status = v.over
     ? "Final result"
     : v.vote
@@ -529,7 +657,14 @@ export function Table({ state, send, reactions }: TableProps) {
       : `${ctx.who(v.turn)} to move`;
 
   return (
-    <div className={`table ph-table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}>
+    <div
+      className={`table ph-table ${docked ? "acting" : ""} ${frozen ? "frozen" : ""}`}
+      // The board's width for its height: a wide screen sizes the board's column by it.
+      style={{
+        ["--board-ratio" as string]: boardRatio.toFixed(3),
+        ["--seat-rows" as string]: seatRows(names.length - (me === null ? 0 : 1)),
+      }}
+    >
       <header className="topbar">
         <Brand />
         <span className="round">
@@ -560,7 +695,12 @@ export function Table({ state, send, reactions }: TableProps) {
             onClose={() => setMenu(false)}
             adminHint="Can skip an away player (a random move is made for them) and set the vote clock."
             endAsk="End the game for everyone? Nobody wins a game ended early."
-            settings={<VoteClock room={room} me={me} send={send} />}
+            settings={
+              <>
+                <VoteClock room={room} me={me} send={send} />
+                <TipsSwitch />
+              </>
+            }
             rules={<Rules skin={skin} n={v.n} options={v.options} />}
           />
         )}
@@ -606,6 +746,8 @@ export function Table({ state, send, reactions }: TableProps) {
           selected={pick}
           looks={room.seats.map((s) => s.avatar)}
           faces={room.settings.gameOptions.avatarsOnBoard ?? false}
+          swap={v.vote ? v.vote.swap : pick?.path !== undefined && !pick.blocker ? extras.swap : undefined}
+          carry={v.vote ? v.vote.carry : pick?.path !== undefined && !pick.blocker ? extras.carry : undefined}
           onRoom={onRoom}
           onPath={onPath}
           onBlocker={onBlocker}
@@ -628,15 +770,25 @@ export function Table({ state, send, reactions }: TableProps) {
           />
         )}
         {bar && (
-          <div ref={dockEl} className={`action-bar ph-bar ${owing ? "your-turn" : ""}`}>
+          <div ref={dockEl} className={`action-bar ph-bar ${owing || asking ? "your-turn" : ""}`}>
             {bar}
           </div>
+        )}
+        {canUndo && !asking && (
+          <button
+            type="button"
+            className="btn ph-undo"
+            aria-label={undoWhat}
+            onClick={() => setAsking({ msg: { type: "undo" }, what: undoWhat })}
+          >
+            {S.undo} <small>{undoBy === me ? "" : undoBy !== null ? <Face ctx={ctx} i={undoBy} /> : null}</small>
+          </button>
         )}
         <section className="recent" aria-label="Latest">
           <h2>Latest</h2>
           <ol>
             {v.log
-              .slice(-5)
+              .slice(-20)
               .reverse()
               .map((e, i) => (
                 <li key={i} className={`log-${e.t}`}>
@@ -699,13 +851,16 @@ function SeatSwatch({ seat }: { seat: number }) {
   );
 }
 
+/** Rows of seat chips for `shown` chips: at most four to a row. */
+const seatRows = (shown: number) => Math.max(1, Math.ceil(shown / 4));
+
 /** The other players' chips (a watcher sees everyone); your own seat is your tray. */
 function Players(props: SeatProps) {
   const { ctx } = props;
   const shown = ctx.names.filter((_, i) => i !== ctx.me).length;
   // At most four chips to a row, and the rows as even as they go (six: 3 + 3, five: 3 + 2), every
   // chip one width.
-  const rows = Math.max(1, Math.ceil(shown / 4));
+  const rows = seatRows(shown);
   const cols = Math.max(1, Math.ceil(shown / rows));
   return (
     <section className="seats ph-players" aria-label="Players" style={{ ["--cols" as string]: cols }}>
@@ -1074,12 +1229,49 @@ function Uses({ n }: { n: number | null }) {
   );
 }
 
+// The 💡 tips can be switched off from the menu, on this device; they start on.
+const TIPS_KEY = "aa:tips";
+const tipsListeners = new Set<() => void>();
+const tipsOn = () => {
+  try {
+    return localStorage.getItem(TIPS_KEY) !== "0";
+  } catch {
+    return true;
+  }
+};
+function setTips(on: boolean) {
+  try {
+    localStorage.setItem(TIPS_KEY, on ? "1" : "0");
+  } catch {
+    // No storage: the switch lasts until the page reloads.
+  }
+  for (const f of tipsListeners) f();
+}
+function useTips(): boolean {
+  return useSyncExternalStore(
+    (f) => {
+      tipsListeners.add(f);
+      return () => tipsListeners.delete(f);
+    },
+    tipsOn,
+    () => true,
+  );
+}
+
+/** The menu's switch for every 💡 on the table: each player's own, on this device. */
+function TipsSwitch() {
+  const on = useTips();
+  return <Toggle label={S.tipsSwitch} hint={S.tipsHint} on={on} admin onChange={setTips} />;
+}
+
 /**
  * A small rule or a deal idea for new players: hidden behind 💡 until tapped, so it never gets in
- * the way of players who know the game.
+ * the way of players who know the game. One per panel at most; the menu switches them all off.
  */
 function Tip({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const shown = useTips();
+  if (!shown) return null;
   return (
     <>
       <button
@@ -1116,6 +1308,7 @@ function MyTray(
   return (
     <section
       className={`ph-tray ${owing ? "owing" : ""}`}
+      data-seat={me}
       aria-label="You"
       style={{ ["--seat" as string]: look.color, ["--seat-ink" as string]: look.ink }}
     >
@@ -1179,6 +1372,8 @@ function MyTray(
           <Tip>
             Only you see your {skin.nouns.points} until the end. Give, ask for or swap tokens any time to seal a deal
             made on the call: a vote, a favour, a promise.
+            {p.favour &&
+              ` Your favour only helps someone else’s move, never your own: offer it when it helps the mover, and agree on the call what they give you for it. Each use earns you ${v.layout.pay[p.favour] ?? 0} ${skin.nouns.points}.`}
           </Tip>
         )}
       </div>
@@ -1256,7 +1451,7 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
       {toggle && (
         <button
           type="button"
-          className={`btn ${offered ? "" : "primary"}`}
+          className="btn ph-offer-btn"
           aria-pressed={offered}
           aria-label={offered ? `Take back your ${f.name}` : `Offer your ${f.name} to ${mover}`}
           disabled={offered && v.vote !== null}
@@ -1271,10 +1466,6 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
           )}
         </button>
       )}
-      <Tip>
-        A favour only helps someone else’s move, never your own. Offer it when it helps the mover, and agree on the call
-        what they give you for it. You earn {pay} {skin.nouns.points} each time it is used.
-      </Tip>
       {info && <FavourSheet ctx={ctx} owner={me} act={act} onClose={() => setInfo(false)} />}
     </div>
   );
@@ -1369,7 +1560,7 @@ function RequestBar({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void })
         </Tip>
       </div>
       <div className="ph-move-grid">
-        <button type="button" className="btn primary ph-move" onClick={() => act({ type: "lend", on: true })}>
+        <button type="button" className="btn ph-move" onClick={() => act({ type: "lend", on: true })}>
           <b>✓ Yes, offer it</b>
           <small>
             +{pay} {points} if used
@@ -1400,7 +1591,7 @@ function MoveButton({
   return (
     <button
       type="button"
-      className={`btn ph-move ${m.primary ? "primary" : ""} ${m.goTo ? "ph-then" : ""}`}
+      className={`btn ph-move ${m.goTo ? "ph-then" : ""}`}
       onClick={() => (m.action ? act(m.action) : m.goTo && setPick(m.goTo))}
     >
       <b>
@@ -1457,7 +1648,9 @@ function PickBar(props: {
       : null
     : !pick
       ? extra
-        ? "Use a glowing move, or end your turn"
+        ? moves.length > 0 || props.blockerLive
+          ? "Use a glowing move, or end your turn"
+          : S.waitFavour
         : `Tap a glowing room${props.blockerLive ? ` or ${blocker}` : ""}`
       : pick.room !== undefined && picked.some((m) => m.goTo)
         ? `${ctx.room(pick.room)}: where to?`
@@ -1606,8 +1799,8 @@ function PickBar(props: {
         </div>
       )}
       {extra && (
-        <button type="button" className="btn primary ph-done" onClick={() => act({ type: "done" })}>
-          ⏭ End turn
+        <button type="button" className="btn ph-move ph-done" onClick={() => act({ type: "done" })}>
+          <b>{S.endTurn}</b>
         </button>
       )}
     </div>
@@ -1807,6 +2000,7 @@ function VoteSummary({ ctx, vote, clock }: { ctx: Ctx; vote: PahunchVote; clock:
         </span>
         {clock && <ClockRing clock={clock} />}
       </h2>
+      <VoteUses ctx={ctx} vote={vote} />
       <p className="ph-pips" role="img" aria-label={`${yes} of ${vote.need} yes`}>
         {Array.from({ length: Math.max(vote.need, yes) }, (_, k) => (
           <span key={k} className={k < yes ? "on" : ""} />
@@ -1854,6 +2048,67 @@ function VoteSummary({ ctx, vote, clock }: { ctx: Ctx; vote: PahunchVote; clock:
   );
 }
 
+/** A coin as a chip: its value colour, its bonus mark; `crossed` when the climb leaves it. */
+function CoinChip({ ctx, path, crossed }: { ctx: Ctx; path: number; crossed?: boolean }) {
+  const t = ctx.v.tokensOn[path];
+  if (!t) return <span className="ph-chip ph-none">∅</span>;
+  const cls = `ph-chip v${Math.min(t.value, 5)} ${crossed ? "ph-crossed" : "ph-gain"}`;
+  const body = (
+    <>
+      {t.value}
+      {t.bonus && <small>{ctx.skin.bonuses[t.bonus].glyph}</small>}
+    </>
+  );
+  return crossed ? <s className={cls}>{body}</s> : <span className={cls}>{body}</span>;
+}
+
+/**
+ * What the climb in a vote uses, for everyone to see before they answer: each lent favour's glyph
+ * and owner's face, and what it changes (the token taken instead, the piece taken along, the extra
+ * seat).
+ */
+function VoteUses({ ctx, vote }: { ctx: Ctx; vote: PahunchVote }) {
+  const { v, skin } = ctx;
+  const uses = climbFavours(v, vote.path, vote.swap, vote.carry);
+  if (uses.length === 0) return null;
+  const to = v.layout.paths[vote.path].to;
+  return (
+    <ul className="ph-vote-uses" aria-label={S.votesFor}>
+      {uses.map(({ kind, owner }) => {
+        const f = skin.favours[kind];
+        const name = owner === null ? "" : ctx.names[owner];
+        let label: string;
+        let body: ReactNode;
+        if (kind === "swapToken" && vote.swap !== undefined) {
+          label = S.usesSwap(name, v.tokensOn[vote.path]?.value ?? null, v.tokensOn[vote.swap]?.value ?? 0);
+          body = (
+            <>
+              <CoinChip ctx={ctx} path={vote.path} crossed /> → <CoinChip ctx={ctx} path={vote.swap} />
+            </>
+          );
+        } else if (kind === "carry" && vote.carry) {
+          const c = vote.carry;
+          label = S.usesCarry(name, c.t === "seat" ? ctx.who(c.seat) : skin.nouns.neutral);
+          body = <>+ {c.t === "seat" ? <Face ctx={ctx} i={c.seat} /> : <Rich ctx={ctx} text={skin.nouns.neutral} />}</>;
+        } else {
+          label = S.usesSqueeze(name);
+          body = <>{ctx.icon(to)} +1</>;
+        }
+        return (
+          <li key={kind} className="ph-vote-use" title={label}>
+            <span className="sr-only">{label}</span>
+            <span aria-hidden="true" className="ph-vote-use-body">
+              <span className="ph-fav-glyph">{f.glyph}</span>
+              {owner !== null && <Face ctx={ctx} i={owner} />}
+              {body}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function VoteBar({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: PahunchAction) => void }) {
   const { v, skin, me } = ctx;
   if (me === null) return null;
@@ -1872,14 +2127,26 @@ function VoteBar({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: Pah
             Saying no keeps a rival down.
           </Tip>
         </div>
+        <VoteUses ctx={ctx} vote={vote} />
         <div className="ph-move-grid">
           {Array.from({ length: mine }, (_, k) => mine - k).map((n) => (
-            <button key={n} className="btn primary" onClick={() => act({ type: "vote", yes: n })}>
-              ✓ Yes{mine > 1 ? ` ×${n}` : ""}
+            <button key={n} className="btn ph-move" onClick={() => act({ type: "vote", yes: n })}>
+              <b>{S.voteYes(mine > 1 ? n : 1)}</b>
+              {/* What the yes lets happen: the way up, and a token taken instead of the path's own. */}
+              <small className="ph-yes-what">
+                {ctx.icon(vote.room)} ➜ {ctx.icon(v.layout.paths[vote.path].to)}
+                {vote.swap !== undefined && (
+                  <>
+                    {" "}
+                    · <CoinChip ctx={ctx} path={vote.path} crossed /> → <CoinChip ctx={ctx} path={vote.swap} />
+                  </>
+                )}
+                {vote.carry && <> · {skin.favours.carry.glyph}</>}
+              </small>
             </button>
           ))}
-          <button className="btn" onClick={() => act({ type: "vote", yes: 0 })}>
-            ✗ No
+          <button className="btn ph-move" onClick={() => act({ type: "vote", yes: 0 })}>
+            <b>{S.voteNo}</b>
           </button>
         </div>
       </div>
@@ -2577,6 +2844,8 @@ export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {
       return `${who(e.from)} swapped ${tokensWord(e.gave)} for ${e.got} of ${e.to === ctx.me ? "yours" : `${ctx.names[e.to]}’s`}.`;
     case "skip":
       return `${who(e.p)} ${e.p === ctx.me ? "were" : "was"} away: a random move was made.`;
+    case "undo":
+      return S.logUndo(who(e.p));
     case "end":
       return e.by !== undefined
         ? `${who(e.by)} ended the game early. Nobody wins.`

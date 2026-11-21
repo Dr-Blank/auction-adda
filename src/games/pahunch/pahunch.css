@@ -692,6 +692,32 @@
   pointer-events: none;
   animation: ph-ghost 1.4s ease-in-out infinite;
 }
+/* A token swap: the coin taken instead is raised, enlarged and glowing; the path's own coin stays,
+   struck through. */
+.ph-mark.swapped .ph-token {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translateY(-0.8px) scale(1.3);
+  filter: drop-shadow(0 0 1.2px rgb(var(--accent-rgb) / 90%));
+  animation: ph-raise 1.4s ease-in-out infinite;
+}
+@keyframes ph-raise {
+  50% {
+    transform: translateY(-1.3px) scale(1.3);
+  }
+}
+.ph-mark.swapped .ph-coin-rim {
+  stroke: var(--accent);
+  stroke-width: 0.6;
+}
+.ph-mark.crossed .ph-token {
+  opacity: 0.6;
+}
+.ph-coin-strike {
+  stroke: var(--text);
+  stroke-width: 0.5;
+  stroke-linecap: round;
+}
 /* The coin under the blocker: the same coin as on any path (colour by value, its bonus mark),
    smaller, at his feet. */
 .ph-under .ph-coin-rim {
@@ -1471,6 +1497,58 @@ button.ph-chip.ph-want-add {
   flex: 1 1 auto;
 }
 
+/* A wide screen has no empty space: the board grows to the window's height (the top bar, the
+   coin key and the stage's padding take about 175 px, each row of seat chips about 66), and the
+   side column is as tall as the window, its "Latest" filling what is left and scrolling. */
+@media (min-width: 961px) {
+  .ph-table {
+    --board-h: max(480px, calc(100dvh - 175px - var(--seat-rows, 1) * 66px));
+  }
+  /* The board's column is as wide as the board at that height (plus the stage's padding), so no
+     band of empty felt sits beside it; the side column takes the rest, and the two sit centred. */
+  .table.ph-table,
+  .table.ph-table:has(> .ph-result) {
+    grid-template-columns:
+      minmax(0, calc(var(--board-h) * var(--board-ratio, 1) + 44px))
+      minmax(340px, 480px);
+    justify-content: center;
+  }
+  .ph-board {
+    max-height: var(--board-h);
+  }
+  .ph-table .ph-side {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 20px);
+    max-height: 100%;
+  }
+  .ph-table .ph-side > * {
+    flex: none;
+  }
+  .ph-table .ph-side > .recent {
+    flex: 1 1 auto;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ph-side .recent ol {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
+  }
+  .ph-side .recent > .btn {
+    align-self: start;
+  }
+}
+/* One column: the latest five lines are enough under the board. */
+@media (max-width: 960px) {
+  .ph-side .recent li:nth-child(n + 6) {
+    display: none;
+  }
+}
+
 /* On a wide screen your move is a panel under your tray, not a strip across the page. */
 @media (min-width: 701px) {
   .ph-side .ph-bar {
@@ -1478,6 +1556,140 @@ button.ph-chip.ph-want-add {
     border: 1px solid var(--accent-line);
     border-radius: 12px;
     background: var(--panel);
+  }
+}
+
+/* ---- motion (motion.ts) ---- */
+/* A fresh coin grows from its own centre. */
+.ph-token[data-coin] {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* Tokens flying between the board and the players, over everything. */
+.ph-fly {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.ph-fly.ph-chip {
+  min-width: 30px;
+  height: 30px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 45%);
+}
+/* A token picked up on the way: the board coin's size, with a glow as it spins up. */
+.ph-fly.ph-picked {
+  box-shadow:
+    0 0 0 2px rgb(var(--accent-rgb) / 60%),
+    0 0 14px rgb(var(--accent-rgb) / 55%);
+}
+.ph-fly.ph-rise {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  color: var(--accent-soft);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---- confirm, undo, tips ---- */
+/* The second tap: what the move does, big, then two equal buttons. "Confirm" has the bright edge,
+   never a filled look, so it does not out-shout "Back". */
+.ph-confirm-what {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.ph-confirm-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ph-moves .btn.ph-confirm-yes {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+/* Your favour's offer: one action among equals, marked by its edge, never a loud fill. */
+.ph-offer-btn:not([aria-pressed="true"]) {
+  border-color: var(--accent);
+}
+.ph-undo {
+  min-height: 44px;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ph-undo small {
+  display: inline-flex;
+}
+
+/* ---- what a climb's favours change, for the voters ---- */
+.ph-vote-uses {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ph-vote-use {
+  display: inline-flex;
+  min-height: 40px;
+  padding: 2px 10px;
+  border: 1px dashed var(--accent-line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.ph-vote-use-body {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ph-vote-use .ph-fav-glyph {
+  font-size: 1.2rem;
+}
+/* The yes button names the way up, and a swapped token as the one struck out → the one taken. */
+.ph-yes-what {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.ph-chip.ph-crossed,
+.ph-chip.ph-gain,
+.ph-chip.ph-none {
+  min-width: 28px;
+  height: 28px;
+  font-size: 0.9rem;
+}
+/* Struck by a slash across the coin, like the board's: a line through the digit reads as another glyph. */
+.ph-chip.ph-crossed {
+  position: relative;
+  opacity: 0.6;
+  text-decoration: none;
+}
+.ph-chip.ph-crossed::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  border-top: 2px solid var(--text);
+  transform: rotate(-45deg);
+}
+.ph-chip.ph-gain {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 40%);
+}
+.ph-chip small {
+  font-size: 0.7em;
+  margin-left: 1px;
+}
+/* Beside the board the vote card already shows it; on a phone the docked bar is what you see. */
+@media (min-width: 701px) {
+  .ph-bar .ph-vote-uses {
+    display: none;
   }
 }
 
@@ -1614,7 +1826,8 @@ button.ph-chip.ph-want-add {
   .ph-blocker.ghost,
   .ph-petals,
   .ph-fav-btn.live,
-  .ph-clock.urgent {
+  .ph-clock.urgent,
+  .ph-mark.swapped .ph-token {
     animation: none;
   }
   .ph-socket.live .ph-socket-glow {

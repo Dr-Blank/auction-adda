@@ -981,9 +981,9 @@ fn the_extra_block_moves_the_blocker_before_or_after_the_main_move() {
     assert_eq!((block.blocker, block.turn, block.players[1].uses), (6, 1, 1));
     let d = act(&after, 0, Action::Done);
     assert_eq!((d.turn, d.players[1].uses), (1, 2));
-    // Taken back before the main move, the turn passes on that move.
+    // Taken back before the main move, it could still be offered after it: the turn waits.
     let back = act(&act(&s, 1, Action::Lend { on: false }), 0, Action::Enter { room: 1 });
-    assert_eq!(back.turn, 1);
+    assert_eq!((back.turn, back.moved), (0, true));
 }
 
 #[test]
@@ -1540,6 +1540,8 @@ fn others_see_a_swap_but_not_its_values() {
 fn deals_outlast_the_turn_but_not_the_game() {
     let mut s = fresh(3);
     s.rooms[0] = vec![Some(0)];
+    // No favour to wait for after the move: the turn passes on it.
+    s.options.favours = false;
     let t = act(&act(&s, 1, plead(2, 1)), 1, swap(2, &[1], &[1]));
     let u = act(&t, 0, Action::climb(0));
     assert_ne!(u.turn, 0);
@@ -1696,4 +1698,93 @@ fn random_games_with_favours_lent_keep_the_board_sound() {
         FavourKind::ALL,
         "every favour got used"
     );
+}
+
+/// `owner` holds the one favour in the game, `kind` with both uses, not on offer.
+fn holds(s: &State, owner: u8, kind: FavourKind) -> State {
+    let mut s = s.clone();
+    for p in &mut s.players {
+        p.favour = None;
+        p.uses = 0;
+    }
+    s.players[usize::from(owner)].favour = Some(kind);
+    s.players[usize::from(owner)].uses = 2;
+    s
+}
+
+#[test]
+fn after_the_main_move_the_turn_waits_while_a_favour_could_still_help() {
+    // Another player holds the extra block: they may offer it after the move, so the turn stays.
+    let s = holds(&fresh(4), 1, FavourKind::ExtraBlock);
+    let t = act(&s, 0, Action::Enter { room: 1 });
+    assert_eq!((t.turn, t.moved, Pahunch::pending(&t)), (0, true, vec![0]));
+    let lent_now = act(&t, 1, Action::Lend { on: true });
+    let block = act(&lent_now, 0, Action::Block { path: 6 });
+    assert_eq!((block.blocker, block.turn, block.players[1].uses), (6, 1, 1));
+    let done = act(&t, 0, Action::Done);
+    assert_eq!((done.turn, done.players[1].uses), (1, 2));
+    // A request after the move waits for its answer too; a no leaves the turn to the mover.
+    let asked = act(&t, 0, Action::Request { owner: 1, on: true });
+    assert_eq!(Pahunch::pending(&asked), vec![0, 1]);
+    assert_eq!(act(&asked, 1, Action::Decline).turn, 0);
+
+    // Nothing could help: the turn passes at once.
+    let mut spent = s.clone();
+    spent.players[1].uses = 0;
+    assert_eq!(act(&spent, 0, Action::Enter { room: 1 }).turn, 1, "used up");
+    assert_eq!(
+        act(
+            &holds(&fresh(4), 0, FavourKind::ExtraBlock),
+            0,
+            Action::Enter { room: 1 }
+        )
+        .turn,
+        1,
+        "the mover's own favour"
+    );
+    let mut off = s.clone();
+    off.options.favours = false;
+    assert_eq!(act(&off, 0, Action::Enter { room: 1 }).turn, 1, "favours off");
+    let mut strict = act(&act(&s, 1, Action::Lend { on: true }), 1, Action::Lend { on: false });
+    strict.options.one_vote_per_room = true;
+    assert_eq!(
+        act(&strict, 0, Action::Enter { room: 1 }).turn,
+        1,
+        "strict: offered once"
+    );
+    assert_eq!(
+        act(
+            &holds(&fresh(4), 1, FavourKind::SqueezeIn),
+            0,
+            Action::Enter { room: 1 }
+        )
+        .turn,
+        1,
+        "a favour that only helps the main move"
+    );
+
+    // Climb again waits only after a move into a room of 1.
+    let c = holds(&fresh(4), 1, FavourKind::ClimbAgain);
+    let one = act(&c, 0, Action::Enter { room: 2 });
+    assert_eq!((one.turn, one.bonuses.climb_again), (0, Some(2)));
+    assert_eq!(refused(&one, 0, Action::climb(10)), "Use an extra move or end the turn");
+    let on = act(&act(&one, 1, Action::Lend { on: true }), 0, Action::climb(10));
+    assert_eq!(
+        (on.rooms[9].clone(), on.turn, on.players[1].uses),
+        (vec![Some(0)], 1, 1)
+    );
+    assert_eq!(act(&c, 0, Action::Enter { room: 3 }).turn, 1);
+}
+
+#[test]
+fn an_undo_puts_the_game_back_and_says_who_did_it() {
+    let s = holds(&fresh(4), 0, FavourKind::ExtraBlock);
+    let t = act(&s, 0, Action::Enter { room: 1 });
+    let back = Pahunch::undo_move(&s, 2).unwrap();
+    assert_eq!(back.rooms, s.rooms);
+    assert_eq!((back.turn, back.players[0].hand), (0, s.players[0].hand));
+    assert_eq!(back.log.last(), Some(&LogEntry::Undo { p: 2 }));
+    assert_eq!(back.log.len(), s.log.len() + 1);
+    assert!(t.log.len() > s.log.len());
+    assert!(Pahunch::undoes_moves());
 }

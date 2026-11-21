@@ -11,11 +11,12 @@
 // going somewhere: the piece that moves is lifted, its path marches towards the room it goes to,
 // and a faint copy of the piece already waits in the seat it will take.
 
-import { type KeyboardEvent, type ReactNode, useId } from "react";
+import { type KeyboardEvent, type ReactNode, useId, useRef } from "react";
 import { AvatarFace } from "../../client/Avatar.tsx";
-import type { PahunchLayout, PahunchView } from "../../generated/index.ts";
+import type { PahunchCarry, PahunchLayout, PahunchView } from "../../generated/index.ts";
 import { offers, slot } from "./derive.ts";
-import { type Box, boxOf, type Pt, routes, SEAT } from "./route.ts";
+import { useMotion } from "./motion.ts";
+import { boxOf, type Pt, routes, seatAt } from "./route.ts";
 import type { PahunchSkin } from "./skin.ts";
 import { roomIcon, roomName } from "./skin.ts";
 
@@ -52,6 +53,12 @@ export interface BoardProps {
   /** Each seat's avatar look; drawn on its pieces when `faces` is on (an admin's display choice). */
   looks: string[];
   faces: boolean;
+  /**
+   * Favours the move on show uses, for everyone to see: the path whose token a swap takes instead
+   * (raised and glowing; the path's own is crossed out), and the piece a carry takes along.
+   */
+  swap?: number;
+  carry?: PahunchCarry;
   onRoom: (room: number) => void;
   onPath: (path: number) => void;
   onBlocker: () => void;
@@ -67,18 +74,6 @@ function press(fn: () => void) {
 }
 
 const ORDER = { back: 0, plain: 1, slot: 2 };
-
-/**
- * Where seat `k` of a room sits; a short last row is centred under the full one. One squeezed in
- * past the seats sits on the room's corner.
- */
-function seatAt(b: Box, k: number, cap: number): Pt {
-  if (k >= Math.max(1, cap)) return { x: b.x + b.w / 2 - 0.6, y: b.y - b.h / 2 + 0.6 };
-  const col = k % b.cols;
-  const row = Math.floor(k / b.cols);
-  const inRow = Math.min(b.cols, cap - row * b.cols);
-  return { x: b.x - (inRow * SEAT) / 2 + SEAT / 2 + col * SEAT, y: b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT };
-}
 
 /** A scalloped tile of eight petals about `r` across: the aunties' frame, unlike any player's round piece. */
 function flower(x: number, y: number, r: number): string {
@@ -125,16 +120,26 @@ export function seatShape(k: number, x: number, y: number, r: number): string {
   }
 }
 
+/** The board's drawn area: every room card and every path, with a small margin. */
+export function viewOf(layout: PahunchLayout) {
+  const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
+  const xs = [
+    ...boxes.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]),
+    ...routes(layout).flatMap((r) => r.p.map((q) => q.x)),
+  ];
+  const minX = Math.min(...xs) - 3;
+  const maxX = Math.max(...xs) + 3;
+  const minY = Math.min(...boxes.map((b) => b.y - b.h / 2)) - 3;
+  const maxY = Math.max(...boxes.map((b) => b.y + b.h / 2)) + 3;
+  return { minX, minY, w: maxX - minX, h: maxY - minY };
+}
+
 export function Board(props: BoardProps) {
   const { v, skin, names, acting, liveRooms, livePaths, focus, targets, blockerLive, selected, faces } = props;
   const { layout } = v;
   const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
   const route = routes(layout);
-  const xs = [...boxes.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...route.flatMap((r) => r.p.map((q) => q.x))];
-  const minX = Math.min(...xs) - 3;
-  const maxX = Math.max(...xs) + 3;
-  const minY = Math.min(...boxes.map((b) => b.y - b.h / 2)) - 3;
-  const maxY = Math.max(...boxes.map((b) => b.y + b.h / 2)) + 3;
+  const { minX, minY, w: viewW, h: viewH } = viewOf(layout);
   const vote = v.vote;
   const who = (s: number | null) => (s === null ? skin.nouns.neutral : s === v.you ? "you" : names[s]);
   const name = (r: number, short = false) => roomName(skin, layout.board, r, layout.summit, short);
@@ -151,6 +156,10 @@ export function Board(props: BoardProps) {
     return from.includes(null) ? null : undefined;
   })();
   const landing = movePath !== undefined && mover !== undefined ? layout.paths[movePath].to : undefined;
+  // A favour's part of the move: the token taken instead, and the piece taken along.
+  const swapAt = movePath !== undefined ? props.swap : undefined;
+  const carried: number | null | undefined =
+    movePath !== undefined && props.carry ? (props.carry.t === "seat" ? props.carry.seat : null) : undefined;
   // The blocker's picked new place, shown as a faint blocker on that path.
   const blockerTo = selected?.blocker && selected.path !== undefined ? selected.path : undefined;
 
@@ -199,17 +208,20 @@ export function Board(props: BoardProps) {
   // is squeezed to fit its card.
   const titleW = (room: number) => 2.9 + name(room, true).length * 1.02;
   const uid = useId().replace(/[^\w-]/g, "");
+  // Each new view slides what moved from where it was (motion.ts).
+  const svgRef = useRef<SVGSVGElement>(null);
+  useMotion(svgRef, v);
 
   /**
    * A piece: an aunty's own face on a square tile (players' pieces are round), or a player's
    * colour as a ring round their face or a disc with their shape.
    */
-  const piece = (s: number | null, at: Pt, key: string | number, cls: string): ReactNode => {
+  const piece = (s: number | null, at: Pt, key: string | number, cls: string, place?: string): ReactNode => {
     const look = s === null ? null : skin.seats[s % skin.seats.length];
     const base = `ph-seat ${s === null ? "neutral" : `seat-${s}`} ${s === v.you ? "mine" : ""} ${cls}`;
     if (s === null)
       return (
-        <g key={key} className={base}>
+        <g key={key} className={base} data-piece={place}>
           {/* Petals that turn slowly round her face. */}
           <path className="ph-piece-ring ph-petals" d={flower(at.x, at.y, R + 0.15)} />
           <AvatarFace
@@ -223,7 +235,7 @@ export function Board(props: BoardProps) {
         </g>
       );
     return (
-      <g key={key} className={`${base} ${faces ? "face" : ""}`}>
+      <g key={key} className={`${base} ${faces ? "face" : ""}`} data-piece={place}>
         <circle className="ph-piece-ring" cx={at.x} cy={at.y} r={R} style={{ fill: look?.color }} />
         {faces ? (
           <AvatarFace code={props.looks[s] ?? ""} name={names[s] ?? ""} x={at.x} y={at.y} r={R - 0.6} />
@@ -236,8 +248,9 @@ export function Board(props: BoardProps) {
 
   return (
     <svg
+      ref={svgRef}
       className={`ph-board ${acting ? "acting" : ""} ${focus ? "picking" : ""} ${movePath !== undefined ? "showing" : ""}`}
-      viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`}
+      viewBox={`${minX} ${minY} ${viewW} ${viewH}`}
       role="group"
       aria-label={`The board: ${layout.name}`}
     >
@@ -338,12 +351,18 @@ export function Board(props: BoardProps) {
           const cap = layout.rooms[room].cap;
           const top = room === layout.summit;
           const icon = roomIcon(skin, layout.board, room, layout.summit);
-          // The piece that moves is lifted; it still sits in its seat.
-          const moving =
-            movePath !== undefined && layout.paths[movePath].from === room ? held.indexOf(mover ?? -2) : -1;
+          // The piece that moves is lifted (and one a carry takes along); it still sits in its seat.
+          const fromHere = movePath !== undefined && layout.paths[movePath].from === room;
+          const moving = fromHere ? held.indexOf(mover ?? -2) : -1;
+          const along =
+            fromHere && carried !== undefined ? held.findIndex((x, k) => x === carried && k !== moving) : -1;
+          // Where they go: faint copies already in the seats they will take.
+          const arriving =
+            landing === room && mover !== undefined ? [mover, ...(carried !== undefined ? [carried] : [])] : [];
           return (
             <g
               key={`s${room}`}
+              data-inside={room}
               className={`ph-room-inside ${top ? "top" : ""} ${roomState(room)}`}
               onClick={() => props.onRoom(room)}
               aria-hidden="true"
@@ -374,16 +393,22 @@ export function Board(props: BoardProps) {
                 const at = seatAt(b, k, cap);
                 const s = k < held.length ? held[k] : undefined;
                 if (s === undefined) {
-                  if (landing === room && k === held.length && mover !== undefined) return piece(mover, at, k, "ghost");
+                  if (k - held.length < arriving.length) return null;
                   return <circle key={k} className="ph-seat empty" cx={at.x} cy={at.y} r={R} />;
                 }
-                return piece(s, at, k, `${k >= cap ? "extra" : ""} ${k === moving ? "moving" : ""}`);
+                return piece(
+                  s,
+                  at,
+                  k,
+                  `${k >= cap ? "extra" : ""} ${k === moving || k === along ? "moving" : ""}`,
+                  `${room}:${k}`,
+                );
               })}
-              {/* A full room still shows where the newcomer squeezes in. */}
-              {landing === room &&
-                mover !== undefined &&
-                held.length >= Math.max(1, cap) &&
-                piece(mover, seatAt(b, held.length, cap), "ghost", "ghost extra")}
+              {/* A full room still shows where the newcomer squeezes in, on its corner. */}
+              {arriving.map((s, j) => {
+                const k = held.length + j;
+                return piece(s, seatAt(b, k, cap), `g${j}`, `ghost ${k >= cap ? "extra" : ""}`);
+              })}
             </g>
           );
         })}
@@ -396,10 +421,12 @@ export function Board(props: BoardProps) {
           const { x, y } = route[i].mid;
           const token = v.tokensOn[i];
           if (v.blocker === i) return null;
+          const swapped = swapAt === i;
+          const crossed = swapAt !== undefined && movePath === i;
           return (
             <g
               key={`m${i}`}
-              className={`ph-mark ${kind} ${kind === "back" && keyOpen ? "open" : ""} ${pathState(i)}`}
+              className={`ph-mark ${kind} ${kind === "back" && keyOpen ? "open" : ""} ${pathState(i)} ${swapped ? "swapped" : ""} ${crossed ? "crossed" : ""}`}
               onClick={() => props.onPath(i)}
               aria-hidden="true"
             >
@@ -411,7 +438,10 @@ export function Board(props: BoardProps) {
                   </text>
                 </g>
               ) : token ? (
-                <g className={`ph-token v${Math.min(token.value, 5)} ${token.bonus ? `bonus ${token.bonus}` : ""}`}>
+                <g
+                  className={`ph-token v${Math.min(token.value, 5)} ${token.bonus ? `bonus ${token.bonus}` : ""}`}
+                  data-coin={i}
+                >
                   <circle className="ph-coin-hit" cx={x} cy={y} r={4} />
                   <circle className="ph-coin-rim" cx={x} cy={y} r={2.3} />
                   <circle className="ph-coin" cx={x} cy={y} r={1.85} />
@@ -426,6 +456,8 @@ export function Board(props: BoardProps) {
                       </text>
                     </g>
                   )}
+                  {/* A swap takes another token: this one stays, struck through. */}
+                  {crossed && <path className="ph-coin-strike" d={`M${x - 2.2} ${y + 2.2}L${x + 2.2} ${y - 2.2}`} />}
                 </g>
               ) : kind === "slot" ? (
                 <circle className="ph-slot-empty" cx={x} cy={y} r={1.3} />

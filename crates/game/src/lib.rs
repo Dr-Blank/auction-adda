@@ -200,6 +200,21 @@ pub trait Game {
         Err(RuleError::new("Nothing to undo"))
     }
 
+    /// Whether the last move can be taken back, by the player who made it or the admin.
+    #[must_use]
+    fn undoes_moves() -> bool {
+        false
+    }
+
+    /// Takes back the last move: `before` is the state it was made on, `by` who takes it back.
+    /// The server checks that `by` may and that nothing happened since.
+    ///
+    /// # Errors
+    /// When the game takes no moves back.
+    fn undo_move(_before: &Self::State, _by: Seat) -> Result<Self::State, RuleError> {
+        Err(RuleError::new("Nothing to undo"))
+    }
+
     /// The running clock, if the game has one now: two marks the server watches (usually log
     /// positions). A new first mark starts the clock afresh; a new second mark tops it up.
     fn clock(_s: &Self::State) -> Option<(usize, usize)> {

@@ -181,11 +181,33 @@ export function askBlock(v: PahunchView, me: number | null, owner: number): stri
   if (v.used.includes(owner)) return "used this turn";
   if (p.uses === 0) return "used up";
   if (onceOffered(v, owner)) return "strict game: offered once this turn";
+  // After the main move only an extra blocker move, or a climb on from a room of 1, can help.
+  if (v.moved && p.favour !== "extraBlock" && !(p.favour === "climbAgain" && v.bonuses.climbAgain !== undefined))
+    return "no help after your move";
   return null;
 }
 
 /** Under the strict switch, `owner`'s favour was on offer once this turn and that offer ended unused. */
 export const onceOffered = (v: PahunchView, owner: number) => v.options.oneVotePerRoom && v.withdrawn.includes(owner);
+
+/**
+ * The lent favours a climb up `path` uses once its vote passes, with their owners: a token swap,
+ * a piece taken along, one squeezed into a full room. What the voters say yes to.
+ */
+export function climbFavours(
+  v: PahunchView,
+  path: number,
+  swap: number | undefined,
+  carry: PahunchCarry | undefined,
+): { kind: PahunchFavour; owner: number | null }[] {
+  const owner = (kind: PahunchFavour) => onOffer(v).find((o) => o.kind === kind)?.owner ?? null;
+  const out: PahunchFavour[] = [];
+  if (swap !== undefined) out.push("swapToken");
+  if (carry) out.push("carry");
+  const to = v.layout.paths[path]?.to;
+  if (to !== undefined && roomFor(v, to, carry ? 2 : 1) === true) out.push("squeezeIn");
+  return out.map((kind) => ({ kind, owner: owner(kind) }));
+}
 
 /** Seats that still owe an answer to the vote. */
 export function votersLeft(v: PahunchView, vote: PahunchVote): number[] {

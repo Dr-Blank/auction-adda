@@ -684,11 +684,26 @@ fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleE
     Ok(())
 }
 
-/// A climber of the mover's reached `room`: a lent favour lets it climb on from a 1-room.
+/// A climber of the mover's reached `room`: from a 1-room a lent favour lets it climb on, so the
+/// turn waits while one could still be lent.
 fn arrive(s: &mut State, room: u8) {
-    if room != s.layout.summit && s.layout.cap(room) == 1 && on_offer(s, FavourKind::ClimbAgain) {
+    if room != s.layout.summit && s.layout.cap(room) == 1 && could_lend(s, FavourKind::ClimbAgain) {
         s.bonuses.climb_again = Some(room);
     }
+}
+
+/// A player other than the mover has a favour of `kind` on offer, or could still offer it this
+/// turn: a use left, not used this turn, and (strict games) not offered once already.
+fn could_lend(s: &State, kind: FavourKind) -> bool {
+    s.options.favours
+        && (0..s.n).any(|o| {
+            o != s.turn
+                && s.players
+                    .get(usize::from(o))
+                    .is_some_and(|p| p.favour == Some(kind) && p.uses > 0)
+                && !s.used.contains(&o)
+                && !(s.options.one_vote_per_room && s.withdrawn.contains(&o))
+        })
 }
 
 fn nudge(s: &mut State, seat: Seat, path: u8) -> Result<(), RuleError> {
@@ -758,9 +773,13 @@ fn climbs_again(s: &State) -> bool {
     s.bonuses.climb_again.is_some() && on_offer(s, FavourKind::ClimbAgain)
 }
 
-/// The mover has extra moves left after the main one.
+/// The mover has extra moves left after the main one: from special coins, or from a favour on
+/// offer or that someone could still offer (the turn waits for it until the mover ends it).
 fn extras(s: &State) -> bool {
-    s.bonuses.block > 0 || s.bonuses.nudge > 0 || climbs_again(s) || on_offer(s, FavourKind::ExtraBlock)
+    s.bonuses.block > 0
+        || s.bonuses.nudge > 0
+        || could_lend(s, FavourKind::ExtraBlock)
+        || (s.bonuses.climb_again.is_some() && could_lend(s, FavourKind::ClimbAgain))
 }
 
 /// `hand` without `tokens` (by value), sorted; `None` when the hand lacks them.
@@ -1288,6 +1307,20 @@ pub fn apply_skip(prev: &State, seat: Seat) -> Result<State, RuleError> {
     apply_action(&s, seat, &action)
 }
 
+/// `by` takes back the last move: the game goes back to `before`, the state it was made on, with
+/// a line saying who took it back. The server checks who may and that nothing happened since.
+///
+/// # Errors
+/// When `by` is no seat.
+pub fn undo(before: &State, by: Seat) -> Result<State, RuleError> {
+    if by >= before.n {
+        return fail("No such seat");
+    }
+    let mut s = before.clone();
+    s.log.push(LogEntry::Undo { p: by });
+    Ok(s)
+}
+
 /// The admin ends the game now: nobody wins.
 ///
 /// # Errors
@@ -1388,7 +1421,8 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
             | LogEntry::Bonus { p, .. }
             | LogEntry::Done { p }
             | LogEntry::Decline { p }
-            | LogEntry::Skip { p } => *p = m(*p),
+            | LogEntry::Skip { p }
+            | LogEntry::Undo { p } => *p = m(*p),
             LogEntry::Favour { owner, user: p, .. } | LogEntry::Request { p, owner } => {
                 *owner = m(*owner);
                 *p = m(*p);

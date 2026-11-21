@@ -245,11 +245,19 @@ impl SeatData {
     }
 }
 
-/// The admin's last called result: the game before it, and the room's game version it produced.
-/// Undo works while nothing has changed the game since.
+/// The last change that can be taken back: the game before it, and the room's game version it
+/// produced. Undo works while nothing has changed the game since.
 struct LastCall {
     before: Match,
     version: u64,
+    /// `None`: the admin's called result (auction). `Some`: a move in a game that takes moves
+    /// back; its player (`by`, `None` for a bot's or a skipped seat's move) or the admin may.
+    moved: Option<Moved>,
+}
+
+#[derive(Clone, Copy)]
+struct Moved {
+    by: Option<Seat>,
 }
 
 struct Room {
@@ -421,6 +429,26 @@ impl Room {
         }
         self.game = Some(game);
         self.version += 1;
+    }
+
+    /// The admin's last call can still be taken back. Only a call holds the bots back; a move's
+    /// undo is for the moments after it.
+    fn call_undoable(&self) -> bool {
+        self.last_call
+            .as_ref()
+            .is_some_and(|c| c.version == self.version && c.moved.is_none())
+    }
+
+    /// After a move (`set_game` already made it): its player `by` (or the admin) may take it back
+    /// while nothing else happens, in a game that takes moves back.
+    fn keep_move(&mut self, before: Match, by: Option<Seat>) {
+        if before.undoes_moves() {
+            self.last_call = Some(LastCall {
+                before,
+                version: self.version,
+                moved: Some(Moved { by }),
+            });
+        }
     }
 
     /// Moves every seat, `to[old] = new`; the game follows. A call made before can no longer be
@@ -865,14 +893,10 @@ impl Rooms {
                 room.bot_due = None;
                 continue;
             };
+            let hold = room.call_undoable();
             let due = *room.bot_due.get_or_insert_with(|| {
                 let think = rng.random_range(self.bot_delay_ms / 2..=self.bot_delay_ms * 3 / 2);
-                let undoable = room.last_call.as_ref().is_some_and(|c| c.version == room.version);
-                now + if undoable {
-                    think.max(BOT_WAIT_AFTER_CALL_MS)
-                } else {
-                    think
-                }
+                now + if hold { think.max(BOT_WAIT_AFTER_CALL_MS) } else { think }
             });
             if due > now {
                 continue;
@@ -890,8 +914,10 @@ impl Rooms {
                     game.skip(seat).map_err(Fail::from)
                 });
             match next {
-                Ok(game) => {
-                    room.set_game(game);
+                Ok(next) => {
+                    let before = game.clone();
+                    room.set_game(next);
+                    room.keep_move(before, None);
                     moved.push(room.code.clone());
                 }
                 Err(e) => error!(room = %room.code, seat, "Bot cannot move: {}", e.message),
@@ -1353,7 +1379,9 @@ impl Rooms {
                 }
                 let game = before.act(me, &action)?;
                 debug!(room = %code, seat = me, "Move {action:?}");
+                let before = before.clone();
                 room.set_game(game);
+                room.keep_move(before, Some(me));
             }
             ClientMsg::Skip { seat } => {
                 let before = room.game_to_move()?;
@@ -1361,7 +1389,9 @@ impl Rooms {
                 require_away(room, seat)?;
                 let game = before.skip(seat)?;
                 info!(room = %code, seat = me, "Skipped away seat {seat}");
+                let before = before.clone();
                 room.set_game(game);
+                room.keep_move(before, None);
             }
             ClientMsg::Rule { winner, price } => {
                 let before = room.game_to_move()?;
@@ -1379,23 +1409,31 @@ impl Rooms {
                 room.last_call = Some(LastCall {
                     before,
                     version: room.version,
+                    moved: None,
                 });
             }
             ClientMsg::Undo => {
-                if me != room.admin {
-                    return fail("Only the room admin can undo a call");
-                }
                 room.game_to_move()?;
                 let (Some(call), Some(after)) = (&room.last_call, &room.game) else {
-                    return fail("Nothing to undo: someone has moved since the call");
+                    return fail("Nothing to undo: someone has moved since");
                 };
-                if call.version != room.version {
-                    return fail("Nothing to undo: someone has moved since the call");
+                match call.moved {
+                    None if me != room.admin => return fail("Only the room admin can undo a call"),
+                    Some(m) if me != room.admin && m.by != Some(me) => {
+                        return fail("Only the room admin or the player who moved can undo it");
+                    }
+                    _ => {}
                 }
-                let game = call.before.undo_call(after, me)?;
+                if call.version != room.version {
+                    return fail("Nothing to undo: someone has moved since");
+                }
+                let game = match call.moved {
+                    None => call.before.undo_call(after, me)?,
+                    Some(_) => call.before.undo_move(me)?,
+                };
                 room.set_game(game);
                 room.last_call = None;
-                info!(room = %code, seat = me, "Admin undid the last call");
+                info!(room = %code, seat = me, "Undid the last change");
             }
             ClientMsg::Admin { seat } => {
                 if !room.has_seat(seat) {
@@ -2081,6 +2119,12 @@ impl Rooms {
                 .collect(),
             admin: room.admin,
             can_undo: room.game.is_some() && room.last_call.as_ref().is_some_and(|c| c.version == room.version),
+            undo_by: room
+                .last_call
+                .as_ref()
+                .filter(|c| room.game.is_some() && c.version == room.version)
+                .and_then(|c| c.moved)
+                .and_then(|m| m.by),
             min_players: kind.min_players(),
             max_players: kind.max_players(),
             skip_after_ms: self.skip_after_ms,

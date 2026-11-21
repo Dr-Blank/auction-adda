@@ -10,9 +10,15 @@ export type RoomInfo = { code: string, theme: string, cast: Cast, started: boole
  */
 admin: number, 
 /**
- * The admin's last called result can still be taken back (nobody has moved since).
+ * The last change can still be taken back (nothing has changed since): the admin's called
+ * result, or a move in a game that takes moves back.
  */
-canUndo: boolean, minPlayers: number, maxPlayers: number, 
+canUndo: boolean, 
+/**
+ * A move that can be taken back: whose it is (they and the admin may). Unset for a call, or
+ * for a bot's or a skipped seat's move (only the admin may).
+ */
+undoBy?: number, minPlayers: number, maxPlayers: number, 
 /**
  * How long a seat must be disconnected before it can be skipped or released.
  */

@@ -337,6 +337,20 @@ impl Match {
         }
     }
 
+    /// Whether the last move can be taken back (by its player or the admin).
+    #[must_use]
+    pub fn undoes_moves(&self) -> bool {
+        each!(self, G, _s => G::undoes_moves())
+    }
+
+    /// Takes back the last move; `self` is the state it was made on.
+    ///
+    /// # Errors
+    /// When the game takes no moves back.
+    pub fn undo_move(&self, by: Seat) -> Result<Self, RuleError> {
+        each!(self, G, s => G::undo_move(s, by).map(Self::from))
+    }
+
     #[must_use]
     pub fn clock(&self) -> Option<(usize, usize)> {
         each!(self, G, s => G::clock(s))

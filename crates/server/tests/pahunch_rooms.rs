@@ -129,6 +129,15 @@ impl Table {
         assert_eq!(last_error(c), None, "seat {seat}");
     }
 
+    /// A main move; a turn that then waits for a favour someone could still lend is ended.
+    fn play(&mut self, seat: u8, action: Value) {
+        self.act(seat, action);
+        let v = view(&self.clients[0]);
+        if v.turn == seat && v.moved && v.vote.is_none() {
+            self.act(seat, json!({ "type": "done" }));
+        }
+    }
+
     fn admin(&mut self, msg: Value) {
         send(&mut self.rooms, &self.clients[0], msg);
     }
@@ -148,9 +157,9 @@ impl Table {
     /// the second there: the second owes a vote.
     fn start_a_vote(&mut self) -> (u8, u8) {
         let o = self.order();
-        self.act(o[0], json!({ "type": "enter", "room": 3 }));
-        self.act(o[1], json!({ "type": "enter", "room": 3 }));
-        self.act(o[2], json!({ "type": "enter", "room": 2 }));
+        self.play(o[0], json!({ "type": "enter", "room": 3 }));
+        self.play(o[1], json!({ "type": "enter", "room": 3 }));
+        self.play(o[2], json!({ "type": "enter", "room": 2 }));
         self.act(o[0], json!({ "type": "climb", "path": 11 }));
         assert_eq!(view(&self.clients[0]).pending, vec![o[1]]);
         (o[0], o[1])
@@ -306,6 +315,50 @@ fn the_admins_house_rules_reach_the_game() {
     let v = view(&t.clients[1]);
     assert!(v.options.fail_ends_turn);
     assert!(v.options.favours, "a missing option takes its default");
+}
+
+#[test]
+fn the_player_who_moved_or_the_admin_takes_back_the_last_move() {
+    let mut t = table(3, None);
+    t.admin(json!({ "type": "start" }));
+    let o = t.order();
+    let before = view(&t.clients[0]);
+    t.act(o[0], json!({ "type": "enter", "room": 3 }));
+    let info = room(&t.clients[0]);
+    assert!(info.can_undo);
+    assert_eq!(info.undo_by, Some(o[0]));
+    // Someone else (not the admin) may not.
+    let other = if o[1] == 0 { o[2] } else { o[1] };
+    send(&mut t.rooms, &t.clients[usize::from(other)], json!({ "type": "undo" }));
+    assert_eq!(
+        last_error(&t.clients[usize::from(other)]).as_deref(),
+        Some("Only the room admin or the player who moved can undo it")
+    );
+    send(&mut t.rooms, &t.clients[usize::from(o[0])], json!({ "type": "undo" }));
+    assert_eq!(last_error(&t.clients[usize::from(o[0])]), None);
+    let back = view(&t.clients[0]);
+    assert_eq!((back.rooms.clone(), back.turn), (before.rooms.clone(), before.turn));
+    assert_eq!(back.log.last(), Some(&LogEntry::Undo { p: o[0] }));
+    assert!(!room(&t.clients[0]).can_undo, "one step back only");
+
+    // The admin may take back anyone's move, but not once something else happened.
+    t.act(o[0], json!({ "type": "enter", "room": 3 }));
+    t.admin(json!({ "type": "undo" }));
+    assert_eq!(last_error(&t.clients[0]), None);
+    assert_eq!(view(&t.clients[0]).rooms, before.rooms);
+    t.play(o[0], json!({ "type": "enter", "room": 3 }));
+    t.play(o[1], json!({ "type": "enter", "room": 2 }));
+    let not_last = if o[0] == 0 { o[2] } else { o[0] };
+    send(
+        &mut t.rooms,
+        &t.clients[usize::from(not_last)],
+        json!({ "type": "undo" }),
+    );
+    assert_eq!(
+        last_error(&t.clients[usize::from(not_last)]).as_deref(),
+        Some("Only the room admin or the player who moved can undo it"),
+        "the last move is someone else's"
+    );
 }
 
 #[test]

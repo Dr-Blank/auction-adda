@@ -392,8 +392,14 @@ pub struct RoomInfo {
     pub seats: Vec<SeatInfo>,
     /// Seat that may call auction results by voice (`rule`). Starts as the room creator.
     pub admin: Seat,
-    /// The admin's last called result can still be taken back (nobody has moved since).
+    /// The last change can still be taken back (nothing has changed since): the admin's called
+    /// result, or a move in a game that takes moves back.
     pub can_undo: bool,
+    /// A move that can be taken back: whose it is (they and the admin may). Unset for a call, or
+    /// for a bot's or a skipped seat's move (only the admin may).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub undo_by: Option<Seat>,
     pub min_players: u8,
     pub max_players: u8,
     /// How long a seat must be disconnected before it can be skipped or released.

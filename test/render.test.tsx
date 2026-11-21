@@ -153,6 +153,12 @@ describe("pahunch pages", () => {
     expect(sent).toHaveLength(0);
     expect(el.querySelectorAll(".ph-facts li").length).toBeGreaterThan(0);
     act(() => (el.querySelector(".ph-pick .ph-move:not(.ph-then)") as HTMLButtonElement).click());
+    expect(sent, "nothing goes before the second tap").toHaveLength(0);
+    // Back keeps the pick; the second tap sends the move.
+    act(() => ([...el.querySelectorAll(".ph-confirm .ph-move")].at(-1) as HTMLButtonElement).click());
+    expect(el.querySelector(".ph-pick .ph-move:not(.ph-then)")).not.toBeNull();
+    act(() => (el.querySelector(".ph-pick .ph-move:not(.ph-then)") as HTMLButtonElement).click());
+    confirmMove();
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ type: "action" });
     act(() => root.unmount());
@@ -170,6 +176,7 @@ describe("pahunch pages", () => {
     act(() => chip.click());
     const ask = [...document.querySelectorAll(".sheet .btn.primary")].find((b) => b.textContent?.includes("Ask"));
     act(() => (ask as HTMLButtonElement).click());
+    confirmMove();
     expect(sent).toEqual([{ type: "action", action: { type: "request", owner, on: true } }]);
     act(() => root.unmount());
   });
@@ -181,10 +188,12 @@ describe("pahunch pages", () => {
     const sent: unknown[] = [];
     const state = { ...Object.fromEntries(pahunch)["favour-asked"], receivedAt: NOW } as RoomState;
     act(() => root.render(<Room state={state} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
-    const buttons = el.querySelectorAll(".ph-request .ph-move");
-    expect(buttons).toHaveLength(2);
-    act(() => (buttons[1] as HTMLButtonElement).click());
-    act(() => (buttons[0] as HTMLButtonElement).click());
+    const buttons = () => el.querySelectorAll(".ph-request .ph-move");
+    expect(buttons()).toHaveLength(2);
+    act(() => (buttons()[1] as HTMLButtonElement).click());
+    confirmMove();
+    act(() => (buttons()[0] as HTMLButtonElement).click());
+    confirmMove();
     expect(sent).toEqual([
       { type: "action", action: { type: "decline" } },
       { type: "action", action: { type: "lend", on: true } },
@@ -192,6 +201,13 @@ describe("pahunch pages", () => {
     act(() => root.unmount());
   });
 });
+
+/** Every Pahunch move waits in the confirm strip: the second tap sends it. */
+function confirmMove() {
+  const yes = document.querySelector(".ph-confirm-yes") as HTMLButtonElement | null;
+  expect(yes, "the confirm strip").not.toBeNull();
+  act(() => yes?.click());
+}
 
 describe("seats that are away, played by bots or open", () => {
   type Seat = { connected: boolean; awayMs: number | null; bot: boolean; open: boolean };
@@ -299,13 +315,15 @@ describe("pahunch deals: asks for tokens and swaps", () => {
     const root = createRoot(el);
     const sent: unknown[] = [];
     act(() => root.render(<Room state={dealState()} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
-    const bars = el.querySelectorAll(".ph-request");
-    expect(bars).toHaveLength(2);
-    const [give, no] = bars[0].querySelectorAll(".ph-move");
-    const [swap] = bars[1].querySelectorAll(".ph-move");
-    act(() => (no as HTMLButtonElement).click());
-    act(() => (swap as HTMLButtonElement).click());
-    act(() => (give as HTMLButtonElement).click());
+    const bars = () => el.querySelectorAll(".ph-request");
+    expect(bars()).toHaveLength(2);
+    // The confirm strip takes the bar's place, so each button is found again after it.
+    const button = (bar: number, k: number) => bars()[bar].querySelectorAll(".ph-move")[k] as HTMLButtonElement;
+    act(() => button(0, 1).click());
+    confirmMove();
+    act(() => button(1, 0).click());
+    confirmMove();
+    act(() => button(0, 0).click());
     // The gift sheet opens on the asker with the two smallest tokens picked.
     expect(document.querySelector(".sheet .ph-give-who.on")?.textContent).toContain("Chitra");
     const picked = [...document.querySelectorAll("button.ph-chip.on")];
@@ -314,8 +332,10 @@ describe("pahunch deals: asks for tokens and swaps", () => {
       b.textContent?.includes("🎁 Give"),
     ) as HTMLButtonElement;
     act(() => confirm.click());
+    confirmMove();
     const recall = el.querySelector(".ph-tray .ph-offer-x") as HTMLButtonElement;
     act(() => recall.click());
+    confirmMove();
     expect(sent).toEqual([
       { type: "action", action: { type: "refuse", from: 0, deal: "plea" } },
       { type: "action", action: { type: "accept", from: 3 } },
@@ -341,10 +361,12 @@ describe("pahunch deals: asks for tokens and swaps", () => {
     act(() => tray("Ask").click());
     act(() => (document.querySelector('.sheet [aria-label="One more"]') as HTMLButtonElement).click());
     act(() => sheetButton("🙏 Ask ").click());
+    confirmMove();
     act(() => tray("Swap").click());
     act(() => (document.querySelector(".sheet button.ph-chip:not(.ph-want-add)") as HTMLButtonElement).click());
     act(() => (document.querySelector('.sheet [aria-label="Add a 3"]') as HTMLButtonElement).click());
     act(() => sheetButton("⇄ Offer").click());
+    confirmMove();
     expect(sent).toEqual([
       { type: "action", action: { type: "plead", of: 0, count: 2 } },
       { type: "action", action: { type: "offer", to: 0, give: [1], want: [3] } },
@@ -370,6 +392,7 @@ describe("pahunch deals: asks for tokens and swaps", () => {
       b.textContent?.includes("🙏 Ask Dev"),
     ) as HTMLButtonElement;
     act(() => go.click());
+    confirmMove();
     expect(sent).toEqual([{ type: "action", action: { type: "plead", of: 3, count: 1 } }]);
     act(() => root.unmount());
   });
@@ -403,6 +426,7 @@ describe("pahunch: the climber takes the needed yes", () => {
     act(() => faces[0].click());
     act(() => faces[1].click());
     act(() => (el.querySelector(".ph-take-go") as HTMLButtonElement).click());
+    confirmMove();
     expect(sent).toEqual([{ type: "action", action: { type: "take", votes: [1, 0, 0, 0] } }]);
     act(() => root.unmount());
   });

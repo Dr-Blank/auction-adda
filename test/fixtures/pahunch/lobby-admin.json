@@ -1,10 +1,10 @@
 {
   "type": "state",
   "room": {
-    "code": "RAJCPX",
+    "code": "SEPQXJ",
     "theme": "society-committee",
     "cast": {
-      "seed": 541998807,
+      "seed": 1404317038,
       "genres": []
     },
     "started": false,
@@ -53,7 +53,7 @@
     "admin": 0,
     "canUndo": false,
     "minPlayers": 3,
-    "maxPlayers": 5,
+    "maxPlayers": 7,
     "skipAfterMs": 30000,
     "adminClaimMs": 20000,
     "adminAutoMs": 30000,
@@ -80,7 +80,7 @@
     "variant": 0,
     "watchers": [
       {
-        "id": 19,
+        "id": 39,
         "name": "Esha",
         "ban": null
       }

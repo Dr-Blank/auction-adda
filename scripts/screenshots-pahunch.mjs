@@ -184,10 +184,50 @@ const clickFirst = (selector) =>
     `(() => { const b = document.querySelector(${JSON.stringify(selector)}); if (!b) return false; b.dispatchEvent(new MouseEvent('click', { bubbles: true })); return true; })()`,
   );
 
+// Every move waits in the confirm strip: shoot it once, then the second tap sends the move.
+const confirm = async (made) => {
+  if (!made) return false;
+  await sleep(150);
+  if (!taken.has("confirm-strip")) await shot("confirm-strip");
+  if (await clickFirst(".ph-confirm-yes")) return true;
+  // A new turn or vote result clears a move waiting to be confirmed: that is no failure.
+  const moved = await evaluate(
+    `!document.querySelector('.ph-pick, .action-bar [aria-label="Your vote"], .action-bar [aria-label="Your climb"]')`,
+  );
+  if (!moved) fail("a move showed no confirm strip");
+  return false;
+};
+
 const end = Date.now() + Number(secs) * 1000;
 let ended = false;
+// Moves slide rather than jump (motion.ts): script-driven animations, not the CSS loops.
+let motion = 0;
+const moving = () =>
+  evaluate(
+    `document.getAnimations().filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition)).length`,
+  );
 for (let tick = 0; tick < 4000; tick++) {
   await sleep(400);
+  const now = (await moving()) ?? 0;
+  motion += now;
+  // One shot mid-move, to see that things slide from where they were: every animation is held
+  // at 45% of its run for the shot, then let go.
+  // A token picked up on the way: hold the frame just after the climber reaches it.
+  const when = await evaluate(`document.querySelector(".ph-picked")?.dataset.when ?? null`);
+  if (when !== null && when !== undefined && !taken.has("pickup")) {
+    const held = `document.getAnimations().filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition))`;
+    await evaluate(`${held}.forEach((a) => { a.pause(); a.currentTime = ${Number(when) + 180}; })`);
+    await shot("pickup");
+    await evaluate(`${held}.forEach((a) => a.play())`);
+  }
+  if (now > 0 && !taken.has("motion")) {
+    const held = `document.getAnimations().filter((a) => !(a instanceof CSSAnimation) && !(a instanceof CSSTransition))`;
+    await evaluate(
+      `${held}.forEach((a) => { a.pause(); const t = a.effect.getTiming(); a.currentTime = (Number(t.delay) || 0) + Number(t.duration) * 0.45; })`,
+    );
+    await shot("motion");
+    await evaluate(`${held}.forEach((a) => a.play())`);
+  }
   const r = await check(`tick ${tick}`);
   if (!r?.table) continue;
   if (r.over) {
@@ -224,6 +264,7 @@ for (let tick = 0; tick < 4000; tick++) {
         `(() => { const b = [...document.querySelectorAll('[role="dialog"] .btn.primary')].find((x) => x.textContent.includes('Ask')); if (!b) return false; b.click(); return true; })()`,
       );
       if (!asked) fail("a glowing favour opened no sheet with an Ask button");
+      await confirm(asked);
       await sleep(150);
       await shot("favour-asked");
     }
@@ -246,25 +287,25 @@ for (let tick = 0; tick < 4000; tick++) {
       if (await clickFirst(".ph-pick .ph-move.ph-then")) {
         await sleep(300);
         await shot("confirm");
-        moved = await clickFirst(".ph-pick .ph-move.primary:not(.ph-then), .ph-pick .ph-move:not(.ph-then)");
-      } else moved = await clickFirst(".ph-pick .ph-move.primary, .ph-pick .ph-move-grid .btn");
+        moved = await confirm(await clickFirst(".ph-pick .ph-move:not(.ph-then)"));
+      } else moved = await confirm(await clickFirst(".ph-pick .ph-move-grid .btn"));
     }
     if (!moved && (await clickFirst(".ph-blocker.live"))) {
       await sleep(200);
       if (await clickFirst(".ph-path.live")) {
         await sleep(200);
-        moved = await clickFirst(".ph-pick .ph-move-grid .btn");
+        moved = await confirm(await clickFirst(".ph-pick .ph-move-grid .btn"));
       }
     }
-    if (!moved && state.extra) moved = await clickFirst(".ph-pick .ph-done");
+    if (!moved && state.extra) moved = await confirm(await clickFirst(".ph-pick .ph-done"));
     if (!moved) fail(`tick ${tick}: no move could be made by tapping the board`);
     await sleep(300);
   } else if (state.vote) {
     await shot("vote-voter");
-    await clickFirst('.action-bar [aria-label="Your vote"] .btn.primary');
+    await confirm(await clickFirst('.action-bar [aria-label="Your vote"] .ph-move-grid .btn'));
   } else if (state.climb) {
     await shot("vote-climber");
-    await clickFirst('.action-bar [aria-label="Your climb"] .btn');
+    await confirm(await clickFirst('.action-bar [aria-label="Your climb"] .btn:not([disabled])'));
   } else if (!taken.has("their-move") && !state.voting) {
     // The turn may have come round since the check above: then this is not their move.
     if (await evaluate(`!!document.querySelector('.ph-pick, .ph-vote')`)) continue;
@@ -325,6 +366,9 @@ for (let tick = 0; tick < 4000; tick++) {
     );
   }
 }
+
+console.log(`animations seen: ${motion}`);
+if (motion === 0) fail("no move was animated");
 
 const exited = new Promise((r) => chrome.once("exit", r));
 chrome.kill();

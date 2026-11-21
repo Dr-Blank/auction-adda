@@ -340,6 +340,10 @@ pub enum LogEntry {
     Skip {
         p: Seat,
     },
+    /// `p` took back the last move (their own, or any as the admin): the game is as it was before.
+    Undo {
+        p: Seat,
+    },
     /// `by`: the admin ended the game early; nobody wins then.
     End {
         winners: Vec<Seat>,

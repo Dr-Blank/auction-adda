@@ -1,6 +1,6 @@
 // Generated sounds (WebAudio, no files). One mute switch, remembered per browser.
 
-export type Sound = "turn" | "bid" | "pass" | "gavel" | "cash" | "fanfare" | "deal";
+export type Sound = "turn" | "bid" | "pass" | "gavel" | "cash" | "fanfare" | "deal" | "coin";
 
 let ctx: AudioContext | undefined;
 let muted = read();
@@ -89,6 +89,11 @@ export function play(sound: Sound): void {
         break;
       case "fanfare":
         [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.11, f, i === 3 ? 0.5 : 0.16, 0.09, "sawtooth"));
+        break;
+      case "coin":
+        // a token picked up on the way: a short blip, then a higher ring
+        tone(t, 988, 0.07, 0.07, "square");
+        tone(t + 0.07, 1319, 0.32, 0.07, "square");
         break;
       case "deal":
         // cards snapping onto the table

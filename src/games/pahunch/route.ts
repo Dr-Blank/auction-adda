@@ -51,7 +51,20 @@ export interface Route {
   dir: Pt;
 }
 
-const bez = (p: Route["p"], t: number): Pt => {
+/**
+ * Where seat `k` of a room sits; a short last row is centred under the full one. One squeezed in
+ * past the seats sits on the room's corner.
+ */
+export function seatAt(b: Box, k: number, cap: number): Pt {
+  if (k >= Math.max(1, cap)) return { x: b.x + b.w / 2 - 0.6, y: b.y - b.h / 2 + 0.6 };
+  const col = k % b.cols;
+  const row = Math.floor(k / b.cols);
+  const inRow = Math.min(b.cols, cap - row * b.cols);
+  return { x: b.x - (inRow * SEAT) / 2 + SEAT / 2 + col * SEAT, y: b.y - b.h / 2 + 5.2 + SEAT / 2 + row * SEAT };
+}
+
+/** The point at `t` (0–1) along a route's cubic. */
+export const bez = (p: Route["p"], t: number): Pt => {
   const u = 1 - t;
   const a = u * u * u;
   const b = 3 * u * u * t;

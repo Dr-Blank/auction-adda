@@ -148,6 +148,14 @@ impl Game for Pahunch {
         choose_action(v, rng)
     }
 
+    fn undoes_moves() -> bool {
+        true
+    }
+
+    fn undo_move(before: &State, by: Seat) -> Result<State, RuleError> {
+        rules::undo(before, by)
+    }
+
     fn clock(s: &State) -> Option<(usize, usize)> {
         rules::clock(s)
     }
