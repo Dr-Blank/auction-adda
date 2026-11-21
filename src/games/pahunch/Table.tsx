@@ -689,7 +689,8 @@ function Players(props: SeatProps) {
   const shown = ctx.names.filter((_, i) => i !== ctx.me).length;
   // At most four chips to a row, and the rows as even as they go (six: 3 + 3, five: 3 + 2), every
   // chip one width.
-  const cols = Math.ceil(shown / Math.ceil(shown / 4));
+  const rows = Math.max(1, Math.ceil(shown / 4));
+  const cols = Math.max(1, Math.ceil(shown / rows));
   return (
     <section className="seats ph-players" aria-label="Players" style={{ ["--cols" as string]: cols }}>
       {ctx.names.map((_, i) => (i === ctx.me ? null : <PlayerChip key={i} {...props} i={i} />))}

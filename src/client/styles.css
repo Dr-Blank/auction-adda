@@ -3266,10 +3266,6 @@ b.you {
   white-space: nowrap;
   font-weight: 600;
 }
-.place .who em {
-  font-weight: 400;
-  color: var(--muted);
-}
 .place .money {
   font-family: var(--display);
   font-weight: 400;

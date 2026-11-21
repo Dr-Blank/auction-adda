@@ -57,7 +57,8 @@ try {
       `--screenshot=${png}`,
       `file://${file}`,
     ]);
-    if (r.status !== 0) console.log(name, String(r.stderr));
+    // A missing chromium sets r.error and no status.
+    if (r.status !== 0) console.log(name, String(r.error ?? r.stderr));
     else console.log(png);
   }
 } finally {
