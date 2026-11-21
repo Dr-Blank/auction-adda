@@ -24,10 +24,16 @@
 }
 
 /* ---- players ---- */
-.ph-players {
+/* --cols chips to a row (set from the seat count), all one width; a short last row is centred. */
+.seats.ph-players {
+  --seat-gap: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  gap: var(--seat-gap);
+}
+.seats.ph-players > .ph-seat-chip {
+  flex: 0 0 calc((100% - (var(--cols, 4) - 1) * var(--seat-gap)) / var(--cols, 4));
 }
 .ph-seat-chip {
   display: flex;
@@ -1385,7 +1391,33 @@ button.ph-chip.on {
   }
 }
 
-/* ---- the end ---- */
+/* ---- the end ----
+   The result takes the top of the right column, beside the final board; your tray and the log
+   follow under it. The board stays, dimmed, and a tap still explains a room or path. */
+.table.ph-table:has(> .ph-result) {
+  grid-template-areas:
+    "top top"
+    "notice notice"
+    "seats result"
+    "stage result"
+    "stage side";
+  grid-template-rows: auto auto auto auto 1fr;
+}
+.ph-result {
+  grid-area: result;
+  min-width: 0;
+}
+.ph-table:has(> .ph-result) .ph-board {
+  opacity: 0.72;
+  filter: saturate(0.7);
+}
+.ph-mark {
+  display: inline-flex;
+  flex: none;
+}
+.ph-mark .ph-swatch {
+  position: static;
+}
 .ph-ended {
   display: grid;
   gap: 10px;
@@ -1396,6 +1428,16 @@ button.ph-chip.on {
 .ph-ended h2 {
   margin: 0;
 }
+/* The standings line up as a list: face, shape and name on the left, the points on the right. */
+.ph-ended .also-ran {
+  justify-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
 .ph-eligible {
   margin: 0;
 }
@@ -1404,6 +1446,11 @@ button.ph-chip.on {
   .table.ph-table {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "top" "notice" "seats" "stage" "side";
+    grid-template-rows: none;
+  }
+  /* One column: who won comes first, then the seats and the final board. */
+  .table.ph-table:has(> .ph-result) {
+    grid-template-areas: "top" "notice" "result" "seats" "stage" "side";
     grid-template-rows: none;
   }
   /* The shared one-column table spreads .side into the grid; here it stays one block under the board. */
@@ -1428,9 +1475,8 @@ button.ph-chip.on {
     gap: 2px 6px;
     padding: 4px 4px 2px;
   }
-  .seats.ph-players.many {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .seats.ph-players {
+    --seat-gap: 4px;
   }
   .ph-seat-chip > .avatar-wrap {
     grid-area: face;

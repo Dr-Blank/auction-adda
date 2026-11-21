@@ -569,32 +569,33 @@ export function Table({ state, send, reactions }: TableProps) {
 
       <Players ctx={ctx} room={room} reactions={reactions} awayFor={awayFor} send={send} act={act} />
 
-      <section className={`stage ph-stage ${owing ? "owing" : ""}`}>
-        {v.over ? (
+      {/* The result has its own place (beside the board, or above it on a phone); the final board stays. */}
+      {v.over && (
+        <section className="ph-result" aria-label="Final result">
           <End ctx={ctx} room={room} send={send} isAdmin={isAdmin} />
-        ) : (
-          <>
-            {/* The vote's card sits in the side column, never over the board, so the board never moves. */}
-            <Board
-              v={v}
-              skin={skin}
-              names={names}
-              acting={myTurn}
-              liveRooms={liveRooms}
-              livePaths={livePaths}
-              focus={focus}
-              targets={targets}
-              blockerLive={blockerLive}
-              selected={pick}
-              looks={room.seats.map((s) => s.avatar)}
-              faces={room.settings.gameOptions.avatarsOnBoard ?? false}
-              onRoom={onRoom}
-              onPath={onPath}
-              onBlocker={onBlocker}
-            />
-            <CoinKey ctx={ctx} />
-          </>
-        )}
+        </section>
+      )}
+
+      <section className={`stage ph-stage ${owing ? "owing" : ""}`}>
+        {/* The vote's card sits in the side column, never over the board, so the board never moves. */}
+        <Board
+          v={v}
+          skin={skin}
+          names={names}
+          acting={myTurn}
+          liveRooms={liveRooms}
+          livePaths={livePaths}
+          focus={focus}
+          targets={targets}
+          blockerLive={blockerLive}
+          selected={pick}
+          looks={room.seats.map((s) => s.avatar)}
+          faces={room.settings.gameOptions.avatarsOnBoard ?? false}
+          onRoom={onRoom}
+          onPath={onPath}
+          onBlocker={onBlocker}
+        />
+        <CoinKey ctx={ctx} />
       </section>
 
       <aside className="side ph-side">
@@ -686,9 +687,11 @@ function SeatSwatch({ seat }: { seat: number }) {
 function Players(props: SeatProps) {
   const { ctx } = props;
   const shown = ctx.names.filter((_, i) => i !== ctx.me).length;
-  // More than four chips do not fit one row on a phone; they go three to a row there.
+  // At most four chips to a row, and the rows as even as they go (six: 3 + 3, five: 3 + 2), every
+  // chip one width.
+  const cols = Math.ceil(shown / Math.ceil(shown / 4));
   return (
-    <section className={`seats ph-players${shown > 4 ? " many" : ""}`} aria-label="Players">
+    <section className="seats ph-players" aria-label="Players" style={{ ["--cols" as string]: cols }}>
       {ctx.names.map((_, i) => (i === ctx.me ? null : <PlayerChip key={i} {...props} i={i} />))}
     </section>
   );
@@ -1919,6 +1922,15 @@ function End({
   const scores = v.players.map((p) => score(p.tokens));
   const end = v.log.findLast((e) => e.t === "end");
   const by = end?.t === "end" ? end.by : undefined;
+  // The seat's shape in its colour, as its pieces carry it on the board above.
+  const mark = (i: number) => {
+    const look = skin.seats[i % skin.seats.length];
+    return (
+      <span className="ph-mark" style={{ ["--seat" as string]: look.color, ["--seat-ink" as string]: look.ink }}>
+        <SeatSwatch seat={i} />
+      </span>
+    );
+  };
   if (v.winners.length > 0)
     return (
       <GameOver
@@ -1927,6 +1939,7 @@ function End({
         names={names}
         winners={v.winners}
         standings={standings(scores, v.winners)}
+        mark={mark}
         format={(n) => `${n} ${skin.nouns.points}`}
         endedNote={
           <p className="muted ph-eligible">
@@ -1947,7 +1960,7 @@ function End({
       <h2>{by !== undefined ? "Game ended early" : "Nobody won"}</h2>
       <p>
         {by !== undefined ? (
-          `${names[by]} ended the game. Nobody wins a game that stops before the ${ctx.room(v.layout.summit)} is full.`
+          `${ctx.who(by)} ended the game. Nobody wins a game that stops before the ${ctx.room(v.layout.summit)} is full.`
         ) : (
           <Rich
             ctx={ctx}
@@ -1959,8 +1972,9 @@ function End({
         {order.map(({ s, i }) => (
           <li key={i}>
             <span>
-              {names[i]}
-              {i === me && <em> (you)</em>}
+              <Avatar code={room.seats[i]?.avatar ?? ""} name={names[i]} className="small" />
+              {mark(i)}
+              {ctx.who(i)}
             </span>
             <b>
               {s} {skin.nouns.points}

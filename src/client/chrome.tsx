@@ -537,6 +537,7 @@ function PodiumStep(props: {
   you: number | null;
   format: (n: number) => string;
   series: boolean;
+  mark?: (i: number) => ReactNode;
 }) {
   const { i, place, step, room } = props;
   const seat = room.seats[i];
@@ -551,8 +552,8 @@ function PodiumStep(props: {
       )}
       <Avatar code={seat?.avatar ?? ""} name={seat?.name ?? ""} />
       <span className="who">
-        {seat?.name}
-        {i === props.you && <em> (you)</em>}
+        {props.mark?.(i)}
+        {i === props.you ? "You" : seat?.name}
       </span>
       <b className="money">{props.format(score)}</b>
       {props.series && <Wins n={seat?.wins ?? 0} />}
@@ -614,8 +615,10 @@ export function GameOver(props: {
   admin?: string;
   onRematch: () => void;
   onSetup: () => void;
+  /** A game's own seat mark (Pahunch: the seat's shape), before each name. */
+  mark?: (i: number) => ReactNode;
 }) {
-  const { room, names, format } = props;
+  const { room, names, format, you } = props;
   const order = props.standings;
   const top = order.slice(0, 3);
   // Second, first, third, left to right.
@@ -623,19 +626,22 @@ export function GameOver(props: {
   const rest = order.slice(3);
   // After one game the tally only repeats the podium.
   const series = room.games > 1;
+  // Your own seat reads "You", as on the seats.
+  const name = (i: number) => (i === you ? "You" : names[i]);
+  const won = props.winners.length > 1 ? "share the win" : props.winners[0] === you ? "win" : "wins";
   return (
     <div className="gameover">
       <Confetti />
       {props.endedNote}
       <h2>
-        {props.winners.map((i) => names[i]).join(" & ")} {props.winners.length > 1 ? "share the win" : "wins"}!
+        {props.winners.map(name).join(" & ")} {won}!
       </h2>
       {series && (
         <p className="muted series-note">Game {room.games} in this room. The trophies count each seat's wins.</p>
       )}
       <ol className="podium">
         {podium.map((o) => (
-          <PodiumStep key={o.i} {...o} room={room} you={props.you} format={format} series={series} />
+          <PodiumStep key={o.i} {...o} room={room} you={you} format={format} series={series} mark={props.mark} />
         ))}
       </ol>
       {rest.length > 0 && (
@@ -643,8 +649,9 @@ export function GameOver(props: {
           {rest.map(({ i, score, place }) => (
             <li key={i} value={place}>
               <span>
-                {room.seats[i]?.name}
-                {i === props.you && <em> (you)</em>}
+                <Avatar code={room.seats[i]?.avatar ?? ""} name={room.seats[i]?.name ?? ""} className="small" />
+                {props.mark?.(i)}
+                {name(i)}
               </span>
               <b>{format(score)}</b>
               {series && <Wins n={room.seats[i]?.wins ?? 0} />}

@@ -3324,11 +3324,15 @@ b.you {
 .also-ran li {
   display: flex;
   gap: 10px;
-  align-items: baseline;
+  align-items: center;
 }
-.also-ran li span {
+/* Face, the game's seat mark, then the name. */
+.also-ran li > span {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 /* Paper over the winner: falls once and is gone. */
 .confetti {

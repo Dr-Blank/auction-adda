@@ -170,8 +170,9 @@ const check = async (where) => {
   })()`);
   if (!r?.table) return r;
   if (r.wide > 1) fail(`${where}: page scrolls sideways by ${r.wide}px`);
-  if (!r.over && r.rooms < 2) fail(`${where}: the board shows ${r.rooms} rooms`);
-  if (!r.over && r.boardW < 200) fail(`${where}: the board is ${r.boardW}px wide`);
+  // The final board stays at the end, so these hold then too.
+  if (r.rooms < 2) fail(`${where}: the board shows ${r.rooms} rooms`);
+  if (r.boardW < 200) fail(`${where}: the board is ${r.boardW}px wide`);
   if (phone && r.owing && r.bar && !r.barOn) fail(`${where}: the action bar is off screen while you owe a move`);
   if (phone && r.owing && r.small) fail(`${where}: action-bar control(s) under 40px: ${r.small}`);
   return r;
