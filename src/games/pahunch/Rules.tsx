@@ -37,7 +37,8 @@ export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; opt
       <h3>Votes</h3>
       <ul>
         <li>
-          Leaving a room takes yes votes from more than half its seats: 2 of 3, 3 of 5. Leaving a post of one is free.
+          Leaving a room takes yes votes from more than half its seats: 2 of 3, 3 of 5, 4 of 7. Leaving a post of one is
+          free.
         </li>
         <li>
           Your own {climbers} in the room say yes. Every other player answers for theirs: yes with some of them, or no.

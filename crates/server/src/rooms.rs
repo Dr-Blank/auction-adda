@@ -1001,6 +1001,30 @@ impl Rooms {
                 self.send(id, &msg);
                 return Ok(());
             }
+            ClientMsg::Delete { seat: key } => {
+                let code = key.room.trim().to_uppercase();
+                // Only the token counts, as in `my_rooms`: a reused code does not match an old one.
+                let room = self.rooms.get(&code).filter(|_| !key.token.is_empty());
+                let seat = room.and_then(|r| {
+                    let i = r
+                        .seats
+                        .iter()
+                        .position(|s| s.token.as_deref() == Some(key.token.as_str()))?;
+                    u8::try_from(i).ok()
+                });
+                let (Some(room), Some(seat)) = (room, seat) else {
+                    return fail("That room is gone");
+                };
+                room.require_admin(seat, "close the room")?;
+                let by = room.name(seat);
+                info!(room = %code, seat, "Admin closed the room from Home");
+                let inside = room.clients.contains(&id);
+                self.close(&code, &by);
+                if !inside {
+                    self.send(id, &ServerMsg::Closed { room: code, by });
+                }
+                return Ok(());
+            }
             msg => msg,
         };
         let code = self

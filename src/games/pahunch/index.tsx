@@ -9,7 +9,7 @@ import { Table } from "./Table.tsx";
 export const pahunch: GameClient = {
   id: "pahunch",
   title: "Pahunch",
-  blurb: "A board game of votes and favours for 3–5 friends: climb to the top room, one deal at a time.",
+  blurb: "A board game of votes and favours for 3–7 friends: climb to the top room, one deal at a time.",
   themes: Object.keys(SKINS) as ThemeId[],
   skin: (theme) => skinFor(theme),
   Table,

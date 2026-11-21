@@ -1427,6 +1427,31 @@ fn the_admin_closes_the_room_and_everyone_in_it_is_told() {
 }
 
 #[test]
+fn the_admin_closes_a_room_from_home_by_their_seat_token() {
+    let mut rooms = Rooms::new(fixed()).unwrap();
+    let (clients, code) = seated(&mut rooms, 3);
+    let admin = joined(&clients[0]).2.unwrap();
+    let player = joined(&clients[1]).2.unwrap();
+    let home = fake(&mut rooms, "10.0.0.9");
+    let close = |token: &str| json!({ "type": "delete", "seat": { "room": code, "token": token } });
+
+    send(&mut rooms, &home, close(&player));
+    assert_error(&home, "Only the room admin can close the room");
+    send(&mut rooms, &home, close("not-a-token"));
+    assert_error(&home, "That room is gone");
+    assert_eq!(rooms.len(), 1);
+
+    send(&mut rooms, &home, close(&admin));
+    let told = json!({ "type": "closed", "room": code, "by": "P0" });
+    for c in clients.iter().chain([&home]) {
+        assert_eq!(serde_json::to_value(last(c)).unwrap(), told);
+    }
+    assert_eq!(rooms.len(), 0);
+    send(&mut rooms, &home, close(&admin));
+    assert_error(&home, "That room is gone");
+}
+
+#[test]
 fn the_admin_kicks_from_the_lobby() {
     let mut rooms = Rooms::new(fixed()).unwrap();
     let (clients, _) = seated(&mut rooms, 3);

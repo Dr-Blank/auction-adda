@@ -55,11 +55,19 @@ export function ConfirmButton(props: {
   yes: string;
   onConfirm: () => void;
   className?: string;
+  /** The first button's name for screen readers, when `label` is a symbol alone. */
+  title?: string;
 }) {
   const [asking, setAsking] = useState(false);
   if (!asking)
     return (
-      <button type="button" className={`btn small ${props.className ?? ""}`} onClick={() => setAsking(true)}>
+      <button
+        type="button"
+        className={`btn small ${props.className ?? ""}`}
+        title={props.title}
+        aria-label={props.title}
+        onClick={() => setAsking(true)}
+      >
         {props.label}
       </button>
     );

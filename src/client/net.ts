@@ -148,6 +148,15 @@ export function useRoom(code: string | null) {
     else if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify({ type: "rooms", seats }));
   }, []);
 
+  /** From Home: delete a room this browser holds the admin seat of. The server answers `closed`. */
+  const deleteRoom = useCallback(
+    (room: string) => {
+      const token = store.get(tokenKey(room));
+      if (token) send({ type: "delete", seat: { room, token } });
+    },
+    [send],
+  );
+
   useEffect(() => {
     let stopped = false;
     let attempt = 0;
@@ -178,6 +187,8 @@ export function useRoom(code: string | null) {
           attached.current = null;
           setNotice({ message: `${msg.by} closed room ${msg.room}.`, at: Date.now() });
           if (codeRef.current === msg.room) goHome();
+          // On Home the list drops it at once.
+          setMyRooms((rooms) => rooms?.filter((r) => r.code !== msg.room) ?? rooms);
         } else if (msg.type === "removed") {
           // The token is the ban: keep it, so coming back is refused until the admin lifts it.
           store.set(tokenKey(msg.room), msg.token);
@@ -229,6 +240,7 @@ export function useRoom(code: string | null) {
     join,
     myRooms,
     listRooms,
+    deleteRoom,
     clearError: () => setError(null),
     clearNotice: () => setNotice(null),
   };

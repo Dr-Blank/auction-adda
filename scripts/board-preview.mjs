@@ -4,6 +4,7 @@
 //   node scripts/board-preview.mjs <out-dir> [width] [fixture-name ...]
 //
 // Writes <out-dir>/<fixture>.png (and .html). Needs `chromium` on the PATH. Run from the project root.
+// PAHUNCH_FIXTURES reads the fixtures from another folder (one capture-pahunch.ts wrote).
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +12,7 @@ import { createServer } from "vite";
 
 const [out = "./shots/board", width = "900", ...only] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
-const dir = "test/fixtures/pahunch";
+const dir = process.env.PAHUNCH_FIXTURES ?? "test/fixtures/pahunch";
 const boards = JSON.parse(fs.readFileSync("crates/pahunch/boards.json", "utf8"));
 const names = fs
   .readdirSync(dir)
@@ -33,7 +34,7 @@ try {
     const v = f.game;
     if (!v?.layout) continue;
     // Room places come from boards.json as it is now, so a layout change shows before re-recording.
-    const board = boards.boards.find((b) => b.id === v.layout.board);
+    const board = boards.boards.flatMap((b) => b.sides).find((s) => s.id === v.layout.board);
     if (board) v.layout.rooms = v.layout.rooms.map((r, i) => ({ ...r, x: board.rooms[i].x, y: board.rooms[i].y }));
     const skin = skinFor(f.room.theme);
     const svg = renderToStaticMarkup(

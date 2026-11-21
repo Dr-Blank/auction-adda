@@ -252,6 +252,11 @@ pub enum ClientMsg {
     },
     /// Admin only: delete the room. Everyone in it gets `closed`.
     Close,
+    /// From Home, without joining: delete the room `seat` is the admin seat of. Everyone in it,
+    /// and this tab, gets `closed`.
+    Delete {
+        seat: SeatKey,
+    },
     /// Admin only: end the running auction with a result agreed on voice. `winner` null = no sale.
     Rule {
         winner: Option<Seat>,
@@ -335,6 +340,7 @@ impl ClientMsg {
             Self::End => "end",
             Self::Theme { .. } => "theme",
             Self::Close => "close",
+            Self::Delete { .. } => "delete",
             Self::Rule { .. } => "rule",
             Self::Undo => "undo",
             Self::Admin { .. } => "admin",

@@ -38,7 +38,7 @@ const fail = (msg) => {
   console.log("FAIL", msg);
 };
 
-// ---- a room with three server bots; this seat is the admin ----
+// ---- a room with three server bots (SEATS − 1); this seat is the admin ----
 const sock = new WebSocket(WS);
 let settings;
 const { code, token } = await new Promise((resolve) => {
@@ -61,7 +61,8 @@ if (process.env.FACES === "1") {
   );
   await sleep(100);
 }
-for (let i = 0; i < 3; i++) {
+// SEATS=6 or 7 plays the other side of the board.
+for (let i = 0; i < Number(process.env.SEATS ?? 4) - 1; i++) {
   sock.send(JSON.stringify({ type: "bot" }));
   await sleep(100);
 }

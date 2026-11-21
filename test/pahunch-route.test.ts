@@ -9,19 +9,21 @@ import type { PahunchLayout } from "../src/generated/index.ts";
 
 interface BoardData {
   id: string;
-  name: string;
   rooms: { cap: number; x: number; y: number }[];
   paths: { from: number; to: number; back?: boolean }[];
 }
 
-const { boards } = JSON.parse(
-  fs.readFileSync(path.join(import.meta.dirname, "../crates/pahunch/boards.json"), "utf8"),
-) as { boards: BoardData[] };
+/** Every side of every board. */
+const boards = (
+  JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../crates/pahunch/boards.json"), "utf8")) as {
+    boards: { sides: BoardData[] }[];
+  }
+).boards.flatMap((b) => b.sides);
 
 const layoutOf = (b: BoardData) =>
   ({
     board: b.id,
-    name: b.name,
+    name: b.id,
     rooms: b.rooms,
     paths: b.paths.map((p) => ({ ...p, back: p.back ?? false })),
     summit: b.rooms.findIndex((r) => r.cap === 0),

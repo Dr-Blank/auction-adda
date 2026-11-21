@@ -48,10 +48,10 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
     let Some(board) = boards().get(usize::from(variant)) else {
         return fail("No such board");
     };
-    let Some(seating) = board.players.get(&n) else {
+    let Some((side, seating)) = board.side(n).and_then(|s| Some((s, s.players.get(&n)?))) else {
         return fail(format!("Cannot play with {n} players"));
     };
-    let layout = board.layout(seating);
+    let layout = board.layout(side, seating);
     let mut random = game::rng(seed);
     let mut bag = game::shuffle(board.coins(), &mut random);
     let tokens_on = (0..u8::try_from(layout.paths.len()).unwrap_or(0))
@@ -82,7 +82,7 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         layout,
         rooms,
         tokens_on,
-        blocker: board.blocker,
+        blocker: side.blocker,
         bag,
         supply: board.supply.saturating_sub(u16::from(n) * u16::from(board.start_ones)),
         players: (0..usize::from(n))

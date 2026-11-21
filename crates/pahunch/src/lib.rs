@@ -42,7 +42,7 @@ const OPTIONS: [GameOption; 5] = [
 ];
 use rand::Rng;
 
-pub use board::{Board, Layout, PathDef, RoomDef, Rooms, Seating, boards, favour_pay};
+pub use board::{Board, Layout, PathDef, RoomDef, Rooms, Seating, Side, boards, favour_pay};
 pub use bot::choose_action;
 pub use rules::{apply_action, apply_skip, end_early, new_game, new_game_with, pending, reseat, score};
 pub use types::*;
@@ -55,11 +55,12 @@ impl Game for Pahunch {
     type Action = Action;
     type View = View;
 
-    /// The seat counts of the default board; every board seats the same (the boards test).
+    /// The seat counts of the default board, over all its sides; every board seats the same
+    /// (the boards test).
     fn players() -> RangeInclusive<u8> {
-        let seats = boards().first().map(|b| &b.players);
-        let min = seats.and_then(|p| p.keys().next().copied()).unwrap_or(0);
-        let max = seats.and_then(|p| p.keys().next_back().copied()).unwrap_or(0);
+        let seats = boards().first().map_or_else(Vec::new, Board::seats);
+        let min = seats.first().copied().unwrap_or(0);
+        let max = seats.last().copied().unwrap_or(0);
         min..=max
     }
 

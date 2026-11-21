@@ -249,8 +249,31 @@ describe("home", () => {
           },
         ]}
         listRooms={() => {}}
+        deleteRoom={() => {}}
       />,
     );
     expect(html).toMatchSnapshot();
+  });
+});
+
+// Last in the file: React's ids count up across renders, so tests added earlier would shift the
+// ids in every snapshot after them.
+describe("pahunch at seven seats (the other side of the board)", () => {
+  const seven = load("fixtures/pahunch-seven");
+
+  it.each(seven)("%s", (_, state) => {
+    (window as unknown as { happyDOM: { setViewport(v: object): void } }).happyDOM.setViewport({
+      width: 1024,
+      height: 768,
+    });
+    expect(room(state)).toMatchSnapshot();
+  });
+
+  it.each(seven)("%s on a phone", (_, state) => {
+    (window as unknown as { happyDOM: { setViewport(v: object): void } }).happyDOM.setViewport({
+      width: 390,
+      height: 844,
+    });
+    expect(room(state)).toMatchSnapshot();
   });
 });

@@ -1345,12 +1345,16 @@ button.ph-chip.on {
     gap: 2px 6px;
     padding: 4px 4px 2px;
   }
+  .seats.ph-players.many {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .ph-seat-chip > .avatar-wrap {
     grid-area: face;
   }
   .ph-seat-chip > .ph-seat-more {
     grid-area: more;
-    min-height: 32px;
+    min-height: 40px;
   }
   .ph-seat-chip > .ph-fav-btn {
     grid-area: fav;

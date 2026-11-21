@@ -51,12 +51,15 @@ fn refused(s: &State, seat: u8, a: Action) -> String {
 #[test]
 fn the_board_is_sound() {
     for b in boards() {
-        assert_eq!(b.check(), Ok(()), "board {}", b.id);
-        let seats: Vec<u8> = b.players.keys().copied().collect();
-        assert_eq!(seats, Pahunch::players().collect::<Vec<_>>(), "board {}", b.id);
+        assert_eq!(b.check(), Ok(()), "board {}", b.name);
+        assert_eq!(b.seats(), Pahunch::players().collect::<Vec<_>>(), "board {}", b.name);
     }
     assert_eq!(Pahunch::variants().len(), boards().len());
-    assert_eq!(boards()[0].id, "full");
+    let sides: Vec<&str> = boards()[0].sides.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(sides, ["full", "big"]);
+    assert_eq!(fresh(5).layout.board, "full");
+    assert_eq!(fresh(6).layout.board, "big");
+    assert_eq!(fresh(7).layout.cap(fresh(7).layout.summit), 7);
 }
 
 #[test]
@@ -86,7 +89,30 @@ fn a_new_game_deals_tokens_on_the_token_paths_only() {
     assert_eq!(s.rooms[8], vec![None]);
     assert_eq!(s.rooms[1], vec![None]);
     assert!(pahunch::new_game(3, 1, 9).is_err());
-    assert!(pahunch::new_game(6, 1, 0).is_err());
+    assert!(pahunch::new_game(8, 1, 0).is_err());
+    assert!(pahunch::new_game(2, 1, 0).is_err());
+}
+
+#[test]
+fn six_or_seven_players_play_the_other_side() {
+    for (n, neutrals) in [(6, vec![(1, 2), (2, 1), (3, 1), (8, 1)]), (7, vec![(1, 1), (3, 1)])] {
+        let s = pahunch::new_game(n, 1, 0).unwrap();
+        assert_eq!(s.layout.board, "big");
+        assert_eq!(s.layout.cap(s.layout.summit), 7);
+        let held: Vec<(usize, usize)> = (0..s.rooms.len())
+            .map(|r| (r, s.rooms[r].iter().filter(|x| x.is_none()).count()))
+            .filter(|&(_, k)| k > 0)
+            .collect();
+        assert_eq!(held, neutrals, "{n} players");
+        assert!(s.players.iter().all(|p| p.hand == 6 && p.tokens == vec![1, 1]));
+        assert_eq!(s.supply, 60 - 2 * u16::from(n));
+        assert_eq!(s.blocker, 20);
+        let on: Vec<usize> = (0..s.tokens_on.len()).filter(|&i| s.tokens_on[i].is_some()).collect();
+        assert_eq!(on, [4, 6, 7, 8, 10, 11, 12, 14, 15, 20, 23]);
+        assert_eq!(s.layout.paths.iter().filter(|p| p.back).count(), 7);
+        let entries: Vec<u8> = (0..15).filter(|&r| s.layout.entry(r)).collect();
+        assert_eq!(entries, [0, 1, 2, 3]);
+    }
 }
 
 #[test]

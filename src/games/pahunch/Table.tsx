@@ -115,7 +115,8 @@ function Rich({ ctx, text }: { ctx: Ctx; text: string }) {
   const { skin } = ctx;
   const { blocker, neutral, neutrals } = skin.nouns;
   const words = [blocker, neutrals, neutral].filter(Boolean).sort((a, b) => b.length - a.length);
-  const parts = text.split(new RegExp(`(${words.map(literal).join("|")})`, "i"));
+  // Whole words only, so a player named "Shaunty" keeps their name.
+  const parts = text.split(new RegExp(`\\b(${words.map(literal).join("|")})\\b`, "i"));
   return (
     <>
       {parts.map((part, i) => {
@@ -244,7 +245,12 @@ export function Table({ state, send, reactions }: TableProps) {
   const [gift, setGift] = useState(false);
   const [pick, setPickRaw] = useState<Pick | null>(null);
   const [info, setInfo] = useState<Pick | null>(null);
-  const [extras, setExtras] = useState<Extras>({});
+  const [picks, setExtras] = useState<Extras>({});
+  // A favour taken back mid-pick drops its pick, or no climb would match it.
+  const extras: Extras = {
+    ...(offers(v, "swapToken") && picks.swap !== undefined && { swap: picks.swap }),
+    ...(offers(v, "carry") && picks.carry && { carry: picks.carry }),
+  };
   const setPick = (p: Pick | null) => {
     setPickRaw(p);
     setExtras({});
@@ -576,7 +582,7 @@ export function Table({ state, send, reactions }: TableProps) {
               .reverse()
               .map((e, i) => (
                 <li key={i} className={`log-${e.t}`}>
-                  <Rich ctx={ctx} text={logLine(e, ctx, v.log)} />
+                  <Rich ctx={ctx} text={logLine(e, ctx, v.log.slice(0, v.log.length - i))} />
                 </li>
               ))}
           </ol>
@@ -637,8 +643,10 @@ function SeatSwatch({ seat }: { seat: number }) {
 /** The other players' chips (a watcher sees everyone); your own seat is your tray. */
 function Players(props: SeatProps) {
   const { ctx } = props;
+  const shown = ctx.names.filter((_, i) => i !== ctx.me).length;
+  // More than four chips do not fit one row on a phone; they go three to a row there.
   return (
-    <section className="seats ph-players" aria-label="Players">
+    <section className={`seats ph-players${shown > 4 ? " many" : ""}`} aria-label="Players">
       {ctx.names.map((_, i) => (i === ctx.me ? null : <PlayerChip key={i} {...props} i={i} />))}
     </section>
   );
@@ -1482,7 +1490,9 @@ function PickBar(props: {
 function BlockPicker({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
   const { v, skin } = ctx;
   const targets = blockTargets(v);
-  const [to, setTo] = useState(targets[0] ?? 0);
+  const [want, setTo] = useState(targets[0] ?? 0);
+  // After a block the picked path is Daddu's own and no longer a target.
+  const to = targets.includes(want) ? want : (targets[0] ?? 0);
   const route = (p: number) => `${ctx.short(v.layout.paths[p].from)} → ${ctx.short(v.layout.paths[p].to)}`;
   return (
     <div className="ph-all-room">
@@ -1799,7 +1809,12 @@ function GiftSheet({
   const tokens = (me !== null && v.players[me]?.tokens) || [];
   const others = names.flatMap((_, i) => (i === me ? [] : [i]));
   const [to, setTo] = useState(others[0] ?? 0);
-  const [picked, setPicked] = useState<number[]>([]);
+  // Picks are places in `tokens`; a token arriving re-sorts them, so picks hold only for the
+  // tokens they were made on.
+  const held = tokens.join(",");
+  const [pick, setPick] = useState<{ held: string; ks: number[] }>({ held, ks: [] });
+  const picked = pick.held === held ? pick.ks : [];
+  const setPicked = (ks: number[]) => setPick({ held, ks });
   const chosen = picked.map((k) => tokens[k]);
   return (
     <Sheet title={`🎁 Give ${skin.nouns.points}`} onClose={onClose}>
@@ -1880,14 +1895,21 @@ function End({
         onSetup={() => send({ type: "lobby" })}
       />
     );
-  // Ended early: no winner and no podium, only where everyone stood.
+  // No winner, so no podium, only where everyone stood: the admin ended it early, or the top room
+  // filled with neutrals alone.
   const order = scores.map((s, i) => ({ s, i })).sort((a, b) => b.s - a.s);
   return (
     <div className="ph-ended">
-      <h2>Game ended early</h2>
+      <h2>{by !== undefined ? "Game ended early" : "Nobody won"}</h2>
       <p>
-        {by !== undefined ? `${names[by]} ended the game.` : "The game was ended."} Nobody wins a game that stops before
-        the {ctx.room(v.layout.summit)} is full.
+        {by !== undefined ? (
+          `${names[by]} ended the game. Nobody wins a game that stops before the ${ctx.room(v.layout.summit)} is full.`
+        ) : (
+          <Rich
+            ctx={ctx}
+            text={`The ${ctx.room(v.layout.summit)} filled with ${skin.nouns.neutrals} alone, so nobody wins.`}
+          />
+        )}
       </p>
       <ol className="also-ran">
         {order.map(({ s, i }) => (

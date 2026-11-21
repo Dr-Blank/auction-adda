@@ -405,7 +405,8 @@ pub enum Action {
     Vote { yes: u8 },
     /// The mover pays a neutral in the room one token of this value for its yes.
     Bribe { token: u8 },
-    /// The mover gives up the climb; the turn ends.
+    /// The mover gives up the climb, as a failed vote: the mover moves again, unless a failed
+    /// vote ends the turn (`fail_ends_turn`).
     Withdraw,
     /// A neutral up `path`, no vote needed; you get a 1-point token.
     Nudge { path: u8 },

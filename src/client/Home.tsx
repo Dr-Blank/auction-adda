@@ -3,7 +3,7 @@ import { GAME_LIST, gameOf, skinOf, THEME_IDS } from "../games/index.ts";
 import type { ClientMsg, MyRoom, ThemeId } from "../generated/index.ts";
 import { LookButton } from "./Avatar.tsx";
 import { Brand } from "./Brand.tsx";
-import { RoomCode, ThemePicker } from "./Lobby.tsx";
+import { ConfirmButton, RoomCode, ThemePicker } from "./Lobby.tsx";
 import { savedName, savedPrefs, savedTheme, saveName, saveTheme, useSavedLook } from "./net.ts";
 
 /** "3 days", "5 h", "12 min", "now": the largest whole unit. */
@@ -29,8 +29,9 @@ const BLURB =
     ? GAME_LIST[0].blurb
     : "Card and board games for friends on voice chat. Everyone joins from their own device.";
 
-/** Rooms this browser has a seat in, admin rooms first, with when each expires. */
-function MyRooms({ rooms }: { rooms: MyRoom[] }) {
+/** Rooms this browser has a seat in, admin rooms first, with when each expires. The admin can
+ * delete one from here (🗑) without opening it. */
+function MyRooms({ rooms, onDelete }: { rooms: MyRoom[]; onDelete: (code: string) => void }) {
   if (rooms.length === 0) return null;
   const ttl = rooms[0].idleMs + rooms[0].expiresInMs;
   return (
@@ -58,9 +59,20 @@ function MyRooms({ rooms }: { rooms: MyRoom[] }) {
                   Active {span(r.idleMs)} ago · deleted in {span(r.expiresInMs)}
                 </small>
               </span>
-              <a className="btn small" href={`#${r.code}`}>
-                Rejoin
-              </a>
+              <span className="my-room-actions">
+                <a className="btn small" href={`#${r.code}`}>
+                  ↩ Rejoin
+                </a>
+                {r.admin && (
+                  <ConfirmButton
+                    label="🗑"
+                    title={`Close room ${r.code}`}
+                    ask="Delete this room for everyone?"
+                    yes="🗑 Close room"
+                    onConfirm={() => onDelete(r.code)}
+                  />
+                )}
+              </span>
             </li>
           );
         })}
@@ -77,11 +89,13 @@ export function Home({
   online,
   myRooms,
   listRooms,
+  deleteRoom,
 }: {
   send: (m: ClientMsg) => void;
   online: boolean;
   myRooms: MyRoom[] | null;
   listRooms: () => void;
+  deleteRoom: (code: string) => void;
 }) {
   useEffect(() => {
     if (online) listRooms();
@@ -97,7 +111,7 @@ export function Home({
       <Brand as="h1" />
       <p className="muted">{BLURB}</p>
 
-      {myRooms && <MyRooms rooms={myRooms} />}
+      {myRooms && <MyRooms rooms={myRooms} onDelete={deleteRoom} />}
 
       <form
         onSubmit={(e) => {

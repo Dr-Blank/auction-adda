@@ -161,7 +161,7 @@ impl Table {
 fn a_society_committee_room_plays_pahunch() {
     let mut t = table(3, None);
     let info = room(&t.clients[0]);
-    assert_eq!((info.min_players, info.max_players), (3, 5));
+    assert_eq!((info.min_players, info.max_players), (3, 7));
     assert_eq!(info.variant, Some(0));
     t.admin(json!({ "type": "start" }));
     let v = view(&t.clients[1]);

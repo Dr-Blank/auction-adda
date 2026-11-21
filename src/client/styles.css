@@ -411,6 +411,20 @@ legend {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-2);
+  flex-wrap: wrap;
+}
+/* Rejoin and 🗑; the 🗑 question wraps under the room when there is no room beside it. */
+.my-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+.my-room-actions .btn {
+  min-height: 44px;
+  min-width: 44px;
 }
 .my-room .grow {
   display: grid;

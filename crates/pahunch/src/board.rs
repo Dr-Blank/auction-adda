@@ -1,5 +1,6 @@
 //! Boards, read from `boards.json`. A board is data: rooms with a capacity and a place to draw
-//! them, paths that climb from room to room, the token mix and the setup per seat count. A new
+//! them, paths that climb from room to room, the token mix and the setup per seat count. A board
+//! has sides for different seat counts, and a game is played on the side for its count. A new
 //! board is a new entry in the file (the `boards` test checks it); the admin picks one per game.
 
 use std::collections::BTreeMap;
@@ -46,16 +47,25 @@ pub struct Seating {
     pub neutrals: Vec<u8>,
 }
 
+/// One side of a board: its rooms and paths, for the seat counts it is played at.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Board {
+pub struct Side {
     pub id: String,
-    pub name: String,
     /// Bottom to top: a path always climbs to a room later in the list.
     pub rooms: Vec<RoomDef>,
     pub paths: Vec<PathDef>,
     /// The path the blocker starts on.
     pub blocker: u8,
+    pub players: BTreeMap<u8, Seating>,
+}
+
+/// A board: one or more sides, each for its own seat counts, sharing the bag and the supply.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Board {
+    pub name: String,
+    /// The game is played on the side that seats its player count.
+    pub sides: Vec<Side>,
     /// Point tokens in the bag: value → how many.
     pub bag: BTreeMap<u8, u8>,
     /// Special coins in the bag, each worth [`SPECIAL`]: bonus → how many.
@@ -66,7 +76,6 @@ pub struct Board {
     pub start_ones: u8,
     /// A neutral votes yes for one token of at least this value.
     pub min_bribe: u8,
-    pub players: BTreeMap<u8, Seating>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,11 +105,25 @@ pub struct Layout {
 }
 
 impl Board {
-    /// This board for `seating`.
+    /// The side that seats `n` players.
     #[must_use]
-    pub fn layout(&self, seating: &Seating) -> Layout {
-        let summit = self.summit().unwrap_or(0);
-        let rooms = self
+    pub fn side(&self, n: u8) -> Option<&Side> {
+        self.sides.iter().find(|s| s.players.contains_key(&n))
+    }
+
+    /// Every seat count the board is played at, smallest first.
+    #[must_use]
+    pub fn seats(&self) -> Vec<u8> {
+        let mut seats: Vec<u8> = self.sides.iter().flat_map(|s| s.players.keys().copied()).collect();
+        seats.sort_unstable();
+        seats
+    }
+
+    /// `side` of this board for `seating`.
+    #[must_use]
+    pub fn layout(&self, side: &Side, seating: &Seating) -> Layout {
+        let summit = side.summit().unwrap_or(0);
+        let rooms = side
             .rooms
             .iter()
             .enumerate()
@@ -114,10 +137,10 @@ impl Board {
             })
             .collect();
         Layout {
-            board: self.id.clone(),
+            board: side.id.clone(),
             name: self.name.clone(),
             rooms,
-            paths: self.paths.clone(),
+            paths: side.paths.clone(),
             summit,
             min_bribe: self.min_bribe,
             pay: FILE.favours.clone(),
@@ -143,6 +166,29 @@ impl Board {
         plain.chain(special).collect()
     }
 
+    /// What is wrong with the board, if anything.
+    ///
+    /// # Errors
+    /// The first broken rule.
+    pub fn check(&self) -> Result<(), String> {
+        let seats = self.seats();
+        if seats.is_empty() {
+            return Err("no side seats anyone".into());
+        }
+        if seats.windows(2).any(|w| matches!(w, [a, b] if a == b)) {
+            return Err("two sides seat the same player count".into());
+        }
+        if self.bag.keys().any(|&v| v < 2) || self.min_bribe < 2 {
+            return Err("bag tokens and bribes are worth 2 or more (1s come from the supply)".into());
+        }
+        for side in &self.sides {
+            side.check(self).map_err(|e| format!("side {}: {e}", side.id))?;
+        }
+        Ok(())
+    }
+}
+
+impl Side {
     /// The one room no path leaves.
     fn summit(&self) -> Option<u8> {
         let tops: Vec<usize> = (0..self.rooms.len())
@@ -154,11 +200,8 @@ impl Board {
         }
     }
 
-    /// What is wrong with the board, if anything.
-    ///
-    /// # Errors
-    /// The first broken rule.
-    pub fn check(&self) -> Result<(), String> {
+    /// What is wrong with this side of `board`, if anything.
+    fn check(&self, board: &Board) -> Result<(), String> {
         let rooms = self.rooms.len();
         if !(2..usize::from(u8::MAX)).contains(&rooms) {
             return Err(format!("{rooms} rooms"));
@@ -173,7 +216,7 @@ impl Board {
         if slots < 2 || !self.paths.get(usize::from(self.blocker)).is_some_and(|&p| self.slot(p)) {
             return Err("the blocker needs a token path to start on and another to move to".into());
         }
-        let bag = self.coins().len();
+        let bag = board.coins().len();
         if bag < slots {
             return Err(format!("{bag} bag tokens for {slots} token paths"));
         }
@@ -188,15 +231,12 @@ impl Board {
         if !self.rooms.iter().enumerate().any(|(i, _)| self.entry(i)) {
             return Err("no room to enter".into());
         }
-        if self.bag.keys().any(|&v| v < 2) || self.min_bribe < 2 {
-            return Err("bag tokens and bribes are worth 2 or more (1s come from the supply)".into());
-        }
         for (&n, s) in &self.players {
             let total = u16::from(n) * u16::from(s.climbers);
             if s.summit == 0 || u16::from(s.summit) > total {
                 return Err(format!("{n} players: the top room cannot be filled"));
             }
-            if u16::from(n) * u16::from(self.start_ones) > self.supply {
+            if u16::from(n) * u16::from(board.start_ones) > board.supply {
                 return Err(format!("{n} players: the supply is too small for the start"));
             }
             for &r in &s.neutrals {

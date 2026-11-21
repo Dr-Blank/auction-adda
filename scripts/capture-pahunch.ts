@@ -21,9 +21,10 @@ import { choosePahunch } from "./pahunch-bot.ts";
 type State = Omit<Extract<ServerMsg, { type: "state" }>, "game"> & { game: PahunchView | null };
 
 const url = process.argv[2] ?? "ws://localhost:8799/ws";
-const out = path.resolve(import.meta.dirname, "../test/fixtures/pahunch");
+// PAHUNCH_SEATS and PAHUNCH_OUT record a game at another seat count, somewhere else.
+const out = path.resolve(process.env.PAHUNCH_OUT ?? path.join(import.meta.dirname, "../test/fixtures/pahunch"));
 const random = rng(20261121);
-const PLAYERS = 4;
+const PLAYERS = Number(process.env.PAHUNCH_SEATS ?? 4);
 
 function client(name: string) {
   const ws = new WebSocket(url);
@@ -85,7 +86,7 @@ players[0].send({
 });
 await until(() => !!players[0].latest(), "the room");
 const code = players[0].latest()!.room.code;
-const names = ["Asha", "Bilal", "Chitra", "Dev"];
+const names = ["Asha", "Bilal", "Chitra", "Dev", "Esha", "Farhan", "Gauri"];
 for (let i = 1; i < PLAYERS; i++) {
   players[i].send({ type: "join", room: code, name: names[i], avatar: `${i}a${i}b${i}c${i}d${i}e${i}f${i}g${i}h` });
   await until(() => players[i].latest()?.you === i, `seat ${i}`);
