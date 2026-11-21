@@ -18,7 +18,8 @@ use rand::rngs::StdRng;
 use crate::board::{Layout, Rooms, boards};
 use crate::bot::choose_action;
 use crate::types::{
-    Action, Bonus, Bonuses, Carry, Coin, FavourKind, LogEntry, Options, Player, RuleError, Seat, State, USES, Vote,
+    Action, Bonus, Bonuses, Carry, Coin, Deal, FavourKind, LogEntry, MAX_PLEA, Offer, Options, Player, Plea, RuleError,
+    Seat, State, USES, Vote,
 };
 use crate::view::view_for;
 
@@ -79,6 +80,8 @@ pub fn new_game_with(n: u8, seed: u32, variant: u8, options: Options) -> Result<
         used: Vec::new(),
         asked: Vec::new(),
         withdrawn: Vec::new(),
+        pleas: Vec::new(),
+        offers: Vec::new(),
         layout,
         rooms,
         tokens_on,
@@ -361,8 +364,8 @@ pub(crate) fn can_bribe(layout: &Layout, rooms: &Rooms, vote: &Vote, tokens: &[u
 
 // ---- moves ----
 
-/// Seats that owe a move: the mover (or the voters while a vote runs), and the owners the mover
-/// asked for their favour.
+/// Seats that owe a move: the mover (or the voters while a vote runs), the owners the mover
+/// asked for their favour, and the players a deal waits on.
 #[must_use]
 pub fn pending(s: &State) -> Vec<Seat> {
     if s.over {
@@ -371,11 +374,16 @@ pub fn pending(s: &State) -> Vec<Seat> {
     let mut owe = match &s.vote {
         None => vec![s.turn],
         Some(v) => {
-            let left = voters_left(&s.rooms, v, s.turn);
-            if left.is_empty() { vec![s.turn] } else { left }
+            let mut left = voters_left(&s.rooms, v, s.turn);
+            // Enough yes in: the mover may take them now.
+            if left.is_empty() || enough(v) {
+                left.push(s.turn);
+            }
+            left
         }
     };
-    for &o in &s.asked {
+    let deals = s.pleas.iter().map(|p| p.of).chain(s.offers.iter().map(|o| o.to));
+    for o in s.asked.iter().copied().chain(deals) {
         if !owe.contains(&o) {
             owe.push(o);
         }
@@ -399,18 +407,7 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
         return Ok(s);
     }
     if s.vote.is_some() {
-        match *action {
-            Action::Vote { yes } => answer(&mut s, seat, yes)?,
-            Action::Bribe { token } => bribe(&mut s, seat, token)?,
-            Action::Withdraw => {
-                if seat != s.turn {
-                    return fail("Only the climber can give up the climb");
-                }
-                failed(&mut s);
-            }
-            Action::Unknown => return fail("Unknown move"),
-            _ => return fail("Wait for the vote to finish"),
-        }
+        in_vote(&mut s, seat, action)?;
         return Ok(s);
     }
     if seat != s.turn {
@@ -475,14 +472,42 @@ pub fn apply_action(prev: &State, seat: Seat, action: &Action) -> Result<State, 
             }
         }
         Action::Done => return fail("Make your move first"),
-        Action::Vote { .. } | Action::Bribe { .. } | Action::Withdraw => return fail("No vote is running"),
+        Action::Vote { .. } | Action::Bribe { .. } | Action::Withdraw | Action::Take { .. } => {
+            return fail("No vote is running");
+        }
         Action::Unknown => return fail("Unknown move"),
-        Action::Give { .. } | Action::Lend { .. } | Action::Request { .. } | Action::Decline => {}
+        Action::Give { .. }
+        | Action::Lend { .. }
+        | Action::Request { .. }
+        | Action::Decline
+        | Action::Plead { .. }
+        | Action::Offer { .. }
+        | Action::Accept { .. }
+        | Action::Refuse { .. }
+        | Action::Recall { .. } => {}
     }
     Ok(s)
 }
 
-/// Moves that wait for nothing (gifts and favours): `true` when `action` was one.
+/// A move while a vote runs: an answer, or the mover's bribe, take or giving up.
+fn in_vote(s: &mut State, seat: Seat, action: &Action) -> Result<(), RuleError> {
+    match action {
+        &Action::Vote { yes } => answer(s, seat, yes),
+        &Action::Bribe { token } => bribe(s, seat, token),
+        Action::Take { votes } => take(s, seat, votes),
+        Action::Withdraw => {
+            if seat != s.turn {
+                return fail("Only the climber can give up the climb");
+            }
+            failed(s);
+            Ok(())
+        }
+        Action::Unknown => fail("Unknown move"),
+        _ => fail("Wait for the vote to finish"),
+    }
+}
+
+/// Moves that wait for nothing (gifts, deals and favours): `true` when `action` was one.
 fn any_time(s: &mut State, seat: Seat, action: &Action) -> Result<bool, RuleError> {
     match action {
         Action::Give { to, tokens } => give(s, seat, *to, tokens)?,
@@ -494,6 +519,25 @@ fn any_time(s: &mut State, seat: Seat, action: &Action) -> Result<bool, RuleErro
             }
             s.asked.retain(|&o| o != seat);
             s.log.push(LogEntry::Decline { p: seat });
+        }
+        &Action::Plead { of, count } => plead(s, seat, of, count)?,
+        Action::Offer { to, give, want } => offer(s, seat, *to, give, want)?,
+        &Action::Accept { from } => accept(s, seat, from)?,
+        &Action::Refuse { from, deal } => {
+            if !close(s, from, seat, deal) {
+                return fail("They opened no such deal with you");
+            }
+            s.log.push(LogEntry::Refuse {
+                p: seat,
+                to: from,
+                deal,
+            });
+        }
+        &Action::Recall { to, deal } => {
+            if !close(s, seat, to, deal) {
+                return fail("You opened no such deal with them");
+            }
+            s.log.push(LogEntry::Recall { p: seat, to, deal });
         }
         _ => return Ok(false),
     }
@@ -719,35 +763,166 @@ fn extras(s: &State) -> bool {
     s.bonuses.block > 0 || s.bonuses.nudge > 0 || climbs_again(s) || on_offer(s, FavourKind::ExtraBlock)
 }
 
-fn give(s: &mut State, from: Seat, to: Seat, tokens: &[u8]) -> Result<(), RuleError> {
-    if to == from || to >= s.n {
-        return fail("Give to another player");
-    }
-    if tokens.is_empty() {
-        return fail("Pick the tokens to give");
-    }
-    let mut left = s.players.get(usize::from(from)).ok_or_else(damaged)?.tokens.clone();
+/// `hand` without `tokens` (by value), sorted; `None` when the hand lacks them.
+fn without(hand: &[u8], tokens: &[u8]) -> Option<Vec<u8>> {
+    let mut left = hand.to_vec();
     for t in tokens {
-        let Some(at) = left.iter().position(|x| x == t) else {
-            return fail("You do not have those tokens");
-        };
+        let at = left.iter().position(|x| x == t)?;
         left.swap_remove(at);
     }
     left.sort_unstable();
+    Some(left)
+}
+
+fn tokens_of(s: &State, seat: Seat) -> Result<&[u8], RuleError> {
+    Ok(&s.players.get(usize::from(seat)).ok_or_else(damaged)?.tokens)
+}
+
+/// `tokens` move from `from` to `to`; the caller checked `from` holds them.
+fn hand_over(s: &mut State, from: Seat, to: Seat, tokens: &[u8]) -> Result<(), RuleError> {
+    let left = without(tokens_of(s, from)?, tokens).ok_or_else(damaged)?;
     if let Some(p) = s.players.get_mut(usize::from(from)) {
         p.tokens = left;
     }
-    if let Some(p) = s.players.get_mut(usize::from(to)) {
-        p.tokens.extend_from_slice(tokens);
-        p.tokens.sort_unstable();
+    let p = s.players.get_mut(usize::from(to)).ok_or_else(damaged)?;
+    p.tokens.extend_from_slice(tokens);
+    p.tokens.sort_unstable();
+    Ok(())
+}
+
+fn other_seat(s: &State, me: Seat, other: Seat, message: &str) -> Result<(), RuleError> {
+    if other == me || other >= s.n {
+        return fail(message);
     }
+    Ok(())
+}
+
+fn count_of(tokens: &[u8]) -> u8 {
+    u8::try_from(tokens.len()).unwrap_or(u8::MAX)
+}
+
+/// A gift; one from the player asked answers their open ask.
+fn give(s: &mut State, from: Seat, to: Seat, tokens: &[u8]) -> Result<(), RuleError> {
+    other_seat(s, from, to, "Give to another player")?;
+    if tokens.is_empty() {
+        return fail("Pick the tokens to give");
+    }
+    if without(tokens_of(s, from)?, tokens).is_none() {
+        return fail("You do not have those tokens");
+    }
+    hand_over(s, from, to, tokens)?;
+    s.pleas.retain(|p| !(p.by == to && p.of == from));
     s.log.push(LogEntry::Gift {
         from,
         to,
-        count: u8::try_from(tokens.len()).unwrap_or(u8::MAX),
+        count: count_of(tokens),
     });
+    drop_stale(s);
     // The mover may have given away the token a bribe needed.
-    settle(s, None)
+    settle(s)
+}
+
+/// `by` asks `of` for `count` tokens.
+fn plead(s: &mut State, by: Seat, of: Seat, count: u8) -> Result<(), RuleError> {
+    other_seat(s, by, of, "Ask another player")?;
+    if !(1..=MAX_PLEA).contains(&count) {
+        return fail(format!("Ask for 1 to {MAX_PLEA} tokens"));
+    }
+    if s.pleas.iter().any(|p| p.by == by && p.of == of) {
+        return fail("You asked them already");
+    }
+    s.pleas.push(Plea { by, of, count });
+    s.log.push(LogEntry::Plea { p: by, of, count });
+    Ok(())
+}
+
+/// `by` offers `to` a swap.
+fn offer(s: &mut State, by: Seat, to: Seat, give: &[u8], want: &[u8]) -> Result<(), RuleError> {
+    other_seat(s, by, to, "Offer to another player")?;
+    if give.is_empty() || want.is_empty() {
+        return fail("A swap needs tokens both ways");
+    }
+    if want.contains(&0) {
+        return fail("No token is worth 0");
+    }
+    if without(tokens_of(s, by)?, give).is_none() {
+        return fail("You do not have those tokens");
+    }
+    if s.offers.iter().any(|o| o.by == by && o.to == to) {
+        return fail("You have an offer open with them already");
+    }
+    s.offers.push(Offer {
+        by,
+        to,
+        give: give.to_vec(),
+        want: want.to_vec(),
+    });
+    s.log.push(LogEntry::Offer {
+        p: by,
+        to,
+        give: count_of(give),
+        want: count_of(want),
+    });
+    Ok(())
+}
+
+/// `me` takes the swap `from` offered.
+fn accept(s: &mut State, me: Seat, from: Seat) -> Result<(), RuleError> {
+    let Some(at) = s.offers.iter().position(|o| o.by == from && o.to == me) else {
+        return fail("They offer you no swap");
+    };
+    let o = s.offers.get(at).cloned().ok_or_else(damaged)?;
+    if without(tokens_of(s, me)?, &o.want).is_none() {
+        return fail("You do not have the tokens they want");
+    }
+    if without(tokens_of(s, from)?, &o.give).is_none() {
+        return fail("They no longer have the tokens they offered");
+    }
+    hand_over(s, from, me, &o.give)?;
+    hand_over(s, me, from, &o.want)?;
+    s.offers.remove(at);
+    s.log.push(LogEntry::Trade {
+        from,
+        to: me,
+        gave: count_of(&o.give),
+        got: count_of(&o.want),
+    });
+    drop_stale(s);
+    // Either side may be the mover, short of a bribe now.
+    settle(s)
+}
+
+/// Tokens left a hand: an offer whose maker no longer holds what it gives ends, as taken back.
+fn drop_stale(s: &mut State) {
+    let (keep, gone): (Vec<Offer>, Vec<Offer>) = std::mem::take(&mut s.offers).into_iter().partition(|o| {
+        s.players
+            .get(usize::from(o.by))
+            .is_some_and(|p| without(&p.tokens, &o.give).is_some())
+    });
+    s.offers = keep;
+    for o in gone {
+        s.log.push(LogEntry::Recall {
+            p: o.by,
+            to: o.to,
+            deal: Deal::Offer,
+        });
+    }
+}
+
+/// The deal between `by` and `to` ends: `p` refused it or took it back.
+fn close(s: &mut State, by: Seat, to: Seat, deal: Deal) -> bool {
+    let before = s.pleas.len() + s.offers.len();
+    match deal {
+        Deal::Plea => s.pleas.retain(|p| !(p.by == by && p.of == to)),
+        Deal::Offer => s.offers.retain(|o| !(o.by == by && o.to == to)),
+    }
+    s.pleas.len() + s.offers.len() < before
+}
+
+/// A deal someone opened with `seat`, oldest first.
+fn deal_for(s: &State, seat: Seat) -> Option<(Seat, Deal)> {
+    let plea = s.pleas.iter().find(|p| p.of == seat).map(|p| (p.by, Deal::Plea));
+    plea.or_else(|| s.offers.iter().find(|o| o.to == seat).map(|o| (o.by, Deal::Offer)))
 }
 
 fn answer(s: &mut State, seat: Seat, yes: u8) -> Result<(), RuleError> {
@@ -767,7 +942,7 @@ fn answer(s: &mut State, seat: Seat, yes: u8) -> Result<(), RuleError> {
         *a = Some(yes);
     }
     s.log.push(LogEntry::Vote { p: seat, yes, of });
-    settle(s, Some(seat))
+    settle(s)
 }
 
 fn bribe(s: &mut State, seat: Seat, token: u8) -> Result<(), RuleError> {
@@ -790,42 +965,128 @@ fn bribe(s: &mut State, seat: Seat, token: u8) -> Result<(), RuleError> {
         v.bribed += 1;
     }
     s.log.push(LogEntry::Bribe { p: seat });
-    settle(s, None)
+    drop_stale(s);
+    settle(s)
 }
 
-/// After a change to the running vote: it passes once enough yes are in, and fails once nothing
-/// can bring them in. `last` answered just now: of its yes, only the needed ones earn a token.
-fn settle(s: &mut State, last: Option<Seat>) -> Result<(), RuleError> {
+/// Yes votes from other players the climb still needs, past the mover's own and the paid neutrals.
+pub(crate) fn still_needed(vote: &Vote, mover: Seat) -> u8 {
+    let own = vote.answers.get(usize::from(mover)).copied().flatten().unwrap_or(0);
+    vote.need.saturating_sub(own.saturating_add(vote.bribed))
+}
+
+/// Enough yes are in: the mover may take the needed ones now, without waiting for the rest.
+pub(crate) fn enough(vote: &Vote) -> bool {
+    vote.yes() >= vote.need
+}
+
+/// The needed yes, taken from the voters in seat order after the mover: what the vote clock picks
+/// when the mover has not.
+pub(crate) fn first_yes(vote: &Vote, mover: Seat) -> Vec<u8> {
+    let n = vote.answers.len();
+    let mut left = still_needed(vote, mover);
+    let mut take = vec![0; n];
+    for k in 1..n {
+        let i = (usize::from(mover) + k) % n;
+        let given = vote.answers.get(i).copied().flatten().unwrap_or(0).min(left);
+        if let Some(t) = take.get_mut(i) {
+            *t = given;
+        }
+        left -= given;
+    }
+    take
+}
+
+/// When the answers leave the mover no choice of whose yes earn the 1s: every other voter has
+/// answered, and either no yes is spare or only one player said yes.
+fn no_choice(rooms: &Rooms, vote: &Vote, mover: Seat) -> Option<Vec<u8>> {
+    if !voters_left(rooms, vote, mover).is_empty() {
+        return None;
+    }
+    let givers = vote
+        .answers
+        .iter()
+        .enumerate()
+        .filter(|&(i, a)| i != usize::from(mover) && a.is_some_and(|y| y > 0))
+        .count();
+    (vote.yes() == vote.need || givers <= 1).then(|| first_yes(vote, mover))
+}
+
+/// After a change to the running vote. The mover's own climbers and paid neutrals alone carry it:
+/// it passes. Enough yes from the others: it passes when the answers leave no choice of whose yes
+/// earn the 1s; else the mover takes the needed ones (any time once enough are in, without waiting
+/// for the rest). Not enough, and nothing can bring them in: it fails.
+fn settle(s: &mut State) -> Result<(), RuleError> {
     let Some(vote) = s.vote.clone() else { return Ok(()) };
     let mover = s.turn;
-    let yes = vote.yes();
-    if yes >= vote.need {
-        let excess = yes - vote.need;
-        for (i, a) in vote.answers.iter().enumerate() {
-            let Ok(seat) = Seat::try_from(i) else { continue };
-            let given = a.unwrap_or(0);
-            let earned = if Some(seat) == last {
-                given.saturating_sub(excess)
-            } else {
-                given
-            };
-            if seat != mover && earned > 0 {
-                reward(s, seat, earned);
-            }
+    if still_needed(&vote, mover) == 0 {
+        return pass(s, &vote, &vec![0; vote.answers.len()]);
+    }
+    if enough(&vote) {
+        if let Some(take) = no_choice(&s.rooms, &vote, mover) {
+            return pass(s, &vote, &take);
         }
-        s.vote = None;
-        let ask = Ask {
-            path: vote.path,
-            swap: vote.swap,
-            carry: vote.carry,
-        };
-        return climb(s, mover, ask, false);
+        return Ok(());
     }
     let tokens = &s.players.get(usize::from(mover)).ok_or_else(damaged)?.tokens;
     if voters_left(&s.rooms, &vote, mover).is_empty() && !can_bribe(&s.layout, &s.rooms, &vote, tokens) {
         failed(s);
     }
     Ok(())
+}
+
+/// The mover takes the yes in `take` (per seat; their own entry is ignored): exactly the ones the
+/// climb still needs, each from a voter who gave at least that many. Only those earn the 1s.
+fn take(s: &mut State, seat: Seat, take: &[u8]) -> Result<(), RuleError> {
+    if seat != s.turn {
+        return fail("Only the climber picks whose votes count");
+    }
+    let vote = s.vote.clone().ok_or_else(damaged)?;
+    if !enough(&vote) {
+        return fail("Not enough yes votes yet");
+    }
+    if take.len() != vote.answers.len() {
+        return fail("Name a count for every seat");
+    }
+    let mut sum = 0_u8;
+    for (i, (&t, a)) in take.iter().zip(&vote.answers).enumerate() {
+        if i == usize::from(seat) {
+            continue;
+        }
+        if t > a.unwrap_or(0) {
+            return fail("Take only yes votes that were given");
+        }
+        sum = sum.saturating_add(t);
+    }
+    let need = still_needed(&vote, seat);
+    if sum != need {
+        return fail(format!("Take exactly the {need} yes votes the climb still needs"));
+    }
+    let mut take = take.to_vec();
+    if let Some(t) = take.get_mut(usize::from(seat)) {
+        *t = 0;
+    }
+    pass(s, &vote, &take)
+}
+
+/// The vote passes: the taken yes earn their givers 1s, and the climb goes.
+fn pass(s: &mut State, vote: &Vote, take: &[u8]) -> Result<(), RuleError> {
+    let mover = s.turn;
+    for (i, &t) in take.iter().enumerate() {
+        if let Ok(seat) = Seat::try_from(i)
+            && seat != mover
+            && t > 0
+        {
+            reward(s, seat, t);
+        }
+    }
+    s.vote = None;
+    let ask = Ask {
+        path: vote.path,
+        swap: vote.swap,
+        carry: vote.carry,
+    };
+    climb(s, mover, ask, false)
 }
 
 /// The running vote did not pass: the climber stays. The turn passes when the options say so;
@@ -982,6 +1243,8 @@ fn finish(s: &mut State, by: Option<Seat>) {
     s.over = true;
     s.vote = None;
     clear_turn(s);
+    s.pleas.clear();
+    s.offers.clear();
     s.winners = if by.is_some() {
         Vec::new()
     } else {
@@ -1010,9 +1273,12 @@ pub fn apply_skip(prev: &State, seat: Seat) -> Result<State, RuleError> {
         return fail("That player does not owe a move");
     }
     let mut rng = StdRng::seed_from_u64((u64::from(prev.seed) << 32) | u64::from(prev.skips));
-    // An absent owner says no to a request; any other move is a random one.
+    // An absent owner says no to a request, an absent player to a deal; any other move is a
+    // random one.
     let action = if prev.asked.contains(&seat) {
         Action::Decline
+    } else if let Some((from, deal)) = deal_for(prev, seat) {
+        Action::Refuse { from, deal }
     } else {
         choose_action(&view_for(prev, Some(seat)), &mut rng).ok_or_else(damaged)?
     };
@@ -1035,8 +1301,8 @@ pub fn end_early(prev: &State, by: Seat) -> Result<State, RuleError> {
     Ok(s)
 }
 
-/// The vote clock ran out: who has not answered says no, and the climb fails unless the yes
-/// are in.
+/// The vote clock ran out: who has not answered says no. With enough yes the climb goes, the
+/// needed yes taken in seat order after the mover unless the mover picked; else it fails.
 ///
 /// # Errors
 /// When no vote runs.
@@ -1052,8 +1318,13 @@ pub fn time_up(prev: &State) -> Result<State, RuleError> {
         }
         s.log.push(LogEntry::Vote { p: seat, yes: 0, of });
     }
-    if s.vote.is_some() {
-        failed(&mut s);
+    if let Some(v) = s.vote.clone() {
+        if enough(&v) {
+            let take = first_yes(&v, s.turn);
+            pass(&mut s, &v, &take)?;
+        } else {
+            failed(&mut s);
+        }
     }
     Ok(s)
 }
@@ -1095,6 +1366,12 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
     s.used = s.used.iter().map(|&o| m(o)).collect();
     s.asked = s.asked.iter().map(|&o| m(o)).collect();
     s.withdrawn = s.withdrawn.iter().map(|&o| m(o)).collect();
+    for p in &mut s.pleas {
+        (p.by, p.of) = (m(p.by), m(p.of));
+    }
+    for o in &mut s.offers {
+        (o.by, o.to) = (m(o.by), m(o.to));
+    }
     s.winners = s.winners.iter().map(|&w| m(w)).collect();
     for e in &mut s.log {
         match e {
@@ -1120,8 +1397,13 @@ pub fn reseat(prev: &State, to: &[Seat]) -> Result<State, RuleError> {
                 *p = m(*p);
                 *who = who.map(m);
             }
-            LogEntry::Gift { from, to, .. } => {
-                *from = m(*from);
+            LogEntry::Gift { from: p, to, .. }
+            | LogEntry::Trade { from: p, to, .. }
+            | LogEntry::Plea { p, of: to, .. }
+            | LogEntry::Offer { p, to, .. }
+            | LogEntry::Refuse { p, to, .. }
+            | LogEntry::Recall { p, to, .. } => {
+                *p = m(*p);
                 *to = m(*to);
             }
             LogEntry::End { winners, by } => {

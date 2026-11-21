@@ -145,6 +145,41 @@ pub struct Player {
     pub uses: u8,
 }
 
+/// A deal between two players, open until answered or taken back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(rename = "PahunchDeal")]
+pub enum Deal {
+    /// An ask for tokens, answered with a gift.
+    Plea,
+    /// An offer to swap tokens.
+    Offer,
+}
+
+/// The most tokens one ask may name.
+pub const MAX_PLEA: u8 = 9;
+
+/// `by` asks `of` for `count` tokens (values are hidden, so only a count). Any gift from `of` to
+/// `by` answers it; `of` may also say no.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(rename = "PahunchPlea")]
+pub struct Plea {
+    pub by: Seat,
+    pub of: Seat,
+    pub count: u8,
+}
+
+/// `by` offers `to` the tokens `give` for theirs `want` (both by value; any deal, equal value or
+/// not). In a view, the values of a deal the viewer is not part of read 0.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(rename = "PahunchOffer")]
+pub struct Offer {
+    pub by: Seat,
+    pub to: Seat,
+    pub give: Vec<u8>,
+    pub want: Vec<u8>,
+}
+
 /// A climb that waits for votes: the mover's climber leaves `room` by `path` once `need` yes
 /// votes are in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -269,6 +304,38 @@ pub enum LogEntry {
         to: Seat,
         count: u8,
     },
+    /// `p` asked `of` for `count` tokens.
+    Plea {
+        p: Seat,
+        of: Seat,
+        count: u8,
+    },
+    /// `p` offered `to` a swap: `give` of their tokens for `want` of `to`'s (counts only).
+    Offer {
+        p: Seat,
+        to: Seat,
+        give: u8,
+        want: u8,
+    },
+    /// `p` said no to the deal `to` opened.
+    Refuse {
+        p: Seat,
+        to: Seat,
+        deal: Deal,
+    },
+    /// `p` took back the deal they opened with `to`.
+    Recall {
+        p: Seat,
+        to: Seat,
+        deal: Deal,
+    },
+    /// `to` took the swap `from` offered: `gave` tokens one way, `got` the other.
+    Trade {
+        from: Seat,
+        to: Seat,
+        gave: u8,
+        got: u8,
+    },
     /// The admin skipped an absent player: the next line is a random move made for them.
     Skip {
         p: Seat,
@@ -364,6 +431,12 @@ pub struct State {
     /// the strict switch their favour is not offered again until the turn passes.
     #[serde(default)]
     pub withdrawn: Vec<Seat>,
+    /// Open asks for tokens; they outlast the turn.
+    #[serde(default)]
+    pub pleas: Vec<Plea>,
+    /// Open swap offers; they outlast the turn.
+    #[serde(default)]
+    pub offers: Vec<Offer>,
     pub layout: Layout,
     /// Who holds each place, room by room, in order of arrival; `null` = a neutral.
     pub rooms: Rooms,
@@ -405,6 +478,9 @@ pub enum Action {
     Vote { yes: u8 },
     /// The mover pays a neutral in the room one token of this value for its yes.
     Bribe { token: u8 },
+    /// With enough yes in, the mover takes exactly the needed ones, per seat (their own entry is
+    /// ignored); the climb goes at once and only those earn the 1s.
+    Take { votes: Vec<u8> },
     /// The mover gives up the climb, as a failed vote: the mover moves again, unless a failed
     /// vote ends the turn (`fail_ends_turn`).
     Withdraw,
@@ -424,6 +500,16 @@ pub enum Action {
     Decline,
     /// Tokens (by value) to another player, at any time.
     Give { to: Seat, tokens: Vec<u8> },
+    /// Ask `of` for `count` tokens, at any time. A gift from them answers it.
+    Plead { of: Seat, count: u8 },
+    /// Offer `to` your tokens `give` for theirs `want`, at any time.
+    Offer { to: Seat, give: Vec<u8>, want: Vec<u8> },
+    /// Take the swap `from` offered you.
+    Accept { from: Seat },
+    /// Say no to the deal `from` opened with you.
+    Refuse { from: Seat, deal: Deal },
+    /// Take back the deal you opened with `to`.
+    Recall { to: Seat, deal: Deal },
     /// Any other `type`: answered with "Unknown move".
     #[serde(other)]
     #[ts(skip)]
@@ -477,6 +563,10 @@ pub struct View {
     pub asked: Vec<Seat>,
     /// Owners whose offer this turn ended unused.
     pub withdrawn: Vec<Seat>,
+    /// Open asks for tokens.
+    pub pleas: Vec<Plea>,
+    /// Open swap offers; values read 0 unless the viewer is part of the deal.
+    pub offers: Vec<Offer>,
     pub layout: Layout,
     pub rooms: Rooms,
     pub tokens_on: Vec<Option<Coin>>,

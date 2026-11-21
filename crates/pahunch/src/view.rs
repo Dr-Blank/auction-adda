@@ -1,5 +1,5 @@
 use crate::rules::pending;
-use crate::types::{LogEntry, PlayerView, Seat, State, View};
+use crate::types::{LogEntry, Offer, PlayerView, Seat, State, View};
 
 const LOG_LIMIT: usize = 150;
 
@@ -39,6 +39,21 @@ pub fn view_for(s: &State, seat: Option<Seat>) -> View {
         used: s.used.clone(),
         asked: s.asked.clone(),
         withdrawn: s.withdrawn.clone(),
+        pleas: s.pleas.clone(),
+        offers: s
+            .offers
+            .iter()
+            .map(|o| {
+                let party = mine(o.by) || mine(o.to);
+                let hide = |ts: &[u8]| if party { ts.to_vec() } else { vec![0; ts.len()] };
+                Offer {
+                    by: o.by,
+                    to: o.to,
+                    give: hide(&o.give),
+                    want: hide(&o.want),
+                }
+            })
+            .collect(),
         layout: s.layout.clone(),
         rooms: s.rooms.clone(),
         tokens_on: s.tokens_on.clone(),

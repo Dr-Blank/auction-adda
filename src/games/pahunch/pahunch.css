@@ -1111,6 +1111,81 @@ button.ph-chip.on {
 .ph-give {
   min-height: 40px;
 }
+/* The mover takes the needed yes: a face per yes voter, picked ones ringed. */
+.ph-take {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.ph-take-head {
+  margin: 0;
+}
+.ph-take-head small {
+  color: var(--muted);
+}
+.ph-take-who {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+.ph-take-go:not(:disabled) {
+  border-color: var(--accent);
+}
+/* The token sheet: give, ask or swap, as three equal tabs. */
+.ph-deal-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.ph-deal-modes .btn {
+  min-height: 44px;
+}
+.ph-deal-modes .btn.on {
+  border-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 18%);
+  color: var(--text);
+  font-weight: 700;
+}
+.ph-deal-h {
+  margin: 12px 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.ph-deal-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin: 8px 0;
+}
+.ph-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 8px 0 12px;
+}
+.ph-stepper .btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.3rem;
+}
+.ph-stepper b {
+  min-width: 5ch;
+  text-align: center;
+  font-size: 1.3rem;
+}
+button.ph-chip.ph-want-add {
+  font-size: 0.85rem;
+}
+.ph-swap-what {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
 .ph-my-favour {
   display: flex;
   flex-wrap: wrap;
@@ -1319,20 +1394,35 @@ button.ph-chip.on {
   gap: 6px;
 }
 .ph-offer {
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--accent-line);
   border-radius: 999px;
   background: var(--panel);
   color: var(--accent-soft);
 }
+.ph-offer-name {
+  appearance: none;
+  min-height: 40px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ph-offer-name:last-child {
+  padding-right: 12px;
+}
+.ph-offer-name:hover {
+  text-decoration: underline dotted;
+}
 .ph-offer small {
   color: var(--muted);
 }
 .ph-offer.asked {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-right: 0;
   border-style: dashed;
 }
 .ph-offer-x {

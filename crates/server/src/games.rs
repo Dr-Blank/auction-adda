@@ -27,6 +27,10 @@ pub enum GameId {
 /// A game in progress. Saved as the game's own state; the room's theme says which game it is.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(untagged)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one per room, never held in bulk; boxing would thread through every game arm"
+)]
 pub enum Match {
     Auction(engine::GameState),
     Pahunch(pahunch::State),

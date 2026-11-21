@@ -1,16 +1,16 @@
 //! Random legal moves, for bot seats and for absent players the admin skips. A bot sees only its
-//! own seat's view. It never gives tokens away, offers its favour unasked or asks for one; asked,
-//! it says yes or no at random. Favours lent to it work where they apply by themselves (an open
+//! own seat's view. It never gives tokens away unasked, offers its favour unasked, asks for one or
+//! opens a deal; asked for a favour or tokens, or offered a swap, it says yes or no at random. Favours lent to it work where they apply by themselves (an open
 //! back path, a full room, a covered token).
 
-use rand::seq::IndexedRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use rand::{Rng, RngExt};
 
 use crate::rules::{
-    Ask, Board, Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, offered, refused_rooms,
-    voters_left,
+    Ask, Board, Climb, can_bribe, check_block, check_climb, check_enter, check_nudge, count, enough, offered,
+    refused_rooms, still_needed, voters_left,
 };
-use crate::types::{Action, FavourKind, Seat, View, Vote};
+use crate::types::{Action, Deal, FavourKind, Seat, View, Vote};
 
 /// The move for the viewer of `v`, or `None` when it owes none.
 pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
@@ -26,6 +26,9 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
         });
     }
     let tokens = v.players.get(usize::from(me))?.tokens.clone().unwrap_or_default();
+    if let Some(action) = answer_deal(v, me, &tokens, rng) {
+        return Some(action);
+    }
 
     if let Some(vote) = &v.vote {
         return Some(in_vote(v, vote, me, &tokens, rng));
@@ -111,6 +114,38 @@ pub fn choose_action<R: Rng + ?Sized>(v: &View, rng: &mut R) -> Option<Action> {
         .or_else(|| pick(&blocks, rng).map(|path| Action::Block { path }))
 }
 
+/// An answer to a deal another player opened with the bot: now and then its smallest tokens for
+/// an ask, or yes to a swap it can make; else no.
+fn answer_deal<R: Rng + ?Sized>(v: &View, me: Seat, tokens: &[u8], rng: &mut R) -> Option<Action> {
+    if let Some(p) = v.pleas.iter().find(|p| p.of == me) {
+        let give: Vec<u8> = tokens.iter().copied().take(usize::from(p.count)).collect();
+        return Some(if !give.is_empty() && rng.random_bool(0.3) {
+            Action::Give { to: p.by, tokens: give }
+        } else {
+            Action::Refuse {
+                from: p.by,
+                deal: Deal::Plea,
+            }
+        });
+    }
+    let o = v.offers.iter().find(|o| o.to == me)?;
+    let mut hand = tokens.to_vec();
+    let can = o.want.iter().all(|t| {
+        hand.iter()
+            .position(|x| x == t)
+            .map(|at| hand.swap_remove(at))
+            .is_some()
+    });
+    Some(if can && rng.random_bool(0.3) {
+        Action::Accept { from: o.by }
+    } else {
+        Action::Refuse {
+            from: o.by,
+            deal: Deal::Offer,
+        }
+    })
+}
+
 /// While a vote runs: a voter's answer, or the mover's bribe or giving up.
 fn in_vote<R: Rng + ?Sized>(v: &View, vote: &Vote, me: Seat, tokens: &[u8], rng: &mut R) -> Action {
     if voters_left(&v.rooms, vote, v.turn).contains(&me) {
@@ -121,6 +156,21 @@ fn in_vote<R: Rng + ?Sized>(v: &View, vote: &Vote, me: Seat, tokens: &[u8], rng:
             _ => 0,
         };
         return Action::Vote { yes };
+    }
+    // The mover, with enough yes in: the needed ones, from voters in a random order.
+    if enough(vote) {
+        let mut order: Vec<usize> = (0..vote.answers.len()).filter(|&i| i != usize::from(me)).collect();
+        order.shuffle(rng);
+        let mut left = still_needed(vote, me);
+        let mut votes = vec![0; vote.answers.len()];
+        for i in order {
+            let given = vote.answers.get(i).copied().flatten().unwrap_or(0).min(left);
+            if let Some(t) = votes.get_mut(i) {
+                *t = given;
+            }
+            left -= given;
+        }
+        return Action::Take { votes };
     }
     // The mover, with only neutrals left to ask.
     let bribe = tokens.iter().copied().filter(|&t| t >= v.layout.min_bribe).min();

@@ -277,3 +277,133 @@ describe("pahunch at seven seats (the other side of the board)", () => {
     expect(room(state)).toMatchSnapshot();
   });
 });
+
+describe("pahunch deals: asks for tokens and swaps", () => {
+  /** Seat 2 (you, tokens 1 1 1) off turn: seat 0 asks you for 2, seat 3 offers 4 for your 1 + 1; you asked seat 1 for 1. */
+  function dealState(): RoomState {
+    const s = structuredClone(Object.fromEntries(pahunch)["their-move"]) as {
+      game: { pleas: object[]; offers: object[]; pending: number[] };
+    };
+    s.game.pleas = [
+      { by: 0, of: 2, count: 2 },
+      { by: 2, of: 1, count: 1 },
+    ];
+    s.game.offers = [{ by: 3, to: 2, give: [4], want: [1, 1] }];
+    s.game.pending = [1, 2];
+    return { ...s, receivedAt: NOW } as unknown as RoomState;
+  }
+
+  it("answers an ask with a gift sheet set to its count, a swap with yes, and takes back your own ask", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    act(() => root.render(<Room state={dealState()} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />));
+    const bars = el.querySelectorAll(".ph-request");
+    expect(bars).toHaveLength(2);
+    const [give, no] = bars[0].querySelectorAll(".ph-move");
+    const [swap] = bars[1].querySelectorAll(".ph-move");
+    act(() => (no as HTMLButtonElement).click());
+    act(() => (swap as HTMLButtonElement).click());
+    act(() => (give as HTMLButtonElement).click());
+    // The gift sheet opens on the asker with the two smallest tokens picked.
+    expect(document.querySelector(".sheet .ph-give-who.on")?.textContent).toContain("Chitra");
+    const picked = [...document.querySelectorAll("button.ph-chip.on")];
+    expect(picked.map((b) => b.textContent)).toEqual(["1", "1"]);
+    const confirm = [...document.querySelectorAll(".sheet .btn.primary")].find((b) =>
+      b.textContent?.includes("🎁 Give"),
+    ) as HTMLButtonElement;
+    act(() => confirm.click());
+    const recall = el.querySelector(".ph-tray .ph-offer-x") as HTMLButtonElement;
+    act(() => recall.click());
+    expect(sent).toEqual([
+      { type: "action", action: { type: "refuse", from: 0, deal: "plea" } },
+      { type: "action", action: { type: "accept", from: 3 } },
+      { type: "action", action: { type: "give", to: 0, tokens: [1, 1] } },
+      { type: "action", action: { type: "recall", to: 1, deal: "plea" } },
+    ]);
+    act(() => root.unmount());
+  });
+
+  it("asks for a count and offers a swap from the tray", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    const s = structuredClone(Object.fromEntries(pahunch)["their-move"]) as unknown as RoomState;
+    act(() =>
+      root.render(<Room state={{ ...s, receivedAt: NOW }} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />),
+    );
+    const tray = (label: string) =>
+      [...el.querySelectorAll(".ph-tray .ph-give")].find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    const sheetButton = (label: string) =>
+      [...document.querySelectorAll(".sheet button")].find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    act(() => tray("Ask").click());
+    act(() => (document.querySelector('.sheet [aria-label="One more"]') as HTMLButtonElement).click());
+    act(() => sheetButton("🙏 Ask ").click());
+    act(() => tray("Swap").click());
+    act(() => (document.querySelector(".sheet button.ph-chip:not(.ph-want-add)") as HTMLButtonElement).click());
+    act(() => (document.querySelector('.sheet [aria-label="Add a 3"]') as HTMLButtonElement).click());
+    act(() => sheetButton("⇄ Offer").click());
+    expect(sent).toEqual([
+      { type: "action", action: { type: "plead", of: 0, count: 2 } },
+      { type: "action", action: { type: "offer", to: 0, give: [1], want: [3] } },
+    ]);
+    act(() => root.unmount());
+  });
+
+  it("opens the token sheet on a player from their seat sheet", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    const s = structuredClone(Object.fromEntries(pahunch)["their-move"]) as unknown as RoomState;
+    act(() =>
+      root.render(<Room state={{ ...s, receivedAt: NOW }} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />),
+    );
+    act(() => (el.querySelector('.ph-seat-chip[data-seat="3"] .avatar-btn') as HTMLButtonElement).click());
+    const ask = [...document.querySelectorAll(".sheet .ph-deal-modes .btn")].find((b) =>
+      b.textContent?.includes("Ask"),
+    ) as HTMLButtonElement;
+    act(() => ask.click());
+    const go = [...document.querySelectorAll(".sheet .btn.primary")].find((b) =>
+      b.textContent?.includes("🙏 Ask Dev"),
+    ) as HTMLButtonElement;
+    act(() => go.click());
+    expect(sent).toEqual([{ type: "action", action: { type: "plead", of: 3, count: 1 } }]);
+    act(() => root.unmount());
+  });
+});
+
+describe("pahunch: the climber takes the needed yes", () => {
+  it("picks whose spare yes earn the 1s", () => {
+    // You (seat 2) climb out of a 3-room with seats 0 and 3: both said yes, one is needed.
+    const s = structuredClone(Object.fromEntries(pahunch)["vote-climber"]) as {
+      game: { rooms: (number | null)[][]; vote: { answers: (number | null)[] }; pending: number[] };
+    };
+    s.game.rooms[8] = [0, 2, 3];
+    s.game.vote.answers = [1, null, 1, 1];
+    s.game.pending = [2];
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: unknown[] = [];
+    act(() =>
+      root.render(
+        <Room
+          state={{ ...s, receivedAt: NOW } as unknown as RoomState}
+          send={(m) => sent.push(m)}
+          join={() => {}}
+          reactions={[]}
+        />,
+      ),
+    );
+    const faces = [...el.querySelectorAll(".ph-take-who .ph-give-who")] as HTMLButtonElement[];
+    expect(faces.map((f) => f.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    act(() => faces[0].click());
+    act(() => faces[1].click());
+    act(() => (el.querySelector(".ph-take-go") as HTMLButtonElement).click());
+    expect(sent).toEqual([{ type: "action", action: { type: "take", votes: [1, 0, 0, 0] } }]);
+    act(() => root.unmount());
+  });
+});

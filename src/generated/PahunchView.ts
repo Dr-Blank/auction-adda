@@ -3,8 +3,10 @@ import type { PahunchBonuses } from "./PahunchBonuses.ts";
 import type { PahunchCoin } from "./PahunchCoin.ts";
 import type { PahunchLayout } from "./PahunchLayout.ts";
 import type { PahunchLog } from "./PahunchLog.ts";
+import type { PahunchOffer } from "./PahunchOffer.ts";
 import type { PahunchOptions } from "./PahunchOptions.ts";
 import type { PahunchPlayer } from "./PahunchPlayer.ts";
+import type { PahunchPlea } from "./PahunchPlea.ts";
 import type { PahunchVote } from "./PahunchVote.ts";
 
 /**
@@ -38,7 +40,15 @@ asked: Array<number>,
 /**
  * Owners whose offer this turn ended unused.
  */
-withdrawn: Array<number>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
+withdrawn: Array<number>, 
+/**
+ * Open asks for tokens.
+ */
+pleas: Array<PahunchPlea>, 
+/**
+ * Open swap offers; values read 0 unless the viewer is part of the deal.
+ */
+offers: Array<PahunchOffer>, layout: PahunchLayout, rooms: Array<Array<number | null>>, tokensOn: Array<PahunchCoin | null>, blocker: number, 
 /**
  * Tokens left in the bag.
  */

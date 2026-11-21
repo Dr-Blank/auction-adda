@@ -284,7 +284,7 @@ export function Table({ state, send, reactions }: TableProps) {
   const { frozen, canFreeze } = freezeRights(room, me, v.over);
   const [menu, setMenu] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [gift, setGift] = useState(false);
+  const [deal, setDeal] = useState<DealInit | null>(null);
   const [pick, setPickRaw] = useState<Pick | null>(null);
   const [info, setInfo] = useState<Pick | null>(null);
   const [picks, setExtras] = useState<Extras>({});
@@ -481,7 +481,14 @@ export function Table({ state, send, reactions }: TableProps) {
 
   let bar: ReactNode = null;
   if (!v.over && me !== null) {
-    const request = v.asked.includes(me) ? <RequestBar ctx={ctx} act={act} /> : null;
+    const deals = <DealBar ctx={ctx} act={act} onGive={setDeal} />;
+    const request =
+      v.asked.includes(me) || v.pleas.some((p) => p.of === me) || v.offers.some((o) => o.to === me) ? (
+        <>
+          {v.asked.includes(me) && <RequestBar ctx={ctx} act={act} />}
+          {deals}
+        </>
+      ) : null;
     if (v.vote && (v.turn === me || votersLeft(v, v.vote).includes(me)))
       bar = <VoteBar ctx={ctx} vote={v.vote} act={act} />;
     else if (myTurn)
@@ -567,7 +574,15 @@ export function Table({ state, send, reactions }: TableProps) {
         hidden={`Everyone’s ${skin.nouns.points} stays hidden.`}
       />
 
-      <Players ctx={ctx} room={room} reactions={reactions} awayFor={awayFor} send={send} act={act} />
+      <Players
+        ctx={ctx}
+        room={room}
+        reactions={reactions}
+        awayFor={awayFor}
+        send={send}
+        act={act}
+        onDeal={me !== null ? setDeal : undefined}
+      />
 
       {/* The result has its own place (beside the board, or above it on a phone); the final board stays. */}
       {v.over && (
@@ -609,7 +624,7 @@ export function Table({ state, send, reactions }: TableProps) {
             send={send}
             act={act}
             owing={owing}
-            onGive={() => setGift(true)}
+            onDeal={setDeal}
           />
         )}
         {bar && (
@@ -649,14 +664,13 @@ export function Table({ state, send, reactions }: TableProps) {
           </ol>
         </Sheet>
       )}
-      {gift && me !== null && !v.over && (
-        <GiftSheet
+      {deal && me !== null && !v.over && (
+        <DealSheet
+          key={`${deal.mode}:${deal.to ?? ""}:${deal.count ?? ""}`}
           ctx={ctx}
-          onGive={(to, tokens) => {
-            act({ type: "give", to, tokens });
-            setGift(false);
-          }}
-          onClose={() => setGift(false)}
+          init={deal}
+          act={act}
+          onClose={() => setDeal(null)}
         />
       )}
     </div>
@@ -672,6 +686,8 @@ interface SeatProps {
   awayFor: (seat: number) => number | null;
   send: (m: ClientMsg) => void;
   act: (a: PahunchAction) => void;
+  /** Opens the token sheet (give, ask, swap) on a player. */
+  onDeal?: (init: DealInit) => void;
 }
 
 /** A seat's colour with its shape on it, as its pieces carry them on the board. */
@@ -706,6 +722,7 @@ function SeatSheet({
   send,
   i,
   onClose,
+  onDeal,
 }: Omit<SeatProps, "reactions" | "act"> & { i: number; onClose: () => void }) {
   const { v, skin, me } = ctx;
   const seat = room.seats[i];
@@ -788,6 +805,29 @@ function SeatSheet({
           </span>
         )}
       </div>
+      {onDeal && me !== null && i !== me && !v.over && (
+        <div className="ph-deal-modes" role="group" aria-label={`Tokens with ${seat.name}`}>
+          {(
+            [
+              ["give", "🎁 Give"],
+              ["ask", "🙏 Ask"],
+              ["swap", "⇄ Swap"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              className="btn"
+              onClick={() => {
+                onClose();
+                onDeal({ mode, to: i });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <SeatSheetActions
         room={room}
         me={me}
@@ -874,7 +914,17 @@ function PlayerChip(props: SeatProps & { i: number }) {
       </button>
       {favour && p.favour && <FavourChip ctx={ctx} owner={i} onOpen={() => setFavourOpen(true)} />}
       <SeatAwayRow room={room} i={i} owing={owing} rights={rights} send={send} />
-      {info && <SeatSheet ctx={ctx} room={room} awayFor={awayFor} send={send} i={i} onClose={() => setInfo(false)} />}
+      {info && (
+        <SeatSheet
+          ctx={ctx}
+          room={room}
+          awayFor={awayFor}
+          send={send}
+          i={i}
+          onClose={() => setInfo(false)}
+          onDeal={props.onDeal}
+        />
+      )}
       {favourOpen && <FavourSheet ctx={ctx} owner={i} act={act} onClose={() => setFavourOpen(false)} />}
     </div>
   );
@@ -904,6 +954,7 @@ function FavourChip({ ctx, owner, onOpen }: { ctx: Ctx; owner: number; onOpen: (
       className={`ph-fav-btn ${state ?? ""} ${canAsk ? "live" : ""}`}
       onClick={onOpen}
       aria-haspopup="dialog"
+      title={`${f.glyph} ${f.name}: ${f.effect}`}
       aria-label={`${ctx.names[owner]}’s favour: ${f.name}, ${usesLeft(p.uses)}${state ? `, ${word[state]}` : ""}`}
     >
       <span className="ph-fav-glyph" aria-hidden="true">
@@ -1049,8 +1100,10 @@ function Tip({ children }: { children: ReactNode }) {
   );
 }
 
-function MyTray(props: SeatProps & { act: (a: PahunchAction) => void; owing: boolean; onGive: () => void }) {
-  const { ctx, room, reactions, awayFor, send, act, owing, onGive } = props;
+function MyTray(
+  props: SeatProps & { act: (a: PahunchAction) => void; owing: boolean; onDeal: (init: DealInit) => void },
+) {
+  const { ctx, room, reactions, awayFor, send, act, owing, onDeal } = props;
   const { v, skin } = ctx;
   const me = ctx.me ?? 0;
   const seat = room.seats[me];
@@ -1108,17 +1161,28 @@ function MyTray(props: SeatProps & { act: (a: PahunchAction) => void; owing: boo
           </span>
         ))}
         {!v.over && tokens.length > 0 && (
-          <button type="button" className="btn small ph-give" onClick={onGive}>
+          <button type="button" className="btn small ph-give" onClick={() => onDeal({ mode: "give" })}>
             🎁 Give
           </button>
         )}
         {!v.over && (
+          <button type="button" className="btn small ph-give" onClick={() => onDeal({ mode: "ask" })}>
+            🙏 Ask
+          </button>
+        )}
+        {!v.over && tokens.length > 0 && (
+          <button type="button" className="btn small ph-give" onClick={() => onDeal({ mode: "swap" })}>
+            ⇄ Swap
+          </button>
+        )}
+        {!v.over && (
           <Tip>
-            Only you see your {skin.nouns.points} until the end. Give tokens any time to seal a deal made on the call: a
-            vote, a favour, a promise.
+            Only you see your {skin.nouns.points} until the end. Give, ask for or swap tokens any time to seal a deal
+            made on the call: a vote, a favour, a promise.
           </Tip>
         )}
       </div>
+      {!v.over && <MyDeals ctx={ctx} act={act} onOpen={onDeal} />}
       {p.favour && !v.over && <MyFavour ctx={ctx} act={act} />}
       {info && <SeatSheet ctx={ctx} room={room} awayFor={awayFor} send={send} i={me} onClose={() => setInfo(false)} />}
     </section>
@@ -1159,6 +1223,7 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
         className="ph-fav-name"
         onClick={() => setInfo(true)}
         aria-haspopup="dialog"
+        title={f.effect}
         aria-label={`Your favour: ${f.name}, ${usesLeft(p.uses)}, ${state}`}
       >
         <span className="ph-fav-glyph" aria-hidden="true">
@@ -1219,21 +1284,34 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
 
 /**
  * The favours on offer to the mover (with a ✕ to turn one down, so no climb uses it), and those
- * they asked for (with a ✕ to take the request back).
+ * they asked for (with a ✕ to take the request back). Tap a name: what the favour does; a mouse
+ * sees it on hover too.
  */
 function OnOffer({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
   const { v, skin } = ctx;
+  const [open, setOpen] = useState<number | null>(null);
   const list = onOffer(v);
   const asked = v.asked.flatMap((owner) => {
     const kind = v.players[owner]?.favour;
     return kind ? [{ owner, kind }] : [];
   });
   if (list.length === 0 && asked.length === 0) return null;
+  const name = (owner: number, kind: PahunchFavour, extra?: ReactNode) => (
+    <button
+      type="button"
+      className="ph-offer-name"
+      onClick={() => setOpen(owner)}
+      aria-haspopup="dialog"
+      title={skin.favours[kind].effect}
+    >
+      {skin.favours[kind].glyph} {skin.favours[kind].name} {extra ?? <Face ctx={ctx} i={owner} />}
+    </button>
+  );
   return (
     <div className="ph-on-offer" aria-label="Favours for your move">
       {list.map(({ owner, kind }) => (
         <span key={owner} className="ph-offer">
-          {skin.favours[kind].glyph} {skin.favours[kind].name} <Face ctx={ctx} i={owner} />
+          {name(owner, kind)}
           {v.vote === null && (
             <button
               type="button"
@@ -1248,10 +1326,13 @@ function OnOffer({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
       ))}
       {asked.map(({ owner, kind }) => (
         <span key={`a${owner}`} className="ph-offer asked">
-          {skin.favours[kind].glyph} {skin.favours[kind].name}{" "}
-          <small role="img" aria-label={`asked ${ctx.names[owner]}, waiting`}>
-            ⏳ <Face ctx={ctx} i={owner} />
-          </small>
+          {name(
+            owner,
+            kind,
+            <small role="img" aria-label={`asked ${ctx.names[owner]}, waiting`}>
+              ⏳ <Face ctx={ctx} i={owner} />
+            </small>,
+          )}
           <button
             type="button"
             className="ph-offer-x"
@@ -1262,6 +1343,7 @@ function OnOffer({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
           </button>
         </span>
       ))}
+      {open !== null && <FavourSheet ctx={ctx} owner={open} act={act} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -1783,7 +1865,7 @@ function VoteBar({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: Pah
         <div className="ph-pick-head">
           <b className="ph-turn">🗳️ Your vote</b>
           <span className="ph-pick-what">
-            {mine} in {ctx.short(vote.room)} · a needed yes earns 1 {skin.nouns.points}
+            {mine} in {ctx.short(vote.room)} · a yes the climber takes earns 1 {skin.nouns.points}
           </span>
           <Tip>
             Your yes can be worth more than 1: ask the climber for a gift or a promise on the call before you answer.
@@ -1804,19 +1886,23 @@ function VoteBar({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: Pah
     );
   }
   const tokens = v.players[me]?.tokens ?? [];
-  const bribes = bribeChoices(v, vote, tokens);
+  const enough = yesSoFar(vote) >= vote.need;
+  // With enough yes in, a paid neutral only costs a token.
+  const bribes = enough ? [] : bribeChoices(v, vote, tokens);
   return (
     <div className="ph-moves" role="group" aria-label="Your climb">
       <div className="ph-pick-head">
         <b className="ph-turn">↑ Your climb</b>
         <span className="ph-pick-what">
-          {yesSoFar(vote)} of {vote.need} yes · ask on the call
+          {yesSoFar(vote)} of {vote.need} yes{enough ? "" : " · ask on the call"}
         </span>
         <Tip>
-          Each needed yes earns its giver 1 {skin.nouns.points}; offer more on the call to win a vote. An{" "}
-          {skin.nouns.neutral} always says yes for a token of {v.layout.minBribe} or more, but that token is gone.
+          Each yes you take earns its giver 1 {skin.nouns.points}; offer more on the call to win a vote. Once enough yes
+          are in, take the ones you need and go: no need to wait for the rest. An {skin.nouns.neutral} always says yes
+          for a token of {v.layout.minBribe} or more, but that token is gone.
         </Tip>
       </div>
+      {enough && <TakeVotes key={`${vote.answers.join(",")}:${vote.bribed}`} ctx={ctx} vote={vote} act={act} />}
       <div className="ph-move-grid">
         {bribes.map((t) => (
           <button key={t} className="btn ph-move" onClick={() => act({ type: "bribe", token: t })}>
@@ -1835,31 +1921,207 @@ function VoteBar({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: Pah
   );
 }
 
+/** Yes from other players the climb still needs, past the mover's own and the paid neutrals. */
+function stillNeeded(vote: PahunchVote, mover: number): number {
+  return Math.max(0, vote.need - (vote.answers[mover] ?? 0) - vote.bribed);
+}
+
+/**
+ * With enough yes in, the mover takes exactly the needed ones: a face per voter who said yes,
+ * tap to take (or, for several yes, cycle how many). Starts on the voters in seat order after
+ * the mover, as the vote clock would pick.
+ */
+function TakeVotes({ ctx, vote, act }: { ctx: Ctx; vote: PahunchVote; act: (a: PahunchAction) => void }) {
+  const { v, skin } = ctx;
+  const mover = v.turn;
+  const need = stillNeeded(vote, mover);
+  const n = vote.answers.length;
+  const order = Array.from({ length: n - 1 }, (_, k) => (mover + 1 + k) % n);
+  const givers = order.filter((s) => (vote.answers[s] ?? 0) > 0);
+  const [take, setTake] = useState<number[]>(() => {
+    const out = Array<number>(n).fill(0);
+    let left = need;
+    for (const s of givers) {
+      out[s] = Math.min(vote.answers[s] ?? 0, left);
+      left -= out[s];
+    }
+    return out;
+  });
+  const sum = take.reduce((a, b) => a + b, 0);
+  const cycle = (s: number) => setTake(take.map((t, i) => (i === s ? (t + 1) % ((vote.answers[s] ?? 0) + 1) : t)));
+  const left = votersLeft(v, vote).length;
+  return (
+    <div className="ph-take">
+      <p className="ph-take-head">
+        <b>
+          ✓ {sum}/{need}
+        </b>{" "}
+        <small>{left > 0 ? `take them now, or wait for ${left} more` : "pick whose yes earn the 1s"}</small>
+      </p>
+      <div className="ph-take-who" role="group" aria-label="Whose yes to take">
+        {givers.map((s) => {
+          const given = vote.answers[s] ?? 0;
+          return (
+            <button
+              key={s}
+              type="button"
+              className={`ph-give-who${take[s] > 0 ? " on" : ""}`}
+              style={{ ["--seat" as string]: skin.seats[s % skin.seats.length].color }}
+              aria-pressed={take[s] > 0}
+              aria-label={`${ctx.names[s]}: take ${take[s]} of ${given} yes`}
+              onClick={() => cycle(s)}
+            >
+              <span className="ph-face">
+                <Avatar code={ctx.looks[s] ?? ""} name={ctx.names[s]} />
+              </span>
+              <span className="ph-give-name">✓ {given > 1 ? `${take[s]}/${given}` : take[s] > 0 ? "+1 🪙" : "—"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        className="btn ph-move ph-take-go"
+        disabled={sum !== need}
+        onClick={() => act({ type: "take", votes: take })}
+      >
+        <b>↑ Go up</b>
+        <small>{sum === need ? "the picked yes earn 1 each" : `take exactly ${need}`}</small>
+      </button>
+    </div>
+  );
+}
+
 // ---- tokens ----
 
-function GiftSheet({
+/** What a deal sheet opens on: give, ask for tokens, or offer a swap; to whom; a gift's count. */
+export type DealMode = "give" | "ask" | "swap";
+export interface DealInit {
+  mode: DealMode;
+  to?: number;
+  count?: number;
+}
+
+/** Values a token can have: what a swap may ask for. */
+const VALUES = [1, 2, 3, 4, 5];
+/** The most tokens one ask names (`MAX_PLEA` in the rules). */
+const MAX_PLEA = 9;
+
+const tokensWord = (n: number) => (n === 1 ? "1 token" : `${n} tokens`);
+
+function Chips({ values, onTap, label }: { values: number[]; onTap?: (k: number) => void; label: string }) {
+  return (
+    <span className="ph-tokens" role="group" aria-label={label}>
+      {values.map((t, k) =>
+        onTap ? (
+          <button
+            key={k}
+            type="button"
+            className={`ph-chip v${Math.min(t, 5)}`}
+            onClick={() => onTap(k)}
+            aria-label={`Remove ${t}`}
+          >
+            {t}
+          </button>
+        ) : (
+          <span key={k} className={`ph-chip v${Math.min(t, 5)}`}>
+            {t === 0 ? "?" : t}
+          </span>
+        ),
+      )}
+    </span>
+  );
+}
+
+/**
+ * Tokens between players: give them, ask for some (a count: values are hidden), or offer a swap
+ * (any deal; the supply never makes change). Opened on a mode; the tabs switch it.
+ */
+function DealSheet({
   ctx,
-  onGive,
+  init,
+  act,
   onClose,
 }: {
   ctx: Ctx;
-  onGive: (to: number, tokens: number[]) => void;
+  init: DealInit;
+  act: (a: PahunchAction) => void;
   onClose: () => void;
 }) {
   const { v, skin, me, names } = ctx;
   const tokens = (me !== null && v.players[me]?.tokens) || [];
   const others = names.flatMap((_, i) => (i === me ? [] : [i]));
-  const [to, setTo] = useState(others[0] ?? 0);
+  const [mode, setMode] = useState<DealMode>(init.mode);
+  const [to, setTo] = useState(init.to ?? others[0] ?? 0);
   // Picks are places in `tokens`; a token arriving re-sorts them, so picks hold only for the
-  // tokens they were made on.
+  // tokens they were made on. A gift for an ask starts on the smallest tokens asked for.
   const held = tokens.join(",");
-  const [pick, setPick] = useState<{ held: string; ks: number[] }>({ held, ks: [] });
+  const [pick, setPick] = useState<{ held: string; ks: number[] }>({
+    held,
+    ks: tokens.slice(0, init.count ?? 0).map((_, k) => k),
+  });
   const picked = pick.held === held ? pick.ks : [];
   const setPicked = (ks: number[]) => setPick({ held, ks });
   const chosen = picked.map((k) => tokens[k]);
+  const [count, setCount] = useState(1);
+  const [want, setWant] = useState<number[]>([]);
+  const done = (a: PahunchAction) => {
+    act(a);
+    onClose();
+  };
+  const { points } = skin.nouns;
+  const name = names[to];
+  const myPlea = v.pleas.find((p) => p.by === me && p.of === to);
+  const myOffer = v.offers.find((o) => o.by === me && o.to === to);
+  const theirPlea = v.pleas.find((p) => p.by === to && p.of === me);
+  const modes: { m: DealMode; label: string }[] = [
+    { m: "give", label: "🎁 Give" },
+    { m: "ask", label: "🙏 Ask" },
+    { m: "swap", label: "⇄ Swap" },
+  ];
+  const lead = {
+    give: `Hand ${points} tokens over. A gift is final.`,
+    ask: `Ask a player for ${points} tokens.`,
+    swap: "Offer your tokens for theirs.",
+  }[mode];
+  const yours = (
+    <div className="ph-tokens" role="group" aria-label={mode === "give" ? "Tokens to give" : "Your tokens to swap"}>
+      {tokens.map((t, k) => (
+        <button
+          key={k}
+          type="button"
+          className={`ph-chip v${Math.min(t, 5)} ${picked.includes(k) ? "on" : ""}`}
+          aria-pressed={picked.includes(k)}
+          onClick={() => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : [...picked, k])}
+        >
+          {t}
+        </button>
+      ))}
+      {tokens.length === 0 && <span className="muted">You have no tokens.</span>}
+    </div>
+  );
+  const recall = (deal: "plea" | "offer") => (
+    <button type="button" className="btn" onClick={() => done({ type: "recall", to, deal })}>
+      ↩ Take it back
+    </button>
+  );
   return (
-    <Sheet title={`🎁 Give ${skin.nouns.points}`} onClose={onClose}>
-      <div className="ph-give-to" role="group" aria-label="Give to">
+    <Sheet title="🪙 Tokens" label={`${points} between players`} onClose={onClose}>
+      <div className="ph-deal-modes" role="group" aria-label="Kind of deal">
+        {modes.map(({ m, label }) => (
+          <button
+            key={m}
+            type="button"
+            className={`btn ${m === mode ? "on" : ""}`}
+            aria-pressed={m === mode}
+            onClick={() => setMode(m)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="ph-sheet-lead">{lead}</p>
+      <div className="ph-give-to" role="group" aria-label="With">
         {others.map((i) => (
           <button
             key={i}
@@ -1876,33 +2138,276 @@ function GiftSheet({
           </button>
         ))}
       </div>
-      <div className="ph-tokens" role="group" aria-label="Tokens to give">
-        {tokens.map((t, k) => (
-          <button
-            key={k}
-            className={`ph-chip v${Math.min(t, 5)} ${picked.includes(k) ? "on" : ""}`}
-            aria-pressed={picked.includes(k)}
-            onClick={() => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : [...picked, k])}
-          >
-            {t}
-          </button>
+      {mode === "give" && (
+        <>
+          {theirPlea && (
+            <p className="ph-deal-note">
+              🙏 <Face ctx={ctx} i={to} /> {name} asked you for {tokensWord(theirPlea.count)}.
+            </p>
+          )}
+          {yours}
+          <div className="row">
+            <button
+              type="button"
+              className="btn primary"
+              disabled={chosen.length === 0}
+              onClick={() => done({ type: "give", to, tokens: chosen })}
+            >
+              {chosen.length === 0
+                ? "Pick tokens to give"
+                : `🎁 Give ${tokensWord(chosen.length)} (${score(chosen)} ${points}) to ${name}`}
+            </button>
+          </div>
+        </>
+      )}
+      {mode === "ask" &&
+        (myPlea ? (
+          <div className="row">
+            <p className="ph-deal-note">
+              ⏳ You asked {name} for {tokensWord(myPlea.count)}.
+            </p>
+            {recall("plea")}
+          </div>
+        ) : (
+          <>
+            <div className="ph-stepper" role="group" aria-label="How many tokens">
+              <button
+                type="button"
+                className="btn"
+                disabled={count <= 1}
+                onClick={() => setCount(count - 1)}
+                aria-label="One fewer"
+              >
+                −
+              </button>
+              <b aria-live="polite">🪙 × {count}</b>
+              <button
+                type="button"
+                className="btn"
+                disabled={count >= MAX_PLEA}
+                onClick={() => setCount(count + 1)}
+                aria-label="One more"
+              >
+                +
+              </button>
+            </div>
+            <div className="row">
+              <button type="button" className="btn primary" onClick={() => done({ type: "plead", of: to, count })}>
+                🙏 Ask {name} for {tokensWord(count)}
+              </button>
+            </div>
+          </>
         ))}
-      </div>
-      <div className="row">
-        <button className="btn primary" disabled={chosen.length === 0} onClick={() => onGive(to, chosen)}>
-          {chosen.length === 0
-            ? "Pick tokens to give"
-            : `🎁 Give ${chosen.length === 1 ? "1 token" : `${chosen.length} tokens`} (${score(chosen)} ${skin.nouns.points}) to ${names[to]}`}
-        </button>
-        <button className="btn" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
+      {mode === "swap" &&
+        (myOffer ? (
+          <div className="row">
+            <p className="ph-deal-note">
+              ⏳ <Chips values={myOffer.give} label="You give" /> ⇄ <Chips values={myOffer.want} label="You get" />
+            </p>
+            {recall("offer")}
+          </div>
+        ) : (
+          <>
+            <h3 className="ph-deal-h">↗ You give</h3>
+            {yours}
+            <h3 className="ph-deal-h">↙ You get</h3>
+            <div className="ph-tokens" role="group" aria-label="Add a token you want">
+              {VALUES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={`ph-chip v${t} ph-want-add`}
+                  onClick={() => setWant([...want, t].sort((a, b) => a - b))}
+                  aria-label={`Add a ${t}`}
+                >
+                  +{t}
+                </button>
+              ))}
+            </div>
+            <p className="ph-deal-note">
+              {want.length > 0 ? (
+                <Chips values={want} label="You want" onTap={(k) => setWant(want.filter((_, x) => x !== k))} />
+              ) : (
+                <span className="muted">Tap the values you want.</span>
+              )}
+            </p>
+            <div className="row">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={chosen.length === 0 || want.length === 0}
+                onClick={() => done({ type: "offer", to, give: chosen, want })}
+              >
+                {chosen.length === 0 || want.length === 0
+                  ? "Pick both sides"
+                  : `⇄ Offer ${name} ${chosen.join("+")} for ${want.join("+")}`}
+              </button>
+            </div>
+          </>
+        ))}
       <p className="muted small">
-        A gift is final and can be made at any time. The others see that you gave, and how many tokens, but not their
-        value.
+        {
+          {
+            give: "Any time. The others see that you gave, and how many tokens, but not their value.",
+            ask: "Any time. Everyone sees the ask and its count. They answer with a gift (they pick which tokens) or say no; you can take it back until then.",
+            swap: "Any time, any deal: equal value or not. Only you two see the values; the others see the counts. The supply never makes change.",
+          }[mode]
+        }
       </p>
     </Sheet>
+  );
+}
+
+/** Asks and swap offers waiting on you: a gift or yes, or no. */
+function DealBar({
+  ctx,
+  act,
+  onGive,
+}: {
+  ctx: Ctx;
+  act: (a: PahunchAction) => void;
+  onGive: (init: DealInit) => void;
+}) {
+  const { v, me } = ctx;
+  if (me === null) return null;
+  const mine = v.players[me]?.tokens ?? [];
+  const has = (want: number[]) => {
+    const left = [...mine];
+    return want.every((t) => {
+      const at = left.indexOf(t);
+      if (at < 0) return false;
+      left.splice(at, 1);
+      return true;
+    });
+  };
+  const pleas = v.pleas.filter((p) => p.of === me);
+  const offers = v.offers.filter((o) => o.to === me);
+  if (pleas.length === 0 && offers.length === 0) return null;
+  return (
+    <>
+      {pleas.map((p) => (
+        <div key={`p${p.by}`} className="ph-moves ph-request" role="group" aria-label={`${ctx.names[p.by]} asks`}>
+          <div className="ph-pick-head">
+            <b className="ph-turn">🙏 Asked</b>
+            <span className="ph-pick-what">
+              <Face ctx={ctx} i={p.by} /> {ctx.names[p.by]} asks you for 🪙 × {p.count}
+            </span>
+          </div>
+          <div className="ph-move-grid">
+            <button
+              type="button"
+              className="btn ph-move"
+              disabled={mine.length === 0}
+              onClick={() => onGive({ mode: "give", to: p.by, count: p.count })}
+            >
+              <b>🎁 Give…</b>
+              <small>{mine.length === 0 ? "you have none" : "you pick which"}</small>
+            </button>
+            <button
+              type="button"
+              className="btn ph-move"
+              onClick={() => act({ type: "refuse", from: p.by, deal: "plea" })}
+            >
+              <b>✗ No</b>
+              <small>give nothing</small>
+            </button>
+          </div>
+        </div>
+      ))}
+      {offers.map((o) => {
+        const can = has(o.want);
+        return (
+          <div
+            key={`o${o.by}`}
+            className="ph-moves ph-request"
+            role="group"
+            aria-label={`${ctx.names[o.by]} offers a swap`}
+          >
+            <div className="ph-pick-head">
+              <b className="ph-turn">⇄ Swap</b>
+              <span className="ph-pick-what ph-swap-what">
+                <Face ctx={ctx} i={o.by} /> <Chips values={o.give} label="You get" /> ⇄ you{" "}
+                <Chips values={o.want} label="You give" />
+              </span>
+            </div>
+            <div className="ph-move-grid">
+              <button
+                type="button"
+                className="btn ph-move"
+                disabled={!can}
+                onClick={() => act({ type: "accept", from: o.by })}
+              >
+                <b>✓ Swap</b>
+                <small>{can ? `+${score(o.give)} −${score(o.want)}` : "you lack those tokens"}</small>
+              </button>
+              <button
+                type="button"
+                className="btn ph-move"
+                onClick={() => act({ type: "refuse", from: o.by, deal: "offer" })}
+              >
+                <b>✗ No</b>
+                <small>keep yours</small>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Your open asks and offers, each with a ✕ to take it back; tap one to see it. */
+function MyDeals({ ctx, act, onOpen }: { ctx: Ctx; act: (a: PahunchAction) => void; onOpen: (i: DealInit) => void }) {
+  const { v, me } = ctx;
+  const pleas = v.pleas.filter((p) => p.by === me);
+  const offers = v.offers.filter((o) => o.by === me);
+  if (pleas.length === 0 && offers.length === 0) return null;
+  const chip = (key: string, to: number, mode: DealMode, deal: "plea" | "offer", body: ReactNode, label: string) => (
+    <span key={key} className="ph-offer asked">
+      <button
+        type="button"
+        className="ph-offer-name"
+        onClick={() => onOpen({ mode, to })}
+        aria-haspopup="dialog"
+        aria-label={label}
+      >
+        {body} ⏳ <Face ctx={ctx} i={to} />
+      </button>
+      <button
+        type="button"
+        className="ph-offer-x"
+        aria-label={`Take back: ${label}`}
+        onClick={() => act({ type: "recall", to, deal })}
+      >
+        ✕
+      </button>
+    </span>
+  );
+  return (
+    <div className="ph-on-offer" aria-label="Your open deals">
+      {pleas.map((p) =>
+        chip(
+          `p${p.of}`,
+          p.of,
+          "ask",
+          "plea",
+          `🙏 🪙 × ${p.count}`,
+          `You asked ${ctx.names[p.of]} for ${tokensWord(p.count)}`,
+        ),
+      )}
+      {offers.map((o) =>
+        chip(
+          `o${o.to}`,
+          o.to,
+          "swap",
+          "offer",
+          <>
+            ⇄ {o.give.join("+")} → {o.want.join("+")}
+          </>,
+          `You offered ${ctx.names[o.to]} ${o.give.join(" + ")} for ${o.want.join(" + ")}`,
+        ),
+      )}
+    </div>
   );
 }
 
@@ -2007,6 +2512,7 @@ export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {
   const paths = v.layout.paths;
   const { blocker, neutral } = skin.nouns;
   const route = (p: number) => `the ${ctx.room(paths[p].from)} to the ${ctx.room(paths[p].to)}`;
+  const them = (i: number) => (i === ctx.me ? "you" : ctx.names[i]);
   switch (e.t) {
     case "start":
       return `${who(e.first)} ${e.first === ctx.me ? "go" : "goes"} first.`;
@@ -2058,7 +2564,17 @@ export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {
     case "carry":
       return `${who(e.p)} brought ${e.who === null ? `an ${neutral}` : e.who === e.p ? `another ${skin.nouns.climber}` : e.who === ctx.me ? "you" : ctx.names[e.who]} along, from ${route(e.path)}.`;
     case "gift":
-      return `${who(e.from)} gave ${e.to === ctx.me ? "you" : ctx.names[e.to]} ${e.count} ${e.count === 1 ? "token" : "tokens"}.`;
+      return `${who(e.from)} gave ${them(e.to)} ${tokensWord(e.count)}.`;
+    case "plea":
+      return `${who(e.p)} asked ${them(e.of)} for ${tokensWord(e.count)}.`;
+    case "offer":
+      return `${who(e.p)} offered ${them(e.to)} a swap: ${tokensWord(e.give)} for ${e.want}.`;
+    case "refuse":
+      return `${who(e.p)} said no to ${e.to === ctx.me ? "your" : `${ctx.names[e.to]}’s`} ${e.deal === "plea" ? "ask" : "swap"}.`;
+    case "recall":
+      return `${who(e.p)} took back ${e.p === ctx.me ? "your" : "their"} ${e.deal === "plea" ? "ask to" : "swap with"} ${them(e.to)}.`;
+    case "trade":
+      return `${who(e.from)} swapped ${tokensWord(e.gave)} for ${e.got} of ${e.to === ctx.me ? "yours" : `${ctx.names[e.to]}’s`}.`;
     case "skip":
       return `${who(e.p)} ${e.p === ctx.me ? "were" : "was"} away: a random move was made.`;
     case "end":

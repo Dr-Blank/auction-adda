@@ -43,7 +43,10 @@ export function Rules({ skin, n, options }: { skin: PahunchSkin; n?: number; opt
         <li>
           Your own {climbers} in the room say yes. Every other player answers for theirs: yes with some of them, or no.
         </li>
-        <li>Each yes the climb needed earns the player who gave it 1 {points}.</li>
+        <li>
+          Each yes the climb needed earns the player who gave it 1 {points}. Once enough yes are in, you take the ones
+          you need and go, without waiting for the rest; with more yes than needed, you pick whose earn the {points}.
+        </li>
         <li>
           An {neutral} says yes only for {bribe}: one of your tokens worth 2 or more, and it leaves the game. Two 1s
           will not do, and there is no change.

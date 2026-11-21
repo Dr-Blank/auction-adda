@@ -17,8 +17,8 @@
 )]
 
 use pahunch::{
-    Action, Bonus, Carry, Coin, FavourKind, LogEntry, Options, Pahunch, State, apply_action, apply_skip, boards,
-    end_early, favour_pay, reseat, view_for,
+    Action, Bonus, Carry, Coin, Deal, FavourKind, LogEntry, Options, Pahunch, Plea, State, apply_action, apply_skip,
+    boards, end_early, favour_pay, reseat, view_for,
 };
 
 use game::Game;
@@ -278,6 +278,125 @@ fn only_the_needed_yes_earn_a_token() {
     assert_eq!(u.rooms[8], vec![Some(0)]);
     assert!(u.log.contains(&LogEntry::Reward { p: 1, ones: 2 }));
     assert!(!u.log.iter().any(|e| matches!(e, LogEntry::Reward { p: 2, .. })));
+}
+
+/// Room 1 seats 5 (leaving takes 3, so 2 from the others): the mover has 1 there, seat 1 has 2,
+/// seats 2 and 3 one each.
+fn crowded_vote() -> State {
+    let mut s = fresh(5);
+    s.rooms[1] = vec![Some(0), Some(1), Some(1), Some(2), Some(3)];
+    act(&s, 0, Action::climb(7))
+}
+
+#[test]
+fn with_enough_yes_the_mover_takes_the_needed_ones_without_waiting() {
+    let t = crowded_vote();
+    let u = act(&t, 1, Action::Vote { yes: 2 });
+    // Enough: the climb waits for the mover, who may take them now; seats 2 and 3 may still answer.
+    assert!(u.vote.is_some());
+    assert_eq!(Pahunch::pending(&u), vec![2, 3, 0]);
+    assert_eq!(
+        refused(
+            &u,
+            0,
+            Action::Take {
+                votes: vec![0, 1, 0, 0, 0]
+            }
+        ),
+        "Take exactly the 2 yes votes the climb still needs"
+    );
+    assert_eq!(
+        refused(
+            &u,
+            0,
+            Action::Take {
+                votes: vec![0, 0, 1, 1, 0]
+            }
+        ),
+        "Take only yes votes that were given"
+    );
+    assert_eq!(
+        refused(
+            &u,
+            1,
+            Action::Take {
+                votes: vec![0, 2, 0, 0, 0]
+            }
+        ),
+        "Only the climber picks whose votes count"
+    );
+    let w = act(
+        &u,
+        0,
+        Action::Take {
+            votes: vec![0, 2, 0, 0, 0],
+        },
+    );
+    assert_eq!(w.rooms[8], vec![Some(0)]);
+    assert!(w.log.contains(&LogEntry::Reward { p: 1, ones: 2 }));
+    assert_eq!(w.turn, 1);
+}
+
+#[test]
+fn the_mover_decides_who_is_paid_when_more_yes_came_in() {
+    let t = crowded_vote();
+    let u = act(&act(&t, 1, Action::Vote { yes: 2 }), 2, Action::Vote { yes: 1 });
+    let u = act(&u, 3, Action::Vote { yes: 1 });
+    // Four yes for two needed, from three players: the mover picks.
+    assert!(u.vote.is_some());
+    assert_eq!(Pahunch::pending(&u), vec![0]);
+    let w = act(
+        &u,
+        0,
+        Action::Take {
+            votes: vec![0, 0, 1, 1, 0],
+        },
+    );
+    assert!(w.log.contains(&LogEntry::Reward { p: 2, ones: 1 }));
+    assert!(w.log.contains(&LogEntry::Reward { p: 3, ones: 1 }));
+    assert!(!w.log.iter().any(|e| matches!(e, LogEntry::Reward { p: 1, .. })));
+}
+
+#[test]
+fn without_a_choice_the_vote_passes_by_itself() {
+    let t = crowded_vote();
+    // Exactly the needed yes from two players, everyone answered.
+    let u = act(
+        &act(&act(&t, 1, Action::Vote { yes: 1 }), 2, Action::Vote { yes: 1 }),
+        3,
+        Action::Vote { yes: 0 },
+    );
+    assert!(u.vote.is_none());
+    assert!(u.log.contains(&LogEntry::Reward { p: 1, ones: 1 }));
+    assert!(u.log.contains(&LogEntry::Reward { p: 2, ones: 1 }));
+    // Spare yes from one player only: they are paid for the needed ones.
+    let u = act(
+        &act(&act(&t, 2, Action::Vote { yes: 0 }), 3, Action::Vote { yes: 0 }),
+        1,
+        Action::Vote { yes: 2 },
+    );
+    assert!(u.vote.is_none());
+    assert!(u.log.contains(&LogEntry::Reward { p: 1, ones: 2 }));
+}
+
+#[test]
+fn the_clock_takes_the_needed_yes_in_seat_order() {
+    let t = crowded_vote();
+    let u = act(&act(&t, 1, Action::Vote { yes: 2 }), 2, Action::Vote { yes: 1 });
+    let w = Pahunch::time_up(&u).unwrap();
+    assert!(w.vote.is_none());
+    assert!(w.log.contains(&LogEntry::Vote { p: 3, yes: 0, of: 1 }));
+    assert!(w.log.contains(&LogEntry::Reward { p: 1, ones: 2 }));
+    assert!(!w.log.iter().any(|e| matches!(e, LogEntry::Reward { p: 2, .. })));
+}
+
+#[test]
+fn a_bot_mover_takes_the_needed_yes() {
+    use rand::SeedableRng;
+    let u = act(&crowded_vote(), 1, Action::Vote { yes: 2 });
+    let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+    let a = pahunch::choose_action(&view_for(&u, Some(0)), &mut rng).unwrap();
+    assert!(act(&u, 0, a).vote.is_none());
 }
 
 #[test]
@@ -1013,7 +1132,16 @@ fn a_carry_after_a_vote_waits_for_the_vote() {
     );
     let failed = act(&act(&t, 1, Action::Vote { yes: 0 }), 2, Action::Vote { yes: 0 });
     assert_eq!((failed.players[3].uses, failed.rooms[3].len()), (2, 3));
-    let passed = act(&t, 1, Action::Vote { yes: 1 });
+    // Enough yes with seat 2 still to answer: the mover takes seat 1's without waiting.
+    let enough = act(&t, 1, Action::Vote { yes: 1 });
+    assert!(enough.vote.is_some());
+    let passed = act(
+        &enough,
+        0,
+        Action::Take {
+            votes: vec![0, 1, 0, 0],
+        },
+    );
     assert_eq!(passed.rooms[9], vec![Some(0), Some(2)]);
     assert_eq!(passed.players[3].uses, 1);
 }
@@ -1053,7 +1181,11 @@ fn reseating_moves_favours_offers_and_carries() {
     assert_eq!(r.lent, vec![2]);
     assert_eq!(r.players[2].favour, Some(FavourKind::Carry));
     assert_eq!(r.vote.as_ref().unwrap().carry, Some(Carry::Seat { seat: 0 }));
-    let done = act(&t, 1, Action::Vote { yes: 1 });
+    let done = act(
+        &act(&t, 1, Action::Vote { yes: 1 }),
+        0,
+        Action::Take { votes: vec![0, 1, 0] },
+    );
     let r = reseat(&done, &[1, 2, 0]).unwrap();
     assert!(r.log.contains(&LogEntry::Favour {
         owner: 2,
@@ -1207,6 +1339,266 @@ fn reseating_moves_requests() {
     assert!(r.log.contains(&LogEntry::Request { p: 1, owner: 2 }));
     let r = reseat(&act(&t, 1, Action::Decline), &[1, 2, 0]).unwrap();
     assert!(r.log.contains(&LogEntry::Decline { p: 2 }));
+}
+
+fn plead(of: u8, count: u8) -> Action {
+    Action::Plead { of, count }
+}
+
+#[test]
+fn an_ask_for_tokens_is_answered_by_any_gift_or_a_no() {
+    let mut s = fresh(4);
+    s.players[2].tokens = vec![1, 3, 4];
+    // Off turn, like a gift: seat 1 asks seat 2 for two tokens.
+    let t = act(&s, 1, plead(2, 2));
+    assert_eq!(t.pleas, vec![Plea { by: 1, of: 2, count: 2 }]);
+    assert_eq!(t.log.last(), Some(&LogEntry::Plea { p: 1, of: 2, count: 2 }));
+    assert_eq!(t.turn, 0, "an ask is not a turn");
+    assert!(Pahunch::pending(&t).contains(&2), "the player asked owes an answer");
+    assert_eq!(refused(&t, 1, plead(2, 1)), "You asked them already");
+    // Yes: a gift of any count closes it.
+    let yes = act(&t, 2, Action::Give { to: 1, tokens: vec![4] });
+    assert!(yes.pleas.is_empty());
+    assert!(!Pahunch::pending(&yes).contains(&2));
+    // A gift to someone else leaves it open.
+    let other = act(&t, 2, Action::Give { to: 3, tokens: vec![4] });
+    assert_eq!(other.pleas.len(), 1);
+    // No.
+    let no = act(
+        &t,
+        2,
+        Action::Refuse {
+            from: 1,
+            deal: Deal::Plea,
+        },
+    );
+    assert!(no.pleas.is_empty());
+    assert_eq!(
+        no.log.last(),
+        Some(&LogEntry::Refuse {
+            p: 2,
+            to: 1,
+            deal: Deal::Plea
+        })
+    );
+    // Taken back.
+    let back = act(
+        &t,
+        1,
+        Action::Recall {
+            to: 2,
+            deal: Deal::Plea,
+        },
+    );
+    assert!(back.pleas.is_empty());
+    assert_eq!(
+        refused(
+            &back,
+            1,
+            Action::Recall {
+                to: 2,
+                deal: Deal::Plea
+            }
+        ),
+        "You opened no such deal with them"
+    );
+    assert_eq!(
+        refused(
+            &t,
+            3,
+            Action::Refuse {
+                from: 1,
+                deal: Deal::Plea
+            }
+        ),
+        "They opened no such deal with you"
+    );
+}
+
+#[test]
+fn an_ask_names_a_count_for_another_player() {
+    let s = fresh(3);
+    assert_eq!(refused(&s, 1, plead(1, 1)), "Ask another player");
+    assert_eq!(refused(&s, 1, plead(3, 1)), "Ask another player");
+    assert_eq!(refused(&s, 1, plead(2, 0)), "Ask for 1 to 9 tokens");
+    assert_eq!(refused(&s, 1, plead(2, 10)), "Ask for 1 to 9 tokens");
+    // Each way is its own ask.
+    let t = act(&act(&s, 1, plead(2, 1)), 2, plead(1, 3));
+    assert_eq!(t.pleas.len(), 2);
+}
+
+fn swap(to: u8, give: &[u8], want: &[u8]) -> Action {
+    Action::Offer {
+        to,
+        give: give.to_vec(),
+        want: want.to_vec(),
+    }
+}
+
+#[test]
+fn a_swap_offer_is_any_deal_the_other_takes_or_refuses() {
+    // Change between players: seat 1 breaks a 4 into 2 + 2 with seat 3, off turn.
+    let mut s = fresh(4);
+    s.players[1].tokens = vec![4];
+    s.players[3].tokens = vec![1, 2, 2];
+    let supply = s.supply;
+    let t = act(&s, 1, swap(3, &[4], &[2, 2]));
+    assert_eq!(t.offers.len(), 1);
+    assert_eq!(
+        t.log.last(),
+        Some(&LogEntry::Offer {
+            p: 1,
+            to: 3,
+            give: 1,
+            want: 2
+        })
+    );
+    assert!(Pahunch::pending(&t).contains(&3));
+    assert_eq!(
+        refused(&t, 1, swap(3, &[4], &[1])),
+        "You have an offer open with them already"
+    );
+    let u = act(&t, 3, Action::Accept { from: 1 });
+    assert_eq!(u.players[1].tokens, vec![2, 2]);
+    assert_eq!(u.players[3].tokens, vec![1, 4]);
+    assert!(u.offers.is_empty());
+    assert_eq!(u.supply, supply, "never with the supply");
+    assert_eq!(
+        u.log.last(),
+        Some(&LogEntry::Trade {
+            from: 1,
+            to: 3,
+            gave: 1,
+            got: 2
+        })
+    );
+    assert_eq!(u.turn, 0, "a swap is not a turn");
+    // Unequal value is fine: a 4 for a 1.
+    let v = act(&act(&s, 1, swap(3, &[4], &[1])), 3, Action::Accept { from: 1 });
+    assert_eq!(v.players[1].tokens, vec![1]);
+    // Refused.
+    let no = act(
+        &t,
+        3,
+        Action::Refuse {
+            from: 1,
+            deal: Deal::Offer,
+        },
+    );
+    assert!(no.offers.is_empty() && no.players[1].tokens == vec![4]);
+}
+
+#[test]
+fn a_swap_needs_the_tokens_on_both_sides() {
+    let mut s = fresh(3);
+    s.players[1].tokens = vec![4];
+    s.players[2].tokens = vec![1, 1];
+    assert_eq!(refused(&s, 1, swap(2, &[3], &[1])), "You do not have those tokens");
+    assert_eq!(refused(&s, 1, swap(2, &[], &[1])), "A swap needs tokens both ways");
+    assert_eq!(refused(&s, 1, swap(2, &[4], &[])), "A swap needs tokens both ways");
+    assert_eq!(refused(&s, 1, swap(2, &[4], &[0])), "No token is worth 0");
+    assert_eq!(refused(&s, 1, swap(1, &[4], &[1])), "Offer to another player");
+    // Seat 2 lacks a 3.
+    let t = act(&s, 1, swap(2, &[4], &[3]));
+    assert_eq!(
+        refused(&t, 2, Action::Accept { from: 1 }),
+        "You do not have the tokens they want"
+    );
+    // Seat 1 gave the 4 away meanwhile: the offer ends, as taken back, and nobody waits on it.
+    let t = act(&s, 1, swap(2, &[4], &[1]));
+    let gone = act(&t, 1, Action::Give { to: 0, tokens: vec![4] });
+    assert!(gone.offers.is_empty());
+    assert_eq!(
+        gone.log.last(),
+        Some(&LogEntry::Recall {
+            p: 1,
+            to: 2,
+            deal: Deal::Offer
+        })
+    );
+    assert!(!Pahunch::pending(&gone).contains(&2));
+    assert_eq!(refused(&gone, 2, Action::Accept { from: 1 }), "They offer you no swap");
+    assert_eq!(refused(&s, 2, Action::Accept { from: 1 }), "They offer you no swap");
+}
+
+#[test]
+fn others_see_a_swap_but_not_its_values() {
+    let mut s = fresh(3);
+    s.players[1].tokens = vec![4];
+    let t = act(&s, 1, swap(2, &[4], &[2, 2]));
+    for seat in [1, 2] {
+        assert_eq!(view_for(&t, Some(seat)).offers[0].give, vec![4]);
+    }
+    for seat in [Some(0), None] {
+        let o = &view_for(&t, seat).offers[0];
+        assert_eq!((o.give.clone(), o.want.clone()), (vec![0], vec![0, 0]));
+    }
+    assert_eq!(view_for(&t, Some(0)).pleas, t.pleas);
+}
+
+#[test]
+fn deals_outlast_the_turn_but_not_the_game() {
+    let mut s = fresh(3);
+    s.rooms[0] = vec![Some(0)];
+    let t = act(&act(&s, 1, plead(2, 1)), 1, swap(2, &[1], &[1]));
+    let u = act(&t, 0, Action::climb(0));
+    assert_ne!(u.turn, 0);
+    assert_eq!((u.pleas.len(), u.offers.len()), (1, 1));
+    let over = end_early(&t, 0).unwrap();
+    assert!(over.pleas.is_empty() && over.offers.is_empty());
+}
+
+#[test]
+fn a_skipped_player_refuses_deals_and_a_bot_answers_either_way() {
+    use rand::SeedableRng;
+    let mut s = fresh(3);
+    s.players[2].tokens = vec![1, 2];
+    let t = act(&act(&s, 1, plead(2, 1)), 1, swap(2, &[1], &[2]));
+    let once = apply_skip(&t, 2).unwrap();
+    assert!(once.pleas.is_empty() && once.offers.len() == 1);
+    let twice = apply_skip(&once, 2).unwrap();
+    assert!(twice.offers.is_empty());
+    assert!(!Pahunch::pending(&twice).contains(&2));
+    let mut answers = std::collections::HashSet::new();
+    for seed in 0..30 {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        for state in [&t, &once] {
+            let a = pahunch::choose_action(&view_for(state, Some(2)), &mut rng).unwrap();
+            act(state, 2, a.clone());
+            answers.insert(std::mem::discriminant(&a));
+        }
+    }
+    assert_eq!(answers.len(), 3, "give, accept and refuse");
+}
+
+#[test]
+fn a_swap_can_end_a_vote_that_lost_its_bribe() {
+    let mut s = fresh(3);
+    s.rooms[1] = vec![None, Some(0), Some(0)];
+    s.players[0].tokens = vec![3];
+    let t = act(&s, 0, Action::climb(7));
+    let u = act(&act(&t, 0, swap(1, &[3], &[1])), 1, Action::Accept { from: 0 });
+    assert!(u.vote.is_none());
+    assert!(u.log.contains(&LogEntry::Fail { p: 0 }));
+}
+
+#[test]
+fn reseating_moves_deals() {
+    let mut s = fresh(3);
+    s.players[1].tokens = vec![2];
+    let t = act(&act(&s, 1, plead(2, 1)), 1, swap(0, &[2], &[1]));
+    let r = reseat(&t, &[1, 2, 0]).unwrap();
+    assert_eq!(r.pleas, vec![Plea { by: 2, of: 0, count: 1 }]);
+    assert_eq!((r.offers[0].by, r.offers[0].to), (2, 1));
+    assert!(r.log.contains(&LogEntry::Plea { p: 2, of: 0, count: 1 }));
+    let done = act(&t, 0, Action::Accept { from: 1 });
+    let r = reseat(&done, &[1, 2, 0]).unwrap();
+    assert!(r.log.contains(&LogEntry::Trade {
+        from: 2,
+        to: 1,
+        gave: 1,
+        got: 1
+    }));
 }
 
 /// Random games where the other players lend whenever they like, the mover asks for favours and

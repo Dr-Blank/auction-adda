@@ -108,6 +108,8 @@
     "used": [],
     "asked": [],
     "withdrawn": [],
+    "pleas": [],
+    "offers": [],
     "layout": {
       "board": "full",
       "name": "Full board",
