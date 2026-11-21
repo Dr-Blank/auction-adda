@@ -92,6 +92,25 @@ export function exitSide(layout: PahunchLayout, path: number): -1 | 0 | 1 {
   return 0;
 }
 
+/** How many times two sampled routes cross. */
+const crossings = (a: Pt[], b: Pt[]) => {
+  let n = 0;
+  for (let i = 1; i < a.length; i++) for (let j = 1; j < b.length; j++) if (cross(a[i - 1], a[i], b[j - 1], b[j])) n++;
+  return n;
+};
+
+/** Pairs of paths that plug into the same edge of a room: both leave it the same way, or both enter it. */
+function sharedEdge(layout: PahunchLayout): [number, number][] {
+  const sides = layout.paths.map((_, i) => exitSide(layout, i));
+  const out: [number, number][] = [];
+  layout.paths.forEach((p, i) =>
+    layout.paths.forEach((q, j) => {
+      if (j > i && ((p.from === q.from && sides[i] === sides[j]) || p.to === q.to)) out.push([i, j]);
+    }),
+  );
+  return out;
+}
+
 /** Where each path plugs into its rooms: spread along the edge, in the order of the far end. */
 function ports(layout: PahunchLayout, boxes: Box[]) {
   const out: Pt[] = [];
@@ -150,9 +169,10 @@ const BENDS = [0.3, 0.5, 0.75];
 const PAD = 1.4;
 const COIN = 7;
 
-function build(layout: PahunchLayout): Route[] {
-  const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
-  const { out, inn, sides } = ports(layout, boxes);
+type Ends = ReturnType<typeof ports>;
+
+/** The best route for each path with its ends plugged in at `ends`, and what the whole board costs. */
+function solve(layout: PahunchLayout, boxes: Box[], { out, inn, sides }: Ends) {
   const marks = layout.paths.map((_, i) => layout.paths[i].back || slot(layout, i));
   const cands = layout.paths.map((path, i) => {
     const s = out[i];
@@ -237,7 +257,42 @@ function build(layout: PahunchLayout): Route[] {
     });
     if (!changed) break;
   }
-  return pick.map(({ p, mid }) => {
+  let total = 0;
+  pick.forEach((c, i) => {
+    total += c.base;
+    pick.forEach((o, j) => {
+      if (j !== i) total += between(c, o, i, j);
+    });
+  });
+  return { pick, total };
+}
+
+/**
+ * Sockets go in the order of the far rooms, which is right unless a path must swing round a room
+ * on the way: then two paths from one edge can cross. Each such pair tries its sockets swapped,
+ * kept when the whole board scores better.
+ */
+function build(layout: PahunchLayout): Route[] {
+  const boxes = layout.rooms.map((_, i) => boxOf(layout, i));
+  const ends = ports(layout, boxes);
+  let best = solve(layout, boxes, ends);
+  const pairs = sharedEdge(layout);
+  for (let pass = 0; pass < 3; pass++) {
+    let improved = false;
+    for (const [i, j] of pairs) {
+      if (crossings(best.pick[i].pts, best.pick[j].pts) === 0) continue;
+      const [p, q] = [layout.paths[i], layout.paths[j]];
+      const at = p.from === q.from && ends.sides[i] === ends.sides[j] ? ends.out : ends.inn;
+      [at[i], at[j]] = [at[j], at[i]];
+      const next = solve(layout, boxes, ends);
+      if (next.total < best.total) {
+        best = next;
+        improved = true;
+      } else [at[i], at[j]] = [at[j], at[i]];
+    }
+    if (!improved) break;
+  }
+  return best.pick.map(({ p, mid }) => {
     const f = (n: number) => Math.round(n * 100) / 100;
     // The arrow sits a little short of the end, so the room's edge never covers it.
     let t = 1;
@@ -271,6 +326,12 @@ export function routes(layout: PahunchLayout): Route[] {
     cache.set(key, r);
   }
   return r;
+}
+
+/** Pairs of paths that leave the same edge of a room, or enter the same edge, and cross each other. */
+export function edgeCrossings(layout: PahunchLayout): [number, number][] {
+  const pts = routes(layout).map((r) => sample(r.p));
+  return sharedEdge(layout).filter(([i, j]) => crossings(pts[i], pts[j]) > 0);
 }
 
 /** How many sampled points of each route fall inside a room it does not join (0 = clear). */

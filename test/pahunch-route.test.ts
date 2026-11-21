@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { boxOf, exitSide, overlaps, routes } from "../src/games/pahunch/route.ts";
+import { boxOf, edgeCrossings, exitSide, overlaps, routes } from "../src/games/pahunch/route.ts";
 import type { PahunchLayout } from "../src/generated/index.ts";
 
 interface BoardData {
@@ -55,6 +55,11 @@ describe.each(boards)("board $id", (b) => {
       expect(r.p[3].y).toBeCloseTo(to.y + to.h / 2);
       expect(Math.abs(r.p[3].x - to.x)).toBeLessThanOrEqual(to.w / 2);
     });
+  });
+
+  it("never crosses two paths that leave or enter the same edge of a room", () => {
+    const name = (i: number) => `${b.paths[i].from}→${b.paths[i].to}`;
+    expect(edgeCrossings(layout).map(([i, j]) => `${name(i)} × ${name(j)}`)).toEqual([]);
   });
 
   it("keeps coins apart", () => {
