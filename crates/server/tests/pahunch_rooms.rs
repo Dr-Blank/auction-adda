@@ -230,6 +230,31 @@ fn the_vote_clock_says_no_for_whoever_did_not_answer() {
 }
 
 #[test]
+fn the_vote_clock_is_off_until_the_admin_sets_it() {
+    let mut t = table(3, None);
+    assert_eq!(room(&t.clients[0]).bid_timer_s, 0, "no prefs: off");
+    t.admin(json!({ "type": "start" }));
+    t.start_a_vote();
+    assert_eq!(room(&t.clients[0]).bid_ms_left, None, "a vote waits");
+
+    // An auction room keeps its bid clock; switched to Pahunch, the clock goes off.
+    let now = Arc::new(AtomicU64::new(1_000_000));
+    let mut rooms = Rooms::new(options(&now, None)).unwrap();
+    let c = fake(&mut rooms, "10.0.2.1");
+    send(
+        &mut rooms,
+        &c,
+        json!({ "type": "create", "theme": "box-office", "name": "A" }),
+    );
+    assert_eq!(room(&c).bid_timer_s, 30);
+    send(&mut rooms, &c, json!({ "type": "theme", "theme": "society-committee" }));
+    assert_eq!(last_error(&c), None);
+    assert_eq!(room(&c).bid_timer_s, 0);
+    send(&mut rooms, &c, json!({ "type": "timer", "seconds": 45, "extend": 10 }));
+    assert_eq!(room(&c).bid_timer_s, 45, "the admin turns it on");
+}
+
+#[test]
 fn ending_early_shows_everything_and_crowns_nobody() {
     let mut t = table(3, None);
     t.admin(json!({ "type": "start" }));

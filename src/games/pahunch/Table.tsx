@@ -151,8 +151,14 @@ function Face({ ctx, i }: { ctx: Ctx; i: number }) {
   );
 }
 
-/** Milliseconds left on the room clock, ticking while it runs. */
-function useClockLeft(state: RoomState): number | null {
+/** The room clock: milliseconds left (ticking while it runs), its whole stretch, and whether a freeze holds it. */
+interface Clock {
+  left: number;
+  total: number;
+  paused: boolean;
+}
+
+function useClock(state: RoomState): Clock | null {
   const { room } = state;
   const running = room.bidMsLeft !== null && room.frozenBy === null;
   const [, tick] = useState(0);
@@ -162,7 +168,43 @@ function useClockLeft(state: RoomState): number | null {
     return () => clearInterval(t);
   }, [running]);
   if (room.bidMsLeft === null) return null;
-  return Math.max(0, room.bidMsLeft - (running ? Date.now() - state.receivedAt : 0));
+  const left = Math.max(0, room.bidMsLeft - (running ? Date.now() - state.receivedAt : 0));
+  return { left, total: Math.max(room.bidMsWindow ?? 0, room.bidMsLeft, 1), paused: !running };
+}
+
+const RING_R = 16;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * The vote clock as a ring that drains, the seconds in the middle. The last 5 seconds turn it red
+ * and pulse it; a frozen game shows ⏸ under the number.
+ */
+function ClockRing({ clock }: { clock: Clock }) {
+  const secs = Math.ceil(clock.left / 1000);
+  const urgent = secs <= 5 && !clock.paused;
+  return (
+    <span
+      className={`ph-clock${urgent ? " urgent" : ""}${clock.paused ? " paused" : ""}`}
+      role="img"
+      aria-label={clock.paused ? `${secs} seconds left, paused` : `${secs} seconds left`}
+    >
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <circle className="ph-clock-track" cx="20" cy="20" r={RING_R} />
+        <circle
+          className="ph-clock-fill"
+          cx="20"
+          cy="20"
+          r={RING_R}
+          strokeDasharray={RING_C}
+          strokeDashoffset={RING_C * (1 - clock.left / clock.total)}
+        />
+      </svg>
+      <span className="ph-clock-secs" aria-hidden="true">
+        {secs}
+        {clock.paused && <small>⏸</small>}
+      </span>
+    </span>
+  );
 }
 
 /**
@@ -469,7 +511,7 @@ export function Table({ state, send, reactions }: TableProps) {
   }
   const docked = owing && bar !== null;
   const dockEl = useDock(docked);
-  const left = useClockLeft(state);
+  const clock = useClock(state);
 
   const top = atTop(v);
   const capTop = v.layout.rooms[v.layout.summit]?.cap ?? 0;
@@ -556,7 +598,7 @@ export function Table({ state, send, reactions }: TableProps) {
       </section>
 
       <aside className="side ph-side">
-        {v.vote && !v.over && <VoteSummary ctx={ctx} vote={v.vote} left={left} />}
+        {v.vote && !v.over && <VoteSummary ctx={ctx} vote={v.vote} clock={clock} />}
         {me !== null && (
           <MyTray
             ctx={ctx}
@@ -1653,13 +1695,12 @@ function BoardInfo({ ctx, pick, onClose }: { ctx: Ctx; pick: Pick; onClose: () =
 
 // ---- votes ----
 
-function VoteSummary({ ctx, vote, left }: { ctx: Ctx; vote: PahunchVote; left: number | null }) {
+function VoteSummary({ ctx, vote, clock }: { ctx: Ctx; vote: PahunchVote; clock: Clock | null }) {
   const { v, skin, who } = ctx;
   const to = v.layout.paths[vote.path].to;
   const neutrals = count(v.rooms, vote.room, null);
   const yes = yesSoFar(vote);
   const voters = vote.answers.flatMap((a, s) => (count(v.rooms, vote.room, s) > 0 ? [{ s, a }] : []));
-  const secs = left === null ? null : Math.ceil(left / 1000);
   // Read without words: the climber's face, the two rooms' icons, a pip per yes needed, and each
   // voter's face with what they said. The sentence is for screen readers and the log.
   const said = (s: number, a: number | null) =>
@@ -1678,11 +1719,7 @@ function VoteSummary({ ctx, vote, left }: { ctx: Ctx; vote: PahunchVote; left: n
         <span className="sr-only">
           {who(v.turn)} {v.turn === ctx.me ? "want" : "wants"} to move up: {ctx.room(vote.room)} to {ctx.room(to)}
         </span>
-        {secs !== null && (
-          <span className="ph-clock" aria-label={`${secs} seconds left`}>
-            ⏱ {secs}
-          </span>
-        )}
+        {clock && <ClockRing clock={clock} />}
       </h2>
       <p className="ph-pips" role="img" aria-label={`${yes} of ${vote.need} yes`}>
         {Array.from({ length: Math.max(vote.need, yes) }, (_, k) => (
@@ -1818,20 +1855,23 @@ function GiftSheet({
   const chosen = picked.map((k) => tokens[k]);
   return (
     <Sheet title={`🎁 Give ${skin.nouns.points}`} onClose={onClose}>
-      <p className="muted">
-        A gift is final and can be made at any time. The others see that you gave, and how many tokens, but not their
-        value.
-      </p>
-      <label>
-        To{" "}
-        <select value={to} onChange={(e) => setTo(Number(e.target.value))}>
-          {others.map((i) => (
-            <option key={i} value={i}>
-              {names[i]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="ph-give-to" role="group" aria-label="Give to">
+        {others.map((i) => (
+          <button
+            key={i}
+            type="button"
+            className={`ph-give-who${i === to ? " on" : ""}`}
+            style={{ ["--seat" as string]: skin.seats[i % skin.seats.length].color }}
+            aria-pressed={i === to}
+            onClick={() => setTo(i)}
+          >
+            <span className="ph-face">
+              <Avatar code={ctx.looks[i] ?? ""} name={names[i]} />
+            </span>
+            <span className="ph-give-name">{names[i]}</span>
+          </button>
+        ))}
+      </div>
       <div className="ph-tokens" role="group" aria-label="Tokens to give">
         {tokens.map((t, k) => (
           <button
@@ -1854,6 +1894,10 @@ function GiftSheet({
           Cancel
         </button>
       </div>
+      <p className="muted small">
+        A gift is final and can be made at any time. The others see that you gave, and how many tokens, but not their
+        value.
+      </p>
     </Sheet>
   );
 }

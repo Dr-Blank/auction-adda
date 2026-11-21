@@ -42,7 +42,9 @@ const fail = (msg) => {
 const sock = new WebSocket(WS);
 let settings;
 const { code, token } = await new Promise((resolve) => {
-  sock.onopen = () => sock.send(JSON.stringify({ type: "create", theme: "society-committee", name: "tp" }));
+  // The vote clock is off by default; on here, so the vote shots show its ring.
+  const prefs = { bidTimerS: 30, bidExtendS: 10 };
+  sock.onopen = () => sock.send(JSON.stringify({ type: "create", theme: "society-committee", name: "tp", prefs }));
   sock.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "state") settings = m.room.settings;

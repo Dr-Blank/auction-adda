@@ -7,13 +7,17 @@ import type { RoomProps } from "../types.ts";
 /** The boards, by index, as the server lists them. */
 export const BOARDS: string[] = (GAMES_JSON.variants as Record<string, string[]>).pahunch ?? [];
 
-const FIRST_CHOICES = [0, 15, 20, 30, 45, 60, 90, 120, 180, 300];
+/** Seconds per vote once the clock is on; off is the switch, not a choice here. */
+const FIRST_CHOICES = [15, 20, 30, 45, 60, 90, 120, 180, 300];
+/** What the switch turns the clock on to. */
+const ON_DEFAULT = 30;
 const EXTEND_CHOICES = [3, 5, 10, 15, 20, 30, 60];
 const secs = (n: number) => (n === 0 ? "No limit" : n < 60 || n % 60 ? `${n} s` : `${n / 60} min`);
 
 /**
  * The vote clock, on the room's clock: a stretch for each vote, topped up after every answer.
- * When it runs out, whoever has not answered says no. Off by default (tables on voice).
+ * When it runs out, whoever has not answered says no. Off by default (tables on voice); the
+ * admin's switch turns it on, then the seconds can be picked.
  */
 export function VoteClock({ room, me, send }: { room: RoomInfo; me: number | null; send: (m: ClientMsg) => void }) {
   const first = room.bidTimerS;
@@ -38,18 +42,25 @@ export function VoteClock({ room, me, send }: { room: RoomInfo; me: number | nul
     );
   return (
     <div className="bid-timer">
-      <h3>Vote clock</h3>
-      <label>For each vote {pick(first, FIRST_CHOICES, (n) => set(n, extend), "Vote clock")}</label>
+      <Toggle
+        label="⏱ Vote clock"
+        hint={
+          first === 0
+            ? "Off: a vote waits until everyone has answered. Good for tables that talk it out on the call."
+            : `Voters have ${secs(first)} to answer. When it runs out, whoever has not answered says no.`
+        }
+        on={first > 0}
+        admin={room.admin === me}
+        onChange={(on) => set(on ? ON_DEFAULT : 0, extend)}
+      />
       {first > 0 && (
-        <label>
-          After an answer, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n), "Time after an answer")}
-        </label>
+        <>
+          <label>For each vote {pick(first, FIRST_CHOICES, (n) => set(n, extend), "Seconds for each vote")}</label>
+          <label>
+            After an answer, at least {pick(extend, EXTEND_CHOICES, (n) => set(first, n), "Time after an answer")}
+          </label>
+        </>
       )}
-      <small className="muted">
-        {first === 0
-          ? "A vote waits until everyone has answered. Good for tables that talk it out on the call."
-          : `Voters have ${secs(first)} to answer. When it runs out, whoever has not answered says no.`}
-      </small>
     </div>
   );
 }

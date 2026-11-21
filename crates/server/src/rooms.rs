@@ -50,6 +50,16 @@ const MAX_GENRES: u8 = 64;
 /// At most this many rooms in one `rooms` answer; tokens beyond it are left alone.
 const MAX_LISTED_ROOMS: usize = 50;
 
+/// The clock (seconds, top-up seconds) a room of `kind` starts with when the creator sent none it
+/// accepts, and gets when the admin switches to that game. Pahunch tables talk on voice, so its
+/// vote clock starts off; the admin turns it on in the lobby.
+const fn default_clock(kind: GameId) -> (u16, u16) {
+    match kind {
+        GameId::Auction => (DEFAULT_BID_TIMER_S, DEFAULT_BID_EXTEND_S),
+        GameId::Pahunch => (0, DEFAULT_BID_EXTEND_S),
+    }
+}
+
 const fn default_bid_timer() -> u16 {
     DEFAULT_BID_TIMER_S
 }
@@ -1234,8 +1244,10 @@ impl Rooms {
                 }
                 if room.theme != id {
                     if theme.game() != room.kind() {
-                        // A setup's number means another setup in another game.
+                        // A setup's number means another setup in another game, and a clock
+                        // set for one game's pace is wrong for another's.
                         room.variant = Some(0);
+                        (room.bid_timer_s, room.bid_extend_s) = default_clock(theme.game());
                     }
                     room.theme = id;
                     // A genre's number means another genre in another theme.
@@ -1616,7 +1628,7 @@ impl Rooms {
         let prefs = prefs.unwrap_or_default();
         let (bid_timer_s, bid_extend_s) = match check_timer(prefs.bid_timer_s, prefs.bid_extend_s) {
             Ok(()) => (prefs.bid_timer_s, prefs.bid_extend_s),
-            Err(_) => (DEFAULT_BID_TIMER_S, DEFAULT_BID_EXTEND_S),
+            Err(_) => default_clock(kind),
         };
         let genres = check_genres(&prefs.genres, kind).unwrap_or_default();
         let mut settings = prefs.settings.unwrap_or_default();
