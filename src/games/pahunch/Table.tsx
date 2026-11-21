@@ -141,6 +141,15 @@ function Rich({ ctx, text }: { ctx: Ctx; text: string }) {
   );
 }
 
+/** A seat's face in a line of text; its name is the label. */
+function Face({ ctx, i }: { ctx: Ctx; i: number }) {
+  return (
+    <span className="ph-inline-face" role="img" aria-label={ctx.who(i)}>
+      <Avatar code={ctx.looks[i] ?? ""} name={ctx.names[i] ?? ""} />
+    </span>
+  );
+}
+
 /** Milliseconds left on the room clock, ticking while it runs. */
 function useClockLeft(state: RoomState): number | null {
   const { room } = state;
@@ -656,19 +665,39 @@ function SeatSheet({
   const name = i === me ? "You" : seat.name;
   const winner = v.over && v.winners.includes(i);
   const mark = markOf(v, i);
-  const { climber, climbers, points } = skin.nouns;
+  const { climbers, points } = skin.nouns;
   const favour = p.favour ? skin.favours[p.favour] : null;
+  const whose = i === me ? "Your" : `${seat.name}’s`;
+  // What the seat owes now leads; then its counts, each glyph with its meaning in small words.
+  const lead = winner
+    ? `👑 ${name} won the game.`
+    : owing
+      ? mark === "votes"
+        ? `🗳️ ${whose} vote is due.`
+        : mark === "to move"
+          ? `▶ ${whose} move.`
+          : `⏳ ${whose} answer is due.`
+      : null;
+  const stats = [
+    { glyph: "✋", n: `${p.hand}`, word: `${climbers} still to place` },
+    { glyph: "⬆️", n: `${onBoard}`, word: "on the way up" },
+    { glyph: "▲", n: `${atTheTop}`, word: `in ${ctx.room(v.layout.summit)}` },
+    { glyph: "🪙", n: p.tokens ? `${score(p.tokens)}` : "?", word: points },
+  ];
+  const favourState = v.lent.includes(i)
+    ? `🤝 On offer to ${ctx.who(v.turn)} now.`
+    : v.used.includes(i)
+      ? `✔ Used by ${ctx.who(v.turn)} this turn.`
+      : v.asked.includes(i)
+        ? `⏳ ${ctx.who(v.turn)} asked for it.`
+        : null;
   const facts = [
-    winner ? `👑 ${name} won the game.` : null,
-    owing ? `${name} ${i === me ? "owe" : "owes"} a move now (${mark}).` : null,
     room.admin === i ? "★ Room admin." : null,
-    `✋ ${p.hand} ${p.hand === 1 ? climber : climbers} still to place, ${onBoard} on the way up, ▲ ${atTheTop} in the ${ctx.room(v.layout.summit)}.`,
     p.tokens
-      ? `${i === me ? "Your" : `${seat.name}’s`} ${points}: ${score(p.tokens)} (${p.tokens.length} tokens)${i === me && !v.over ? ". Only you can see it." : "."}`
-      : `${upper(points)} stays hidden until the game ends.`,
-    favour
-      ? `Favour: ${favour.glyph} ${favour.name}, ${usesLeft(p.uses)}. ${favour.effect}${v.lent.includes(i) ? ` On offer to ${ctx.who(v.turn)} now.` : v.used.includes(i) ? ` Used by ${ctx.who(v.turn)} this turn.` : v.asked.includes(i) ? ` ${ctx.who(v.turn)} asked for it.` : ""}`
-      : null,
+      ? `🪙 ${score(p.tokens)} ${points} in ${p.tokens.length} tokens${i === me && !v.over ? ". Only you can see it." : "."}`
+      : `🪙 ${upper(points)} stays hidden until the game ends.`,
+    favour ? `${favour.glyph} ${favour.name}: ${favour.effect} ${upper(usesLeft(p.uses))}.` : null,
+    favourState,
     connectionFact(room, i, name, away, rights),
   ].filter((f): f is string => f !== null);
   return (
@@ -686,13 +715,25 @@ function SeatSheet({
           Your name: <b>{seat.name}</b> <Rename name={seat.name} send={send} />
         </p>
       )}
-      <ul className="seat-facts">
-        {facts.map((f) => (
-          <li key={f}>
-            <Rich ctx={ctx} text={f} />
-          </li>
+      {lead && <p className="ph-sheet-lead">{lead}</p>}
+      <div className="ph-stats">
+        {stats.map((s) => (
+          <span key={s.glyph} className="ph-stat">
+            <b>
+              <span aria-hidden="true">{s.glyph}</span> {s.n}
+            </b>
+            <small>{s.word}</small>
+          </span>
         ))}
-      </ul>
+        {favour && (
+          <span className="ph-stat">
+            <b>
+              <span aria-hidden="true">{favour.glyph}</span> <Uses n={p.uses} />
+            </b>
+            <small>{favour.name}</small>
+          </span>
+        )}
+      </div>
       <SeatSheetActions
         room={room}
         me={me}
@@ -703,6 +744,13 @@ function SeatSheet({
         kicking={kicking}
         setKicking={setKicking}
       />
+      <ul className="ph-sheet-small plain">
+        {facts.map((f) => (
+          <li key={f}>
+            <Rich ctx={ctx} text={f} />
+          </li>
+        ))}
+      </ul>
     </Sheet>
   );
 }
@@ -757,11 +805,15 @@ function PlayerChip(props: SeatProps & { i: number }) {
           )}
         </span>
         <span className="seat-line ph-counts">
-          <span aria-label="still to place">✋ {p.hand}</span>
-          <span aria-label="at the top">▲ {atTheTop}</span>
+          <span role="img" aria-label={`${p.hand} still to place`}>
+            ✋ {p.hand}
+          </span>
+          <span role="img" aria-label={`${atTheTop} at the top`}>
+            ▲ {atTheTop}
+          </span>
           {p.tokens && (
-            <b className="ph-points">
-              {score(p.tokens)} {points}
+            <b className="ph-points" role="img" aria-label={`${score(p.tokens)} ${points}`}>
+              🪙 {score(p.tokens)}
             </b>
           )}
         </span>
@@ -977,13 +1029,23 @@ function MyTray(props: SeatProps & { act: (a: PahunchAction) => void; owing: boo
         <button className="ph-tray-who" onClick={() => setInfo(true)} aria-haspopup="dialog">
           <span className="seat-name">You{room.admin === me && <span className="admin-mark">★</span>}</span>
           <span className="ph-counts">
-            <span aria-label="still to place">✋ {p.hand}</span>
-            <span aria-label="at the top">▲ {atTheTop}</span>
+            <span role="img" aria-label={`${p.hand} still to place`}>
+              ✋ {p.hand}
+            </span>
+            <span role="img" aria-label={`${atTheTop} at the top`}>
+              ▲ {atTheTop}
+            </span>
           </span>
         </button>
-        <span className="ph-score" aria-label={`Your ${skin.nouns.points}`}>
-          <b>{score(tokens)}</b> {skin.nouns.points}
-        </span>
+        <button
+          type="button"
+          className="ph-score"
+          onClick={() => setInfo(true)}
+          aria-haspopup="dialog"
+          aria-label={`Your ${skin.nouns.points}: ${score(tokens)}`}
+        >
+          <span aria-hidden="true">🪙</span> <b>{score(tokens)}</b>
+        </button>
       </div>
       <div className="ph-tokens ph-tray-tokens">
         {tokens.map((t, k) => (
@@ -993,7 +1055,7 @@ function MyTray(props: SeatProps & { act: (a: PahunchAction) => void; owing: boo
         ))}
         {!v.over && tokens.length > 0 && (
           <button type="button" className="btn small ph-give" onClick={onGive}>
-            Give…
+            🎁 Give
           </button>
         )}
         {!v.over && (
@@ -1025,25 +1087,50 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
   const mover = ctx.names[v.turn];
   const once = !offered && onceOffered(v, me);
   const toggle = theirs && !spent && !once && (offered || (p.uses ?? 0) > 0);
+  const asked = v.asked.includes(me);
+  // Where it stands, as a glyph and the mover's face; the words are the button's label.
+  const state = spent
+    ? `used by ${mover}`
+    : offered
+      ? `on offer to ${mover}`
+      : asked
+        ? `${mover} asks for it`
+        : once
+          ? "offered once this turn"
+          : `each use earns you ${pay} ${skin.nouns.points}`;
   return (
     <div className={`ph-my-favour ${offered ? "offered" : ""}`}>
-      <button type="button" className="ph-fav-name" onClick={() => setInfo(true)} aria-haspopup="dialog">
+      <button
+        type="button"
+        className="ph-fav-name"
+        onClick={() => setInfo(true)}
+        aria-haspopup="dialog"
+        aria-label={`Your favour: ${f.name}, ${usesLeft(p.uses)}, ${state}`}
+      >
         <span className="ph-fav-glyph" aria-hidden="true">
           {f.glyph}
         </span>
-        <span>
+        <span aria-hidden="true">
           <b>{f.name}</b>
           <small>
             <Uses n={p.uses} />{" "}
-            {spent
-              ? `used by ${mover}`
-              : offered
-                ? `on offer to ${mover}`
-                : v.asked.includes(me)
-                  ? `${mover} asks for it`
-                  : once
-                    ? "offered once this turn"
-                    : `+${pay} a use`}
+            {spent ? (
+              <>
+                ✔ <Face ctx={ctx} i={v.turn} />
+              </>
+            ) : offered ? (
+              <>
+                🤝 → <Face ctx={ctx} i={v.turn} />
+              </>
+            ) : asked ? (
+              <>
+                🙏 <Face ctx={ctx} i={v.turn} />
+              </>
+            ) : once ? (
+              "↩ offered once this turn"
+            ) : (
+              `+${pay} 🪙`
+            )}
           </small>
         </span>
       </button>
@@ -1052,10 +1139,17 @@ function MyFavour({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
           type="button"
           className={`btn ${offered ? "" : "primary"}`}
           aria-pressed={offered}
+          aria-label={offered ? `Take back your ${f.name}` : `Offer your ${f.name} to ${mover}`}
           disabled={offered && v.vote !== null}
           onClick={() => act({ type: "lend", on: !offered })}
         >
-          {offered ? "↩ Take back" : `🤝 Offer to ${mover}`}
+          {offered ? (
+            "↩ Take back"
+          ) : (
+            <>
+              🤝 Offer {f.glyph} → <Face ctx={ctx} i={v.turn} />
+            </>
+          )}
         </button>
       )}
       <Tip>
@@ -1085,7 +1179,7 @@ function OnOffer({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
     <div className="ph-on-offer" aria-label="Favours for your move">
       {list.map(({ owner, kind }) => (
         <span key={owner} className="ph-offer">
-          {skin.favours[kind].glyph} {skin.favours[kind].name} <small>{ctx.names[owner]}</small>
+          {skin.favours[kind].glyph} {skin.favours[kind].name} <Face ctx={ctx} i={owner} />
           {v.vote === null && (
             <button
               type="button"
@@ -1100,7 +1194,10 @@ function OnOffer({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
       ))}
       {asked.map(({ owner, kind }) => (
         <span key={`a${owner}`} className="ph-offer asked">
-          {skin.favours[kind].glyph} {skin.favours[kind].name} <small>asked {ctx.names[owner]}…</small>
+          {skin.favours[kind].glyph} {skin.favours[kind].name}{" "}
+          <small role="img" aria-label={`asked ${ctx.names[owner]}, waiting`}>
+            ⏳ <Face ctx={ctx} i={owner} />
+          </small>
           <button
             type="button"
             className="ph-offer-x"

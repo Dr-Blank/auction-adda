@@ -297,6 +297,15 @@ for (let tick = 0; tick < 4000; tick++) {
       await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
       await sleep(200);
     }
+    // Another seat's sheet: where ✋ and ▲ on the chips are explained.
+    if (await clickFirst(".ph-seat-chip .ph-seat-more")) {
+      await sleep(900);
+      if (!(await evaluate(`!!document.querySelector('[role="dialog"] .ph-stats')`)))
+        fail("the seat sheet has no counts");
+      await shot("seat");
+      await evaluate(`dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await sleep(200);
+    }
   }
   if (!ended && Date.now() > end) {
     ended = true;
