@@ -1165,7 +1165,7 @@ function FavourSheet({
   return (
     <Sheet title={`${f.glyph} ${f.name}`} label={`${mine ? "Your" : `${name}’s`} favour`} onClose={onClose}>
       <p className="ph-sheet-lead">{f.effect}</p>
-      <div className="ph-fav-facts">
+      <div className="ph-sheet-facts">
         <span className="ph-fav-owner">
           <Avatar code={ctx.looks[owner] ?? ""} name={name} className="small" /> {mine ? "You" : name}
         </span>
@@ -1741,47 +1741,66 @@ function PickBar(props: {
           ))}
         </div>
       )}
-      {(swaps.length > 0 || carries.length > 0) && (
-        <div className="ph-favour-picks">
-          {swaps.length > 0 && (
-            <label>
-              <span className="ph-act-label">{skin.favours.swapToken.glyph} Take</span>
-              <select
-                value={extras.swap ?? ""}
-                onChange={(e) =>
-                  setExtras({ ...extras, swap: e.target.value === "" ? undefined : Number(e.target.value) })
-                }
-              >
-                <option value="">the {points} on the way</option>
-                {swaps.map((p) => (
-                  <option key={p} value={p}>
-                    {v.tokensOn[p]?.value} from {route(p)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {carries.length > 0 && (
-            <label>
-              <span className="ph-act-label">{skin.favours.carry.glyph} Bring</span>
-              <select
-                value={carryKey(extras.carry)}
-                onChange={(e) => setExtras({ ...extras, carry: carries.find((c) => carryKey(c) === e.target.value) })}
-              >
-                <option value="">nobody</option>
-                {carries.map((c) => (
-                  <option key={carryKey(c)} value={carryKey(c)}>
-                    {c.t === "seat"
-                      ? c.seat === ctx.me
-                        ? `another of your ${climbers}`
-                        : ctx.names[c.seat]
-                      : `an ${neutral}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+      {swaps.length > 0 && pick?.path !== undefined && (
+        <Opts glyph={skin.favours.swapToken.glyph} label={S.swapPick}>
+          <Opt on={extras.swap === undefined} label={S.swapOwn} onTap={() => setExtras({ ...extras, swap: undefined })}>
+            <CoinChip ctx={ctx} path={pick.path} />
+            <small>{S.onTheWay}</small>
+          </Opt>
+          {swaps.map((p) => (
+            <Opt
+              key={p}
+              path={p}
+              on={extras.swap === p}
+              label={S.swapFrom(v.tokensOn[p]?.value ?? 0, route(p))}
+              onTap={() => setExtras({ ...extras, swap: p })}
+            >
+              <CoinChip ctx={ctx} path={p} />
+              <small>
+                <Rich ctx={ctx} text={route(p)} />
+              </small>
+            </Opt>
+          ))}
+        </Opts>
+      )}
+      {carries.length > 0 && (
+        <Opts glyph={skin.favours.carry.glyph} label={S.carryPick}>
+          <Opt
+            on={extras.carry === undefined}
+            label={S.nobody}
+            onTap={() => setExtras({ ...extras, carry: undefined })}
+          >
+            <span className="ph-opt-glyph">✕</span>
+            <small>{S.nobody}</small>
+          </Opt>
+          {carries.map((c) => (
+            <Opt
+              key={carryKey(c)}
+              seat={c.t === "seat" ? c.seat : undefined}
+              on={carryKey(extras.carry) === carryKey(c)}
+              label={
+                c.t === "seat"
+                  ? c.seat === ctx.me
+                    ? S.carryOwn(climbers)
+                    : ctx.names[c.seat]
+                  : S.carryNeutral(neutral)
+              }
+              onTap={() => setExtras({ ...extras, carry: c })}
+            >
+              {c.t === "seat" ? (
+                <>
+                  <Face ctx={ctx} i={c.seat} />
+                  <small>{c.seat === ctx.me ? "+1" : ctx.names[c.seat]}</small>
+                </>
+              ) : (
+                <>
+                  <span className="ph-opt-glyph">{skin.neutralGlyph}</span>
+                  <small>+1</small>
+                </>
+              )}
+            </Opt>
+          ))}
+        </Opts>
       )}
       {!pick && all && (
         <div className="ph-all">
@@ -1807,32 +1826,60 @@ function PickBar(props: {
   );
 }
 
-/** The blocker's move as a list, for the "All moves" view. */
+/** A row of picks, one per choice: the glyph says which favour or piece it is for. */
+function Opts({ glyph, label, children }: { glyph: string; label: string; children: ReactNode }) {
+  return (
+    <div className="ph-opts-row">
+      <span className="ph-opts-glyph" aria-hidden="true">
+        {glyph}
+      </span>
+      <div className="ph-opts" role="group" aria-label={label}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** One pick in an `Opts` row: what it is on top (a coin, a face, a glyph), a word beneath. */
+function Opt(props: {
+  on?: boolean;
+  label: string;
+  onTap: () => void;
+  path?: number;
+  seat?: number;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`ph-give-who ph-opt${props.on ? " on" : ""}`}
+      aria-pressed={props.on === undefined ? undefined : props.on}
+      aria-label={props.label}
+      data-path={props.path}
+      data-seat={props.seat}
+      onClick={props.onTap}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+/** The blocker's move, for the "All moves" view: a tap on where he goes (the confirm strip follows). */
 function BlockPicker({ ctx, act }: { ctx: Ctx; act: (a: PahunchAction) => void }) {
   const { v, skin } = ctx;
-  const targets = blockTargets(v);
-  const [want, setTo] = useState(targets[0] ?? 0);
-  // After a block the picked path is Daddu's own and no longer a target.
-  const to = targets.includes(want) ? want : (targets[0] ?? 0);
   const route = (p: number) => `${ctx.short(v.layout.paths[p].from)} → ${ctx.short(v.layout.paths[p].to)}`;
   return (
     <div className="ph-all-room">
-      <span className="ph-act-label">{skin.nouns.blocker}</span>
-      <div className="ph-favour-picks">
-        <label>
-          <span className="ph-act-label">Send to</span>
-          <select value={to} onChange={(e) => setTo(Number(e.target.value))}>
-            {targets.map((p) => (
-              <option key={p} value={p}>
-                {route(p)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="btn" onClick={() => act({ type: "block", path: to })}>
-          <Rich ctx={ctx} text={`➜ Send ${skin.nouns.blocker}`} />
-        </button>
-      </div>
+      <Opts glyph={skin.blockerGlyph} label={S.blockPick(skin.nouns.blocker)}>
+        {blockTargets(v).map((p) => (
+          <Opt key={p} path={p} label={route(p)} onTap={() => act({ type: "block", path: p })}>
+            <CoinChip ctx={ctx} path={p} />
+            <small>
+              <Rich ctx={ctx} text={route(p)} />
+            </small>
+          </Opt>
+        ))}
+      </Opts>
     </div>
   );
 }
@@ -1900,36 +1947,67 @@ function BoardInfo({ ctx, pick, onClose }: { ctx: Ctx; pick: Pick; onClose: () =
     const b = t.bonus ? skin.bonuses[t.bonus] : null;
     return `${t.value} ${points}${b ? ` with ${b.glyph} ${b.name}` : ""}`;
   };
-  const who = (s: number | null) => (s === null ? neutral : ctx.who(s));
+  // A chip: a fact as glyphs and numbers, its words in the label.
+  const chip = (key: string, label: string, body: ReactNode, cls = "") => (
+    <span key={key} className={cls} role="img" aria-label={label}>
+      {body}
+    </span>
+  );
+  const coinChip = (p: number) =>
+    v.tokensOn[p] ? chip(`c${p}`, coinLine(p) ?? "", <CoinChip ctx={ctx} path={p} />, "ph-fact-coin") : null;
+  const votesChip = (r: number) =>
+    chip("v", S.factVotes(need(layout, r), layout.rooms[r].cap), `🗳️ ${need(layout, r)}/${layout.rooms[r].cap}`);
   let title = "";
-  let facts: string[] = [];
+  let lead = "";
+  let chips: ReactNode[] = [];
+  let small: string[] = [];
   if (pick.blocker && v.blocker !== null) {
     const p = layout.paths[v.blocker];
-    const under = coinLine(v.blocker);
     title = `${skin.blockerGlyph} ${upper(blocker)}`;
-    facts = [
-      `${upper(blocker)} sits on the ${skin.nouns.path} from the ${ctx.room(p.from)} up to the ${ctx.room(p.to)}${under ? `, on ${under}` : ""}.`,
-      `Anyone may climb past ${blocker} with no vote, but nobody takes the ${points} under him (unless ${skin.favours.coveredToken.glyph} ${skin.favours.coveredToken.name} is on offer).`,
-      `On your turn, instead of moving a ${climber}, you may send ${blocker} to another ${skin.nouns.path} with ${points} on it. Never onto ${skin.nouns.backPath}. Tap him on your turn, then tap where he goes.`,
+    lead = S.blockerLead(upper(blocker), points);
+    chips = [
+      chip(
+        "at",
+        S.factOn(ctx.room(p.from), ctx.room(p.to)),
+        <Rich ctx={ctx} text={`${ctx.icon(p.from)} → ${ctx.icon(p.to)}`} />,
+      ),
+      coinChip(v.blocker),
+    ];
+    small = [
+      S.blockerCovered(points, `${skin.favours.coveredToken.glyph} ${skin.favours.coveredToken.name}`),
+      S.blockerMove(blocker, climber, skin.nouns.path, points, skin.nouns.backPath),
     ];
   } else if (pick.path !== undefined) {
     const i = pick.path;
     const p = layout.paths[i];
     const kind = pathKind(layout, i);
-    const coin = coinLine(i);
     const bonus = v.tokensOn[i]?.bonus;
+    const key = `${skin.favours.backStairs.glyph} ${skin.favours.backStairs.name}`;
     title = `${ctx.short(p.from)} → ${ctx.short(p.to)}`;
-    facts = [
-      `A ${kind === "back" ? skin.nouns.backPath : skin.nouns.path} from the ${ctx.room(p.from)} up to the ${ctx.room(p.to)}.`,
+    lead =
       kind === "back"
-        ? `Locked. Only when someone offers the mover ${skin.favours.backStairs.glyph} ${skin.favours.backStairs.name} may they climb it, with no vote. No ${points} lies here.${offers(v, "backStairs") ? " The key is on offer this turn." : ""}`
+        ? S.backLead(key, points)
         : v.blocker === i
-          ? `${upper(blocker)} sits here: climbing it needs no vote, and takes no ${points}.`
+          ? S.blockedLead(upper(blocker), points)
           : kind === "plain"
-            ? `It leaves a post of one: climbing it needs no vote and takes no ${points}.`
-            : `Climbing it takes ${need(layout, p.from)} yes votes from the ${ctx.room(p.from)}${coin ? `, and the climber takes the ${coin}` : ""}.`,
+            ? S.plainLead(points)
+            : S.pathLead(need(layout, p.from), ctx.room(p.from));
+    chips = [
+      chip(
+        "way",
+        S.factWay(kind === "back" ? skin.nouns.backPath : skin.nouns.path, ctx.room(p.from), ctx.room(p.to)),
+        <Rich ctx={ctx} text={`${ctx.icon(p.from)} → ${ctx.icon(p.to)}${kind === "back" ? " 🔒" : ""}`} />,
+      ),
+      kind === "slot" && v.blocker !== i ? votesChip(p.from) : null,
+      coinChip(i),
+      v.blocker === i ? chip("b", S.factBlocker(upper(blocker)), skin.blockerGlyph) : null,
+      kind === "back" && offers(v, "backStairs")
+        ? chip("k", S.factKey, `${skin.favours.backStairs.glyph} ✓`, "ph-fav-status")
+        : null,
+    ];
+    small = [
       bonus ? `${skin.bonuses[bonus].glyph} ${skin.bonuses[bonus].name}: ${skin.bonuses[bonus].effect}` : "",
-      `An ${neutral} may be nudged up it too: no vote, and +1 ${points} for whoever nudges.`,
+      kind === "back" ? "" : S.nudgeNote(neutral, points),
     ].filter(Boolean);
   } else if (pick.room !== undefined) {
     const r = pick.room;
@@ -1938,36 +2016,58 @@ function BoardInfo({ ctx, pick, onClose }: { ctx: Ctx; pick: Pick; onClose: () =
     const top = r === layout.summit;
     const out = layout.paths.flatMap((p, i) => (p.from === r ? [i] : []));
     title = ctx.room(r);
-    facts = [
-      `${held.length} of ${cap} seats taken${held.length ? `: ${held.map(who).join(", ")}` : ""}.`,
-      top
-        ? `The game ends the moment it is full. Only players with a ${climber} here can win; ${neutrals} take seats but never win.`
-        : isEntry(layout, r)
-          ? `New ${skin.nouns.climbers} join here.`
-          : "",
-      top
-        ? ""
-        : cap === 1
-          ? "A post of one: leaving it needs no vote."
-          : `Leaving takes ${need(layout, r)} yes votes of its ${cap} seats.`,
+    lead = top ? S.topLead(climber) : cap === 1 ? S.postLead : S.roomLead(need(layout, r), cap);
+    chips = [
+      chip(
+        "held",
+        S.factSeats(held.length, cap, held.map((s) => (s === null ? neutral : ctx.who(s))).join(", ")),
+        <>
+          {held.map((s, k) =>
+            s === null ? (
+              // biome-ignore lint/suspicious/noArrayIndexKey: neutrals have no id; their order is the room's
+              <span key={k}>{skin.neutralGlyph}</span>
+            ) : (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a seat may sit here twice
+              <Face key={k} ctx={ctx} i={s} />
+            ),
+          )}
+          <b>
+            {held.length}/{cap}
+          </b>
+        </>,
+      ),
+      top || cap === 1 ? null : votesChip(r),
       ...out.map((i) => {
         const p = layout.paths[i];
-        const coin = coinLine(i);
-        return `↑ ${ctx.room(p.to)}: ${
-          p.back ? `${skin.nouns.backPath} 🔒` : v.blocker === i ? `${blocker} sits here` : coin ? coin : `no ${points}`
-        }.`;
+        const t = v.tokensOn[i];
+        const what = p.back ? "🔒" : v.blocker === i ? skin.blockerGlyph : t ? null : "∅";
+        return chip(
+          `o${i}`,
+          `↑ ${ctx.room(p.to)}: ${p.back ? `${skin.nouns.backPath}, locked` : v.blocker === i ? `${blocker} sits here` : (coinLine(i) ?? `no ${points}`)}`,
+          <>
+            <Rich ctx={ctx} text={`↑ ${ctx.icon(p.to)}`} /> {what ?? <CoinChip ctx={ctx} path={i} />}
+          </>,
+          "ph-fact-coin",
+        );
       }),
-    ].filter(Boolean);
+    ];
+    small = [top ? S.topNote(neutrals) : isEntry(layout, r) ? S.entryNote(skin.nouns.climbers) : ""].filter(Boolean);
   }
   return (
     <Sheet title={<Rich ctx={ctx} text={title} />} onClose={onClose}>
-      <ul className="seat-facts">
-        {facts.map((f) => (
-          <li key={f}>
-            <Rich ctx={ctx} text={f} />
-          </li>
-        ))}
-      </ul>
+      <p className="ph-sheet-lead">
+        <Rich ctx={ctx} text={lead} />
+      </p>
+      <div className="ph-sheet-facts">{chips}</div>
+      {small.length > 0 && (
+        <ul className="ph-sheet-small">
+          {small.map((f) => (
+            <li key={f}>
+              <Rich ctx={ctx} text={f} />
+            </li>
+          ))}
+        </ul>
+      )}
     </Sheet>
   );
 }

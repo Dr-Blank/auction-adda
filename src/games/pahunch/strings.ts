@@ -48,6 +48,46 @@ export const S = {
   recallPlea: (to: string) => `↩ Take back your ask to ${to}`,
   recallOffer: (to: string) => `↩ Take back your swap with ${to}`,
   carryWith: (glyph: string, who: string) => `${glyph} + ${who}`,
+
+  // Favour picks on a climb, and where the blocker goes.
+  swapPick: "Token swap: take instead",
+  swapOwn: "The token on the way",
+  onTheWay: "on the way",
+  swapFrom: (value: number, route: string) => `The ${value} from ${route}`,
+  carryPick: "Carry: take along",
+  nobody: "Nobody",
+  carryOwn: (climbers: string) => `Another of your ${climbers}`,
+  carryNeutral: (neutral: string) => `An ${neutral}`,
+  blockPick: (blocker: string) => `Send ${blocker} to`,
+
+  // The sheets a tap on the board opens: what the thing does, then its facts as chips (their words
+  // in the labels), then the small print.
+  blockerLead: (blocker: string, points: string) =>
+    `Anyone may climb past ${blocker} with no vote, but nobody takes the ${points} under him.`,
+  blockerCovered: (points: string, favour: string) =>
+    `Unless ${favour} is on offer: then the mover takes those ${points}.`,
+  blockerMove: (blocker: string, climber: string, path: string, points: string, backPath: string) =>
+    `On your turn, instead of moving a ${climber}, you may send ${blocker} to another ${path} with ${points} on it, never onto ${backPath}. Tap him, then tap where he goes.`,
+  backLead: (key: string, points: string) =>
+    `Locked. Only when someone offers the mover ${key} may they climb it, with no vote. No ${points} lies here.`,
+  blockedLead: (blocker: string, points: string) =>
+    `${blocker} sits here: climbing it needs no vote, and takes no ${points}.`,
+  plainLead: (points: string) => `It leaves a post of one: climbing it needs no vote and takes no ${points}.`,
+  pathLead: (need: number, room: string) => `Climbing it takes ${need} yes votes from the ${room}.`,
+  nudgeNote: (neutral: string, points: string) =>
+    `An ${neutral} may be nudged up it too: no vote, and +1 ${points} for whoever nudges.`,
+  topLead: (climber: string) => `The game ends the moment it is full. Only players with a ${climber} here can win.`,
+  topNote: (neutrals: string) =>
+    `${neutrals.charAt(0).toUpperCase()}${neutrals.slice(1)} take seats here but never win.`,
+  postLead: "A post of one: leaving it needs no vote.",
+  roomLead: (need: number, cap: number) => `Leaving takes ${need} yes votes of its ${cap} seats.`,
+  entryNote: (climbers: string) => `New ${climbers} join here.`,
+  factVotes: (need: number, cap: number) => `${need} yes of ${cap} to leave`,
+  factOn: (from: string, to: string) => `On the way from the ${from} up to the ${to}`,
+  factWay: (kind: string, from: string, to: string) => `A ${kind} from the ${from} up to the ${to}`,
+  factBlocker: (blocker: string) => `${blocker} sits here`,
+  factKey: "The key is on offer this turn",
+  factSeats: (held: number, cap: number, who: string) => `${held} of ${cap} seats taken${who ? `: ${who}` : ""}`,
   swapFor: (glyph: string, from: number, to: number) => `${glyph} ${from} ⇢ ${to}`,
 
   // What a vote uses, for the voters.

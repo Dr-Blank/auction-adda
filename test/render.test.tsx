@@ -431,3 +431,80 @@ describe("pahunch: the climber takes the needed yes", () => {
     act(() => root.unmount());
   });
 });
+
+describe("pahunch: favour picks on a climb, and the blocker from the list", () => {
+  /** You (seat 1) share room 3 with seat 2 and a neutral; seat 0 lends a token swap, seat 2 a carry. */
+  function pickState(): RoomState {
+    const s = structuredClone(Object.fromEntries(pahunch)["your-move"]) as {
+      game: {
+        rooms: (number | null)[][];
+        lent: number[];
+        players: { favour: string | null; uses: number | null }[];
+      };
+    };
+    s.game.rooms[2] = [];
+    s.game.rooms[3] = [null, 2, 1];
+    s.game.players[0].favour = "swapToken";
+    s.game.players[0].uses = 2;
+    s.game.lent = [0, 2];
+    return { ...s, receivedAt: NOW } as unknown as RoomState;
+  }
+
+  function mount(state: RoomState) {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const root = createRoot(el);
+    const sent: { action?: object }[] = [];
+    act(() => root.render(<Room state={state} send={(m) => sent.push(m as never)} join={() => {}} reactions={[]} />));
+    const tap = (e: Element) => act(() => e.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    return { el, root, sent, tap };
+  }
+
+  it("takes another token and another piece along on a climb", () => {
+    const { el, root, sent, tap } = mount(pickState());
+    tap(el.querySelector('.ph-room[data-room="3"]') as Element);
+    tap(el.querySelector('.ph-room[data-room="9"]') as Element);
+    const swap = el.querySelector('[aria-label="Token swap: take instead"]') as HTMLElement;
+    const carry = el.querySelector('[aria-label="Carry: take along"]') as HTMLElement;
+    expect(swap, "the swap pick").not.toBeNull();
+    expect(carry, "the carry pick").not.toBeNull();
+    // The path's own token comes first and is picked; then every other uncovered one.
+    const swaps = [...swap.querySelectorAll("button")];
+    expect(swaps[0].getAttribute("aria-pressed")).toBe("true");
+    act(() => (swaps.find((b) => b.dataset.path === "12") as HTMLButtonElement).click());
+    const carries = [...carry.querySelectorAll("button")];
+    expect(carries[0].getAttribute("aria-pressed"), "nobody, at first").toBe("true");
+    act(() => (carries.find((b) => b.dataset.seat === "2") as HTMLButtonElement).click());
+    act(() => (el.querySelector(".ph-pick .ph-move:not(.ph-then)") as HTMLButtonElement).click());
+    confirmMove();
+    expect(sent.at(-1)?.action).toEqual({ type: "climb", path: 11, swap: 12, carry: { t: "seat", seat: 2 } });
+    act(() => root.unmount());
+  });
+
+  it("sends the blocker from the list of all moves", () => {
+    const { el, root, sent } = mount({ ...Object.fromEntries(pahunch)["your-move"], receivedAt: NOW } as RoomState);
+    const all = [...el.querySelectorAll(".ph-pick button")].find((b) => b.textContent?.includes("All moves"));
+    act(() => (all as HTMLButtonElement).click());
+    const send = el.querySelector('[aria-label="Send Daddu to"]') as HTMLElement;
+    act(() => (send.querySelector('button[data-path="12"]') as HTMLButtonElement).click());
+    confirmMove();
+    expect(sent.at(-1)?.action).toEqual({ type: "block", path: 12 });
+    act(() => root.unmount());
+  });
+
+  it("explains a tapped room in the sheet order: what it does, chips, small print", () => {
+    const { el, root, tap } = mount({ ...Object.fromEntries(pahunch)["their-move"], receivedAt: NOW } as RoomState);
+    // Room 1 is a bottom room of 5 seats: leaving takes a vote, and new climbers join here.
+    tap(el.querySelector('.ph-room[data-room="1"]') as Element);
+    const sheet = document.querySelector(".sheet") as HTMLElement;
+    expect(sheet.querySelector(".ph-sheet-lead")?.textContent).toBe("Leaving takes 3 yes votes of its 5 seats.");
+    const chips = [...sheet.querySelectorAll(".ph-sheet-facts > [aria-label]")].map((c) =>
+      c.getAttribute("aria-label"),
+    );
+    expect(chips[0]).toMatch(/^\d of 5 seats taken/);
+    expect(chips[1]).toBe("3 yes of 5 to leave");
+    expect(chips.slice(2).every((c) => c?.startsWith("↑ "))).toBe(true);
+    expect(sheet.querySelector(".ph-sheet-small")?.textContent).toBe("New residents join here.");
+    act(() => root.unmount());
+  });
+});

@@ -130,14 +130,17 @@
   line-height: 1.4;
   color: var(--text);
 }
-.ph-fav-facts {
+.ph-sheet-facts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
 }
-.ph-fav-facts > span {
+.ph-sheet-facts:empty {
+  display: none;
+}
+.ph-sheet-facts > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1475,26 +1478,39 @@ button.ph-chip.ph-want-add {
 .ph-request .ph-pick-what {
   white-space: normal;
 }
-.ph-favour-picks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+/* A favour's picks on a climb (or where the blocker goes): its glyph, then a tile per choice, the
+   picked one ringed. */
+.ph-opts-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
 }
-.ph-favour-picks label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1 1 200px;
-}
-.ph-favour-picks select {
-  font-size: 1rem;
+.ph-opts-glyph {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
   min-height: 44px;
-  min-width: 0;
+  font-size: 1.4rem;
+}
+.ph-opts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+.ph-opt small {
   max-width: 100%;
-  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+.ph-opt-glyph {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  font-size: 1.3rem;
 }
 
 /* A wide screen has no empty space: the board grows to the window's height (the top bar, the
