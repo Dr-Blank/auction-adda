@@ -1788,3 +1788,38 @@ fn an_undo_puts_the_game_back_and_says_who_did_it() {
     assert!(t.log.len() > s.log.len());
     assert!(Pahunch::undoes_moves());
 }
+
+#[test]
+fn an_undo_reshuffles_the_bag_so_the_refill_seen_is_not_the_next_one() {
+    let mut s = fresh(5);
+    s.rooms[3] = vec![Some(0), Some(0), Some(1)];
+    let t = act(&s, 0, Action::climb(11));
+    assert_eq!(t.tokens_on[11], s.bag.last().copied(), "the climb showed the next coin");
+    let back = Pahunch::undo_move(&s, 0).unwrap();
+    let values = |b: &[Coin]| {
+        let mut v: Vec<u8> = b.iter().map(|c| c.value).collect();
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(values(&back.bag), values(&s.bag), "the same coins");
+    assert_ne!(back.bag, s.bag, "in another order");
+    assert_eq!(back.tokens_on, s.tokens_on, "the board is as it was");
+    let again = Pahunch::undo_move(&s, 0).unwrap();
+    assert_eq!(again.bag, back.bag, "the same every time");
+}
+
+#[test]
+fn an_ask_taken_back_and_asked_again_is_one_line() {
+    let s = fresh(4);
+    let back = |s: &State, owner| act(s, 0, Action::Request { owner, on: false });
+    let requests = |s: &State| s.log.iter().filter(|e| matches!(e, LogEntry::Request { .. })).count();
+    let once = act(&s, 0, ask(2));
+    let gone = back(&once, 2);
+    assert_eq!(gone.log, s.log, "taken back at once: its line goes too");
+    let again = act(&gone, 0, ask(2));
+    assert_eq!(requests(&again), 1);
+    // A line in between keeps the ask.
+    let other = back(&act(&once, 0, ask(3)), 2);
+    assert_eq!(requests(&other), 2);
+    assert_eq!(other.asked, vec![3]);
+}

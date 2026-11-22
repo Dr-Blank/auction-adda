@@ -784,36 +784,19 @@ export function Table({ state, send, reactions }: TableProps) {
             {S.undo} <small>{undoBy === me ? "" : undoBy !== null ? <Face ctx={ctx} i={undoBy} /> : null}</small>
           </button>
         )}
-        <section className="recent" aria-label="Latest">
-          <h2>Latest</h2>
-          <ol>
-            {v.log
-              .slice(-20)
-              .reverse()
-              .map((e, i) => (
-                <li key={i} className={`log-${e.t}`}>
-                  <Rich ctx={ctx} text={logLine(e, ctx, v.log.slice(0, v.log.length - i))} />
-                </li>
-              ))}
-          </ol>
+        <section className="recent" aria-label={S.latest}>
+          <h2>{S.latest}</h2>
+          <LogList ctx={ctx} last={20} />
           <button className="btn small ghost" onClick={() => setLogOpen(true)}>
-            Full log
+            {S.fullLog}
           </button>
         </section>
       </aside>
 
       {info && <BoardInfo ctx={ctx} pick={info} onClose={() => setInfo(null)} />}
       {logOpen && (
-        <Sheet title="📜 What happened" onClose={() => setLogOpen(false)}>
-          <ol className="log">
-            {v.log
-              .map((e, i) => (
-                <li key={i} className={`log-${e.t}`}>
-                  <Rich ctx={ctx} text={logLine(e, ctx, v.log.slice(0, i + 1))} />
-                </li>
-              ))
-              .reverse()}
-          </ol>
+        <Sheet title={S.logTitle} onClose={() => setLogOpen(false)}>
+          <LogList ctx={ctx} className="log" />
         </Sheet>
       )}
       {deal && me !== null && !v.over && (
@@ -2872,6 +2855,34 @@ function End({
 }
 
 // ---- the log ----
+
+/** The log newest first, the `last` lines of it; a run of the same line shows once, with its count. */
+function LogList({ ctx, last, className }: { ctx: Ctx; last?: number; className?: string }) {
+  const log = ctx.v.log;
+  const rows: { t: string; text: string; n: number; key: number }[] = [];
+  for (let i = log.length - 1; i >= Math.max(0, log.length - (last ?? log.length)); i--) {
+    const text = logLine(log[i], ctx, log.slice(0, i + 1));
+    const top = rows.at(-1);
+    // Keyed by the run's first line, so a repeat counts up in place.
+    if (top?.text === text) Object.assign(top, { n: top.n + 1, key: ctx.v.logStart + i });
+    else rows.push({ t: log[i].t, text, n: 1, key: ctx.v.logStart + i });
+  }
+  return (
+    <ol className={className}>
+      {rows.map((r) => (
+        <li key={r.key} className={`log-${r.t}`}>
+          <Rich ctx={ctx} text={r.text} />
+          {r.n > 1 && (
+            <small className="ph-log-n" aria-label={S.logTimesLabel(r.n)}>
+              {" "}
+              {S.logTimes(r.n)}
+            </small>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /** One log line in words; `upTo` is the log up to and including it (a failed climb names its rooms). */
 export function logLine(e: PahunchLog, ctx: Ctx, upTo: PahunchLog[]): string {

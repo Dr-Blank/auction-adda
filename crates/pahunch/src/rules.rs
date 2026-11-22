@@ -650,6 +650,10 @@ fn request(s: &mut State, seat: Seat, owner: Seat, on: bool) -> Result<(), RuleE
             return fail("You did not ask for that favour");
         }
         s.asked.retain(|&o| o != owner);
+        // Taken back at once, the ask leaves no line: asking on and off cannot flood the log.
+        if s.log.last() == Some(&LogEntry::Request { p: seat, owner }) {
+            s.log.pop();
+        }
         return Ok(());
     }
     if s.vote.is_some() {
@@ -1309,6 +1313,7 @@ pub fn apply_skip(prev: &State, seat: Seat) -> Result<State, RuleError> {
 
 /// `by` takes back the last move: the game goes back to `before`, the state it was made on, with
 /// a line saying who took it back. The server checks who may and that nothing happened since.
+/// The bag is shuffled again: the move may have shown its next coin as a refill.
 ///
 /// # Errors
 /// When `by` is no seat.
@@ -1318,6 +1323,11 @@ pub fn undo(before: &State, by: Seat) -> Result<State, RuleError> {
     }
     let mut s = before.clone();
     s.log.push(LogEntry::Undo { p: by });
+    let turn = u32::try_from(s.log.len()).unwrap_or(u32::MAX);
+    s.bag = game::shuffle(
+        std::mem::take(&mut s.bag),
+        &mut game::rng(s.seed ^ turn.rotate_left(16)),
+    );
     Ok(s)
 }
 

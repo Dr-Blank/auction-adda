@@ -1856,3 +1856,9 @@ button.ph-chip.ph-want-add {
   min-height: 40px;
   height: auto;
 }
+
+/* A run of the same log line, shown once: its count. */
+.ph-log-n {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

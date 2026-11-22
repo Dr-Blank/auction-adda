@@ -633,7 +633,8 @@ export function GameOver(props: {
     <div className="gameover">
       <Confetti />
       {props.endedNote}
-      <h2>
+      {/* Read out when the card appears, in both games: the board above it may have the focus. */}
+      <h2 role="status">
         {props.winners.map(name).join(" & ")} {won}!
       </h2>
       {series && (

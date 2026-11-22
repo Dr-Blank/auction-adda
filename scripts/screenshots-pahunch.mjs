@@ -13,7 +13,10 @@
 //   - no script errors on the page.
 //
 // After `seconds` the admin (this seat) ends the game early, so the no-winner end is seen too.
-// Exits 1 if any check failed.
+// Then, on Home, the admin closes the room with its 🗑 and checks it leaves the list. The token
+// swap and carry picks (`swap-pick`, `carry-pick`) need a bot to lend that favour: the run asks
+// for favours until it gets them, and says "not reached" if it never does. Exits 1 if any check
+// failed.
 //
 //   npm run build && PORT=8799 DATA_DIR= CREATE_LIMIT=1000 npm start &
 //   node scripts/screenshots-pahunch.mjs ./shots/pahunch [seconds] [phone]
@@ -198,6 +201,18 @@ const confirm = async (made) => {
   return false;
 };
 
+// The favour picks on a climb (tiles in the bar), shot once each when on screen: the shot, the
+// picks' label, the favour's glyph (skin.ts).
+const PICKS = [
+  ["swap-pick", "Token swap: take instead", "⇄"],
+  ["carry-pick", "Carry: take along", "🚗"],
+];
+const wantPicks = () => PICKS.some(([name]) => !taken.has(name));
+const shootPicks = async () => {
+  for (const [name, label] of PICKS)
+    if (!taken.has(name) && (await evaluate(`!!document.querySelector('[aria-label="${label}"]')`))) await shot(name);
+};
+
 const end = Date.now() + Number(secs) * 1000;
 let ended = false;
 // Moves slide rather than jump (motion.ts): script-driven animations, not the CSS loops.
@@ -256,8 +271,14 @@ for (let tick = 0; tick < 4000; tick++) {
       await clickFirst('.ph-pick button[aria-label="Clear"]');
       await sleep(200);
     }
-    // Ask a bot for its favour from its chip: the sheet, then the request waiting in the bar.
-    if (!taken.has("favour-sheet") && !state.extra && (await clickFirst(".ph-fav-btn.live"))) {
+    // Ask a bot for its favour from its chip: the sheet, then the request waiting in the bar. The
+    // swap and carry picks show only with such a favour on offer, so keep asking its holder (the
+    // chip's title starts with the favour's glyph) until both are shot.
+    const holder = PICKS.filter(([name]) => !taken.has(name))
+      .map(([, , glyph]) => `.ph-fav-btn.live[title^="${glyph}"]`)
+      .join(", ");
+    const chip = !taken.has("favour-sheet") ? `${holder ? `${holder}, ` : ""}.ph-fav-btn.live` : holder;
+    if (chip && !state.extra && (await clickFirst(chip))) {
       await sleep(300);
       await shot("favour-sheet");
       const asked = await evaluate(
@@ -267,6 +288,8 @@ for (let tick = 0; tick < 4000; tick++) {
       await confirm(asked);
       await sleep(150);
       await shot("favour-asked");
+      // Give the bot time to answer before the move: it thinks for up to 2.25 s.
+      if (wantPicks()) await sleep(2500);
     }
     if (!taken.has("tip") && (await clickFirst(".ph-pick .ph-tip-btn"))) {
       await sleep(300);
@@ -283,10 +306,12 @@ for (let tick = 0; tick < 4000; tick++) {
     if (await clickFirst(".ph-room.live")) {
       await sleep(300);
       await shot("selected");
+      await shootPicks();
       // A way up out of the room picks that way first (A, then B): its facts, then the move.
       if (await clickFirst(".ph-pick .ph-move.ph-then")) {
         await sleep(300);
         await shot("confirm");
+        await shootPicks();
         moved = await confirm(await clickFirst(".ph-pick .ph-move:not(.ph-then)"));
       } else moved = await confirm(await clickFirst(".ph-pick .ph-move-grid .btn"));
     }
@@ -369,6 +394,26 @@ for (let tick = 0; tick < 4000; tick++) {
 
 console.log(`animations seen: ${motion}`);
 if (motion === 0) fail("no move was animated");
+// Whether a bot lends a swap or carry is luck: a run without one is no failure.
+for (const [name] of PICKS) if (!taken.has(name)) console.log(`not reached: ${name}`);
+
+// ---- Home: the admin closes the room from its 🗑, two taps, and it leaves the list ----
+await s("Page.navigate", { url: `${BASE}/` });
+await sleep(1500);
+const bin = `.my-room button[aria-label="Close room ${code}"]`;
+const listed = `!!document.querySelector('.my-room a[href="#${code}"]')`;
+if (!(await clickFirst(bin))) fail("Home lists no 🗑 for this room");
+else {
+  await sleep(300);
+  await shot("home-delete");
+  const yes = await evaluate(
+    `(() => { const b = document.querySelector('.my-room .confirm .btn.danger'); if (!b) return false; b.click(); return true; })()`,
+  );
+  if (!yes) fail("the 🗑 asked nothing before closing the room");
+  await sleep(1000);
+  if (await evaluate(listed)) fail("the closed room is still listed on Home");
+  await shot("home-deleted");
+}
 
 const exited = new Promise((r) => chrome.once("exit", r));
 chrome.kill();

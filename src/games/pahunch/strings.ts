@@ -15,6 +15,14 @@ export const S = {
   undoWhat: (whose: string) => `↩ Undo ${whose} move`,
   logUndo: (who: string) => `${who} took back the last move.`,
 
+  // The log: the latest lines in the side column, all of them in a sheet. A run of the same line
+  // shows once, with its count.
+  latest: "Latest",
+  fullLog: "Full log",
+  logTitle: "📜 What happened",
+  logTimes: (n: number) => `×${n}`,
+  logTimesLabel: (n: number) => `${n} times`,
+
   // After the main move, while a favour could still help.
   endTurn: "⏭ End turn",
   waitFavour: "🤝 A favour may still help: ask for one, or end your turn",

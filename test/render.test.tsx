@@ -507,4 +507,18 @@ describe("pahunch: favour picks on a climb, and the blocker from the list", () =
     expect(sheet.querySelector(".ph-sheet-small")?.textContent).toBe("New residents join here.");
     act(() => root.unmount());
   });
+
+  it("shows a run of the same log line once, with its count", () => {
+    const s = structuredClone(Object.fromEntries(pahunch)["their-move"]) as unknown as {
+      game: { log: object[] };
+    };
+    const gift = { t: "gift", from: 2, to: 3, count: 1 };
+    s.game.log.push(gift, gift, gift, { t: "gift", from: 2, to: 3, count: 2 }, gift);
+    const { el, root } = mount({ ...s, receivedAt: NOW } as unknown as RoomState);
+    const rows = [...el.querySelectorAll(".recent li")].slice(0, 3);
+    expect(rows.map((r) => r.querySelector(".ph-log-n")?.textContent ?? "")).toEqual(["", "", " ×3"]);
+    expect(rows[2].querySelector(".ph-log-n")?.getAttribute("aria-label")).toBe("3 times");
+    expect(rows[1].textContent).toMatch(/2 tokens/);
+    act(() => root.unmount());
+  });
 });
