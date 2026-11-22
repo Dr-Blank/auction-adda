@@ -31,13 +31,13 @@ jobs:
     name: Lint, test, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Rust toolchain (version from rust-toolchain.toml)
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ env.WRITE_CACHE }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -49,7 +49,7 @@ jobs:
       # Every check lives in prek.toml, the same hooks that run on commit and push locally:
       # formatting, clippy, typecheck, tests (which also fail on a stale src/generated),
       # cargo-deny and the production build.
-      - uses: j178/prek-action@44924fe9ef4a6f88253c4b6b1bf11c689d3ce53d # v3.1.0
+      - uses: j178/prek-action@7b101f8338a08d2bd6fdb3625e4e7692428763a3 # v3.1.1
         with:
           prek-version: "0.5.11"
           extra-args: --all-files --hook-stage manual
@@ -61,9 +61,9 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # Layer cache lives in GHCR as :buildcache. The package is public, so PRs read it without
       # logging in; only main and tags log in and write it.
@@ -72,7 +72,7 @@ jobs:
 
       - name: Log in to GHCR
         if: env.WRITE_CACHE == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -81,7 +81,7 @@ jobs:
       # Both platforms in one build, so they compile at the same time. The result stays in the
       # builder: the smoke test below and the publish job reuse it from cache.
       - name: Build every platform
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           pull: true
@@ -90,7 +90,7 @@ jobs:
           cache-to: ${{ env.WRITE_CACHE == 'true' && format('type=registry,ref={0},mode=max', env.CACHE) || '' }}
 
       - name: Load amd64 for the smoke test
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           pull: true
@@ -120,16 +120,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Cache ref
         run: echo "CACHE=${IMAGE,,}:buildcache" >> "$GITHUB_ENV"
 
       - name: Image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         env:
           # Put labels on the multi-arch index too, so GHCR shows the source, licence and description.
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
@@ -146,7 +146,7 @@ jobs:
             org.opencontainers.image.description=Browser auction card game for 3-5 friends on voice chat
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -154,7 +154,7 @@ jobs:
 
       # Every layer comes from the cache the image job just wrote; nothing recompiles.
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           pull: true
