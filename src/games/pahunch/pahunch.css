@@ -3,6 +3,20 @@
    shared table parts keep theirs). .table.ph-table outranks the shared .table grid, whichever
    stylesheet loads last. */
 
+/* Colours of Pahunch's own. Gold (--accent) means only "you can act on this now"; the top room is
+   ivory. Coins are one metal family, darkest to lightest by value (copper 2, bronze 3, silver 4,
+   gold 5), so value reads by brightness and the number, never by a seat's hue. A 1 is plain. */
+:root {
+  --ph-ivory: #eee3cb;
+  --ph-coin-1: var(--panel-2);
+  --ph-coin-2: #7a4630;
+  --ph-coin-3: #85633a;
+  --ph-coin-4: #bfc3c8;
+  --ph-coin-5: #e7cf86;
+  --ph-coin-ink-light: #f7efe1;
+  --ph-coin-ink-dark: #1d1609;
+}
+
 .table.ph-table {
   grid-template-areas:
     "top top"
@@ -35,22 +49,53 @@
 .seats.ph-players > .ph-seat-chip {
   flex: 0 0 calc((100% - (var(--cols, 4) - 1) * var(--seat-gap)) / var(--cols, 4));
 }
+/* A chip is one fixed grid, the same height in every state: face, then the name over the counts,
+   then the favour button. Where a favour stands is a badge on its button, never words, so nothing
+   squeezes the name. A seat that owes an answer pulses round its face (the shared .seat.owing). */
 .ph-seat-chip {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "face more fav"
+    "away away away";
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
+  column-gap: 6px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 6px 8px 6px 6px;
   border: 1px solid var(--line);
   border-left: 5px solid var(--seat);
   border-radius: 12px;
   background: var(--panel);
-  min-width: 0;
-  flex: 1 1 170px;
 }
-.ph-seat-chip.owing {
-  border-color: var(--accent);
-  border-left-color: var(--seat);
-  box-shadow: 0 0 0 1px var(--accent) inset;
+.ph-seat-chip > .avatar-wrap {
+  grid-area: face;
+}
+.ph-seat-chip > .ph-seat-more {
+  grid-area: more;
+}
+.ph-seat-chip > .ph-fav-btn {
+  grid-area: fav;
+}
+.ph-seat-chip > :not(.avatar-wrap, .ph-seat-more, .ph-fav-btn) {
+  grid-area: away;
+}
+.ph-seat-chip .seat-name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.ph-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-seat-chip .seat-name > :not(.ph-name-text) {
+  flex: none;
+}
+.ph-seat-chip .seat-name .mark {
+  margin-left: 2px;
 }
 .ph-seat-chip .avatar-wrap,
 .ph-tray .avatar-wrap {
@@ -82,26 +127,32 @@
   fill: var(--seat-ink);
   border: 2px solid var(--panel);
 }
+/* One line, never wrapped: the chip keeps its height. */
 .ph-counts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 .ph-counts > * {
   white-space: nowrap;
 }
 .ph-points {
-  color: var(--accent-soft);
+  color: var(--text);
 }
 .ph-uses {
-  color: var(--accent-soft);
+  color: var(--text);
   letter-spacing: 1px;
 }
 .ph-uses.hidden {
-  color: var(--dim);
+  color: var(--muted);
   font-weight: 700;
+}
+.ph-uses-dots {
+  opacity: 0.35;
 }
 
 /* Faces in a line of text: the blocker as his face, a neutral's face beside her name. */
@@ -113,7 +164,7 @@
 .ph-inline-face .avatar {
   width: 1.45em;
   height: 1.45em;
-  box-shadow: 0 0 0 1.5px var(--accent-soft);
+  box-shadow: 0 0 0 1.5px var(--muted);
 }
 .ph-inline-face.neutral .avatar {
   box-shadow: 0 0 0 1.5px #e98fb6;
@@ -140,33 +191,32 @@
 .ph-sheet-facts:empty {
   display: none;
 }
-.ph-sheet-facts > span {
+/* A fact is a quiet chip: a tinted fill, no border, glyph first. Only a button has an edge. */
+.ph-sheet-facts > span,
+.ph-chip-fact {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 32px;
   padding: 2px 10px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--panel);
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel-2);
 }
 .ph-fav-owner .avatar {
   width: 24px;
   height: 24px;
 }
-.ph-fav-pay {
-  color: var(--accent-soft);
-  font-weight: 700;
-}
+.ph-fav-pay,
 .ph-fav-status {
-  color: var(--accent);
   font-weight: 700;
 }
+/* The small print: last and small, but still easy to read (--muted, not --dim). */
 .ph-sheet-small {
   margin: 14px 0 0;
   padding: 10px 0 0 18px;
   border-top: 1px solid var(--line);
-  color: var(--dim);
+  color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.45;
 }
@@ -205,49 +255,52 @@
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
-/* Another player's favour: its own button on the chip. Glows when you, moving, can ask for it. */
+/* Another player's favour: its own button on the chip, the glyph over its uses, and a badge in its
+   corner for where it stands (⏳ asked, 🤝 on offer, ✔ used). A neutral edge; bright only when the
+   favour is on offer to you. */
 .ph-fav-btn {
   appearance: none;
+  position: relative;
   flex: none;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  min-width: 40px;
-  padding: 2px 8px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 2px 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-2);
   color: inherit;
   font: inherit;
+  line-height: 1.1;
   cursor: pointer;
   touch-action: manipulation;
 }
 .ph-fav-btn .ph-fav-glyph {
   font-size: 1.2rem;
 }
-.ph-fav-side {
+.ph-fav-btn .ph-uses {
+  font-size: 0.62rem;
+}
+.ph-fav-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
   display: grid;
-  line-height: 1.1;
-  text-align: left;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 0.7rem;
+  line-height: 1;
 }
-.ph-fav-side small {
-  font-size: 0.72rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.ph-fav-btn.live {
+.ph-fav-btn.to-me {
   border-color: var(--accent);
-  animation: ph-glow-box 1.8s ease-in-out infinite;
-}
-.ph-fav-btn.offered,
-.ph-fav-btn.asked {
-  border-color: var(--accent-line);
-}
-.ph-fav-btn.offered small,
-.ph-fav-btn.asked small {
-  color: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 .ph-fav-btn.used {
   opacity: 0.6;
@@ -289,15 +342,18 @@
   fill: none;
   stroke: none;
 }
+/* The top room has its own look, never the gold that means "usable now": an ivory double edge
+   and its crown. */
 .ph-room.top .ph-room-box {
   fill: var(--deep);
-  stroke: var(--accent-line);
-  stroke-width: 0.4;
+  stroke: var(--ph-ivory);
+  stroke-width: 0.35;
 }
 .ph-room-inner {
   fill: none;
-  stroke: var(--accent-line);
-  stroke-width: 0.22;
+  stroke: var(--ph-ivory);
+  stroke-width: 0.2;
+  opacity: 0.7;
   pointer-events: none;
 }
 .ph-room-pad {
@@ -321,7 +377,7 @@
   pointer-events: none;
 }
 .ph-room-inside.top .ph-room-name {
-  fill: var(--accent-soft);
+  fill: var(--ph-ivory);
 }
 .ph-room.live .ph-room-box {
   stroke: var(--accent);
@@ -333,12 +389,15 @@
   filter: blur(0.9px);
   animation: ph-breathe 1.8s ease-in-out infinite;
 }
+/* Idle: the card goes dark and its edge fades; its name stays readable, as it still says where
+   things are. */
 .ph-room.idle .ph-room-box {
   fill: var(--deep-2);
+  stroke: var(--edge-3);
+  stroke-opacity: 0.6;
 }
-.ph-room-inside.idle .ph-room-name,
 .ph-room-inside.idle .ph-room-icon {
-  opacity: 0.45;
+  opacity: 0.7;
 }
 .ph-room.target .ph-room-box {
   stroke: var(--accent-soft);
@@ -358,15 +417,21 @@
   stroke-width: 0.9;
   stroke-dasharray: none;
 }
+/* The pick stands out from every other live room: a solid bright edge, lifted, and a big tick. */
+.ph-room.selected .ph-room-box {
+  stroke: var(--accent-soft);
+  stroke-width: 1.1;
+  filter: drop-shadow(0 0.9px 1.2px rgb(0 0 0 / 80%)) drop-shadow(0 0 1.4px rgb(var(--accent-rgb) / 70%));
+}
 .ph-room-check circle {
   fill: var(--accent);
   stroke: var(--felt);
-  stroke-width: 0.3;
+  stroke-width: 0.35;
 }
 .ph-room-check path {
   fill: none;
   stroke: #1f1604;
-  stroke-width: 0.45;
+  stroke-width: 0.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -538,7 +603,7 @@
 .ph-path.moving .ph-path-head,
 .ph-path.selected .ph-path-head {
   fill: var(--accent-soft);
-  transform: scale(2.2);
+  transform: scale(1.6);
 }
 .ph-path:focus-visible .ph-path-line {
   stroke: var(--text);
@@ -583,29 +648,37 @@
   fill: transparent;
 }
 .ph-coin-rim {
-  fill: var(--panel-2);
-  stroke: var(--accent-line);
+  fill: var(--ph-coin-1);
+  stroke: var(--felt);
   stroke-width: 0.45;
 }
 .ph-token.v2 .ph-coin-rim {
-  fill: #3f5f4a;
+  fill: var(--ph-coin-2);
 }
 .ph-token.v3 .ph-coin-rim {
-  fill: #4d5f86;
+  fill: var(--ph-coin-3);
 }
 .ph-token.v4 .ph-coin-rim {
-  fill: #7a4f8c;
+  fill: var(--ph-coin-4);
 }
 .ph-token.v5 .ph-coin-rim {
-  fill: #9a5a2c;
+  fill: var(--ph-coin-5);
 }
 .ph-coin {
   fill: none;
-  stroke: rgb(255 255 255 / 18%);
+  stroke: rgb(255 255 255 / 30%);
   stroke-width: 0.2;
 }
 .ph-token text {
-  fill: var(--text);
+  fill: var(--ph-coin-ink-light);
+}
+.ph-token.v4 text,
+.ph-token.v5 text {
+  fill: var(--ph-coin-ink-dark);
+}
+.ph-token.v4 .ph-coin,
+.ph-token.v5 .ph-coin {
+  stroke: rgb(0 0 0 / 25%);
 }
 .ph-mark.live .ph-coin-rim,
 .ph-mark.moving .ph-coin-rim {
@@ -624,7 +697,7 @@
 }
 .ph-coin-mark circle {
   fill: var(--panel);
-  stroke: var(--accent);
+  stroke: var(--muted);
   stroke-width: 0.25;
 }
 .ph-coin-mark text {
@@ -659,7 +732,7 @@
 }
 .ph-blocker-disc {
   fill: var(--back-1);
-  stroke: var(--accent-soft);
+  stroke: var(--muted);
   stroke-width: 0.45;
 }
 .ph-blocker text {
@@ -685,10 +758,15 @@
   transform: translateY(-0.7px);
   filter: drop-shadow(0 0.7px 0.5px rgb(0 0 0 / 75%));
 }
-/* Once something is picked, the other rooms you could use stop breathing, so the pick leads. */
+/* Once something is picked, the other rooms you could use drop to a thin outline with no glow:
+   still tappable, not chosen. The pick leads. */
 .ph-board.picking .ph-room.live .ph-room-halo {
   animation: none;
-  opacity: 0.15;
+  opacity: 0;
+}
+.ph-board.picking .ph-room.live .ph-room-box {
+  stroke: var(--accent-line);
+  stroke-width: 0.3;
 }
 .ph-blocker.ghost {
   opacity: 0.5;
@@ -733,7 +811,8 @@
   font-size: 1.2px;
 }
 
-/* The key to the special coins, under the board. */
+/* The key to the special coins: under the board on one column, in the side column beside it (the
+   board gets that height back). A legend, so it stays quieter than what it explains. */
 .ph-coin-key {
   display: flex;
   flex-wrap: wrap;
@@ -741,16 +820,23 @@
   gap: 8px;
   margin-top: 6px;
 }
+.ph-side > .ph-coin-key {
+  justify-content: flex-start;
+  margin: 0;
+}
 .ph-key-chip {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 40px;
-  padding: 4px 12px;
+  padding: 4px 12px 4px 6px;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--panel);
-  color: var(--text);
+  color: var(--muted);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 .ph-key-glyph {
@@ -758,8 +844,9 @@
   place-items: center;
   width: 1.6em;
   height: 1.6em;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--muted);
   border-radius: 50%;
+  color: var(--text);
   font-weight: 700;
 }
 .ph-key-list {
@@ -783,7 +870,7 @@
   line-height: 1.4;
 }
 .ph-key-list small {
-  color: var(--dim);
+  color: var(--muted);
 }
 .ph-key-list li.muted {
   opacity: 0.55;
@@ -836,15 +923,10 @@
     opacity: 1;
   }
 }
-@keyframes ph-glow-box {
-  50% {
-    box-shadow: 0 0 10px rgb(var(--accent-rgb) / 55%);
-  }
-}
 
 /* ---- the vote ---- */
 .ph-vote {
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-2);
   padding: 10px 14px;
@@ -864,8 +946,12 @@
   line-height: 1;
 }
 .ph-vote-arrow {
-  color: var(--accent);
+  color: var(--muted);
   font-size: 1.3rem;
+}
+/* The vote card folded into one row: only in the docked bar on a phone. */
+.ph-vote-row {
+  display: none;
 }
 /* The vote clock: a ring that drains clockwise from the top, seconds in the middle. */
 .ph-clock {
@@ -876,7 +962,7 @@
   width: 44px;
   height: 44px;
   margin-left: auto;
-  color: var(--accent-soft);
+  color: var(--ph-ivory);
   font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -914,7 +1000,7 @@
   animation: ph-clock-pulse 1s ease-in-out infinite;
 }
 .ph-clock.paused {
-  color: var(--accent);
+  color: var(--muted);
 }
 @keyframes ph-clock-pulse {
   50% {
@@ -932,10 +1018,10 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--ph-ivory);
 }
 .ph-pips span.on {
-  background: var(--accent);
+  background: var(--ph-ivory);
 }
 /* A face in its seat colour, with badges: how many it has in the room, and what it said. */
 .ph-face {
@@ -1021,15 +1107,33 @@
   background: var(--panel-2);
   min-width: 0;
 }
-.ph-tray.owing {
-  border-color: var(--accent);
-  border-left-color: var(--seat);
-}
+/* You, your points, Undo when it lives here, and the 💡 (its tip opens on a line of its own). */
 .ph-tray-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.ph-tray-head > .ph-tip {
+  order: 5;
+}
+/* The one door to the token sheet: your tokens on it, then its name. */
+.btn.ph-tokens-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  min-height: 48px;
+  padding: 6px 12px 6px 8px;
+  text-align: left;
+}
+.ph-tokens-btn .ph-tokens-label {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.ph-tokens-btn .ph-chip {
+  min-width: 32px;
+  height: 32px;
 }
 .ph-tray-who {
   appearance: none;
@@ -1054,13 +1158,12 @@
   background: none;
   font: inherit;
   font-size: 1.2rem;
-  color: var(--accent-soft);
+  color: var(--text);
   white-space: nowrap;
   cursor: pointer;
 }
 .ph-score b {
   font-size: 1.4rem;
-  color: var(--accent);
 }
 /* Who a gift goes to: a face per player; the picked one is ringed and its name bold. */
 .ph-give-to {
@@ -1071,6 +1174,7 @@
 }
 .ph-give-who {
   appearance: none;
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 6px;
@@ -1084,11 +1188,28 @@
   font: inherit;
   cursor: pointer;
 }
+/* Picked: the accent edge and a tick, never the seat's colour (a red seat would read as an error);
+   the seat's colour stays on the face's ring. */
 .ph-give-who.on {
-  border-color: var(--seat, var(--accent));
+  border-color: var(--accent);
   background: rgb(255 255 255 / 10%);
   color: var(--text);
   font-weight: 700;
+}
+.ph-give-who.on::after {
+  content: "✔";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1f1604;
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 .ph-give-name {
   max-width: 100%;
@@ -1112,21 +1233,27 @@
   display: inline-grid;
   place-items: center;
   font-weight: 700;
-  border: 2px solid var(--accent-line);
-  background: var(--panel-2);
-  color: var(--text);
+  border: 2px solid var(--edge);
+  background: var(--ph-coin-1);
+  color: var(--ph-coin-ink-light);
 }
 .ph-chip.v2 {
-  background: #3f5f4a;
+  background: var(--ph-coin-2);
+  border-color: rgb(255 255 255 / 22%);
 }
 .ph-chip.v3 {
-  background: #4d5f86;
+  background: var(--ph-coin-3);
+  border-color: rgb(255 255 255 / 22%);
 }
 .ph-chip.v4 {
-  background: #7a4f8c;
+  background: var(--ph-coin-4);
+  border-color: rgb(0 0 0 / 30%);
+  color: var(--ph-coin-ink-dark);
 }
 .ph-chip.v5 {
-  background: #9a5a2c;
+  background: var(--ph-coin-5);
+  border-color: rgb(0 0 0 / 30%);
+  color: var(--ph-coin-ink-dark);
 }
 button.ph-chip {
   cursor: pointer;
@@ -1188,6 +1315,18 @@ button.ph-chip.on {
   gap: 6px;
   min-height: 40px;
   margin: 8px 0;
+}
+/* What to tap says so above the tokens; the button names only the deal, and looks off until a
+   pick makes it work (not the shared gold outline, which reads as on). */
+.ph-deal-help {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.btn.primary.ph-deal-go:disabled {
+  opacity: 0.4;
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
 }
 .ph-stepper {
   display: flex;
@@ -1251,7 +1390,7 @@ button.ph-chip.ph-want-add {
   line-height: 1;
 }
 .ph-my-favour.offered .ph-fav-name {
-  border-color: var(--accent);
+  border-color: var(--accent-line);
 }
 .ph-my-favour > .btn {
   min-height: 48px;
@@ -1326,13 +1465,39 @@ button.ph-chip.ph-want-add {
     "Times New Roman",
     serif;
 }
+/* The panel's text in order: its title, then the pick line, then a tile's title, then its note. */
 .ph-turn {
   color: var(--accent);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
 }
 .ph-pick-what {
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   min-width: 0;
+}
+.ph-stake {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ph-chip-fact .ph-inline-face {
+  margin: 0;
+}
+/* Undo: a round icon in the panel's head (with whose move it is, for the admin). */
+.ph-moves .icon-btn.ph-chipbtn.ph-undo,
+.ph-tray .icon-btn.ph-chipbtn.ph-undo {
+  width: auto;
+  white-space: nowrap;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 1.1rem;
 }
 .ph-hint {
   color: var(--muted);
@@ -1356,6 +1521,12 @@ button.ph-chip.ph-want-add {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
   gap: 8px;
 }
+/* Beside the board the tiles fill the panel's row, so their titles keep to one line. */
+@media (min-width: 701px) {
+  .ph-move-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  }
+}
 .ph-move-grid .btn {
   min-height: 48px;
   touch-action: manipulation;
@@ -1369,8 +1540,13 @@ button.ph-chip.ph-want-add {
   text-align: left;
   padding: 8px 12px;
 }
+.ph-move b {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
 .ph-move small {
   color: var(--muted);
+  font-size: 0.8rem;
   font-weight: 400;
 }
 .ph-move.primary small {
@@ -1386,17 +1562,24 @@ button.ph-chip.ph-want-add {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* Facts, not buttons: quiet chips with no edge, glyph first; the words are each chip's label. */
 .ph-facts li {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 2px 10px;
   border-radius: 8px;
   background: var(--panel-2);
-  border: 1px solid var(--line);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 .ph-facts li:first-child {
-  border-color: var(--accent-line);
-  color: var(--accent-soft);
-  font-weight: 600;
+  font-weight: 700;
+}
+.ph-fact-who {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 .ph-done {
   width: 100%;
@@ -1514,11 +1697,15 @@ button.ph-chip.ph-want-add {
 }
 
 /* A wide screen has no empty space: the board grows to the window's height (the top bar, the
-   coin key and the stage's padding take about 175 px, each row of seat chips about 66), and the
-   side column is as tall as the window, its "Latest" filling what is left and scrolling. */
+   table's and the stage's padding take about 140 px, each row of seat chips 68: a chip is 60 high
+   in every state, plus the gap), and the side column is as tall as the window, its "Latest" filling
+   what is left and scrolling. The coin key sits in the side column here, not under the board. */
 @media (min-width: 961px) {
   .ph-table {
-    --board-h: max(480px, calc(100dvh - 175px - var(--seat-rows, 1) * 66px));
+    --board-h: max(420px, calc(100dvh - 140px - var(--seat-rows, 1) * 68px));
+  }
+  .ph-stage > .ph-coin-key {
+    display: none;
   }
   /* The board's column is as wide as the board at that height (plus the stage's padding), so no
      band of empty felt sits beside it; the side column takes the rest, and the two sit centred. */
@@ -1558,9 +1745,12 @@ button.ph-chip.ph-want-add {
     align-self: start;
   }
 }
-/* One column: the latest five lines are enough under the board. */
+/* One column: the latest five lines are enough under the board, and the key stays under it. */
 @media (max-width: 960px) {
   .ph-side .recent li:nth-child(n + 6) {
+    display: none;
+  }
+  .ph-side > .ph-coin-key {
     display: none;
   }
 }
@@ -1569,10 +1759,63 @@ button.ph-chip.ph-want-add {
 @media (min-width: 701px) {
   .ph-side .ph-bar {
     padding: 12px;
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--panel);
   }
+}
+/* The phone's line of what you hold: only on top of the docked bar. */
+.ph-you {
+  display: none;
+}
+/* The board's frame stays neutral when you owe a move: the top bar and your panel say so. */
+.stage.ph-stage.owing {
+  box-shadow:
+    0 18px 40px rgb(0 0 0 / 45%),
+    inset 0 0 0 1px rgb(255 255 255 / 6%);
+}
+/* The top bar's status, then the top room's count, which never gives way. */
+.topbar .round.ph-round {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ph-status-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-status-glyph {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.ph-summit {
+  flex: none;
+  white-space: nowrap;
+}
+.ph-summit b {
+  color: var(--text);
+}
+/* The latest log lines: the actor's face, then glyphs; the sentence is the label and in the full log. */
+.ph-side .recent li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+.ph-log-glyphs {
+  min-width: 0;
+}
+.ph-side .recent li > .ph-inline-face:first-child {
+  margin-left: 0;
+}
+.log li > .ph-inline-face:first-child {
+  margin-left: 0;
+  margin-right: 0.35em;
 }
 
 /* ---- motion (motion.ts) ---- */
@@ -1629,16 +1872,6 @@ button.ph-chip.ph-want-add {
 .ph-offer-btn:not([aria-pressed="true"]) {
   border-color: var(--accent);
 }
-.ph-undo {
-  min-height: 44px;
-  align-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.ph-undo small {
-  display: inline-flex;
-}
 
 /* ---- what a climb's favours change, for the voters ---- */
 .ph-vote-uses {
@@ -1653,9 +1886,8 @@ button.ph-chip.ph-want-add {
   display: inline-flex;
   min-height: 40px;
   padding: 2px 10px;
-  border: 1px dashed var(--accent-line);
-  border-radius: 999px;
-  background: var(--panel);
+  border-radius: 8px;
+  background: var(--panel-2);
 }
 .ph-vote-use-body {
   display: inline-flex;
@@ -1812,8 +2044,77 @@ button.ph-chip.ph-want-add {
   .ph-seat-chip > :not(.avatar-wrap, .ph-seat-more, .ph-fav-btn, .sheet-back) {
     grid-area: away;
   }
+  .seats.ph-players .ph-seat-chip .seat-name {
+    justify-content: center;
+  }
+  .seats.ph-players .ph-counts {
+    justify-content: center;
+  }
   .ph-board {
     max-height: none;
+  }
+  /* The top bar: the status as glyphs (a face and ▶, or 🗳️ and a face), the top room as its icon
+     and count, which never truncates. */
+  .ph-status-words,
+  .ph-summit-name {
+    display: none;
+  }
+  .ph-status-glyph {
+    display: inline-flex;
+  }
+  /* The coin key: glyphs alone in one row; a tap opens the sheet that names them. */
+  .ph-key-name {
+    display: none;
+  }
+  .ph-key-chip {
+    min-width: 40px;
+    padding: 4px;
+    justify-content: center;
+  }
+  /* The docked bar holds what you need to act: the vote folded into one row (the card is below
+     the fold), and a line of what you hold (the tray is too). */
+  .table.acting .ph-bar .ph-vote-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ph-vote-row .ph-face .avatar {
+    width: 32px;
+    height: 32px;
+  }
+  .ph-vote-row .ph-vote-rooms {
+    font-size: 1.3rem;
+  }
+  .ph-vote-row .ph-pips {
+    margin: 0;
+  }
+  .ph-vote-row .ph-clock {
+    width: 40px;
+    height: 40px;
+  }
+  .table.acting .ph-bar .ph-you {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 0 6px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .ph-you .ph-chip {
+    min-width: 26px;
+    height: 26px;
+    font-size: 0.8rem;
   }
   /* Too small to read here: the card shows its icon alone, and a tap names it. */
   .ph-room-title {
@@ -1841,7 +2142,6 @@ button.ph-chip.ph-want-add {
   .ph-seat.ghost,
   .ph-blocker.ghost,
   .ph-petals,
-  .ph-fav-btn.live,
   .ph-clock.urgent,
   .ph-mark.swapped .ph-token {
     animation: none;

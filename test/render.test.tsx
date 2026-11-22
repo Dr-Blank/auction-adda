@@ -354,15 +354,21 @@ describe("pahunch deals: asks for tokens and swaps", () => {
     act(() =>
       root.render(<Room state={{ ...s, receivedAt: NOW }} send={(m) => sent.push(m)} join={() => {}} reactions={[]} />),
     );
-    const tray = (label: string) =>
-      [...el.querySelectorAll(".ph-tray .ph-give")].find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
     const sheetButton = (label: string) =>
       [...document.querySelectorAll(".sheet button")].find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
-    act(() => tray("Ask").click());
+    // The tray has one door to the token sheet; its tabs pick the deal.
+    const tray = (label: string) => {
+      act(() => (el.querySelector(".ph-tray .ph-tokens-btn") as HTMLButtonElement).click());
+      const tab = [...document.querySelectorAll(".sheet .ph-deal-modes .btn")].find((b) =>
+        b.textContent?.includes(label),
+      ) as HTMLButtonElement;
+      act(() => tab.click());
+    };
+    tray("Ask");
     act(() => (document.querySelector('.sheet [aria-label="One more"]') as HTMLButtonElement).click());
     act(() => sheetButton("🙏 Ask ").click());
     confirmMove();
-    act(() => tray("Swap").click());
+    tray("Swap");
     act(() => (document.querySelector(".sheet button.ph-chip:not(.ph-want-add)") as HTMLButtonElement).click());
     act(() => (document.querySelector('.sheet [aria-label="Add a 3"]') as HTMLButtonElement).click());
     act(() => sheetButton("⇄ Offer").click());

@@ -661,7 +661,7 @@ export function Table({ state, send, reactions }: TableProps) {
         )}
         {canFreeze && !frozen && <FreezeButton onClick={() => send({ type: "freeze", on: true })} />}
         <button className="icon-btn" onClick={() => setLogOpen(true)} title="Auction log" aria-label="Auction log">
-          ☰ <span className="lbl">Log</span>
+          <span aria-hidden="true">📜</span> <span className="lbl">Log</span>
         </button>
         <MuteButton />
         <button
@@ -671,7 +671,7 @@ export function Table({ state, send, reactions }: TableProps) {
           title="Room and rules"
           aria-label="Room and rules"
         >
-          ? <span className="lbl">Room</span>
+          <span aria-hidden="true">⚙️</span> <span className="lbl">Room</span>
         </button>
         {menu && (
           <RoomMenu

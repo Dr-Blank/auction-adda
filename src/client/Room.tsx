@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { gameOf } from "../games/index.ts";
 import type { ClientMsg } from "../generated/index.ts";
 import { Lobby } from "./Lobby.tsx";
 import type { Reaction, RoomState } from "./net.ts";
+import { saveTheme } from "./net.ts";
 
 interface Props {
   state: RoomState;
@@ -14,6 +16,11 @@ interface Props {
 export function Room({ state, send, join, reactions }: Props) {
   const { room } = state;
   const game = gameOf(room.theme);
+  const playing = !!state.game;
+  // Home's new-room picker starts on the theme last played, whoever made the room.
+  useEffect(() => {
+    if (playing) saveTheme(room.theme);
+  }, [playing, room.theme]);
   if (!state.game) {
     const skin = game.skin(room.theme, room.cast);
     return <Lobby state={state} send={send} join={join} game={game} skin={skin} reactions={reactions} />;

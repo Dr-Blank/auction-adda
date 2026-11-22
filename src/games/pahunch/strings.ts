@@ -24,8 +24,33 @@ export const S = {
   logTimesLabel: (n: number) => `${n} times`,
 
   // After the main move, while a favour could still help.
-  endTurn: "⏭ End turn",
+  // The emoji form (with its selector), so it renders at the label's size, not as a tiny text glyph.
+  endTurn: "⏭️ End turn",
   waitFavour: "🤝 A favour may still help: ask for one, or end your turn",
+
+  // A seat's counts (chip, tray, sheet): the glyphs show, these are their labels.
+  countHand: (n: number, climbers: string) => `${n} ${climbers} still to place`,
+  countWay: (n: number) => `${n} on the way up`,
+  countTop: (n: number, room: string) => `${n} in the ${room}`,
+  favState: { used: "used this turn", offered: "on offer", asked: "asked for" },
+  // What a favour's use pays its owner; a pay of 0 says so plainly.
+  earns: (who: string, pay: number, points: string) =>
+    pay > 0 ? `Each use earns ${who} ${pay} ${points}.` : `A use earns ${who} nothing.`,
+
+  // The tray's one door to the token sheet.
+  tokens: "🪙 Tokens",
+  tokensOpen: (n: number) => `Your tokens (${n}): give, ask or swap`,
+  // The token sheet: what to tap says so above the tokens; the button names only the deal.
+  giveHelp: "Tap the tokens to hand over.",
+  giveGo: "🎁 Give",
+  swapHelp: "Tap the tokens you give, then the values you want.",
+  swapGo: "⇄ Offer",
+
+  // The phone's line of what you hold, on top of the docked bar.
+  youStrip: (score: number, points: string, n: number) => `You: ${score} ${points} in ${n} tokens. Show your tray`,
+
+  // The top bar: how full the top room is, which says how near the end is.
+  summitCount: (room: string, n: number, cap: number) => `${room}: ${n} of ${cap} seats taken`,
 
   // Tips.
   tipsSwitch: "💡 Tips",
@@ -35,7 +60,15 @@ export const S = {
   enter: (climber: string, room: string) => `✚ Add a ${climber} → ${room}`,
   climb: (from: string, to: string) => `↑ ${from} → ${to}`,
   askVotes: (from: string, to: string) => `🗳️ Ask for votes: ${from} → ${to}`,
-  voteYes: (n: number) => (n > 1 ? `✓ Yes ×${n}` : "✓ Yes"),
+  // A yes button says how many of yours it gives: ✓ per climber (up to three), then the word.
+  voteYesOf: (n: number, of: number) => {
+    const ticks = n <= 3 ? "✓".repeat(n) : `✓×${n}`;
+    if (of <= 1) return "✓ Yes";
+    if (n === of) return `${ticks} Yes, ${of === 2 ? "both" : `all ${of}`}`;
+    return `${ticks} Yes, ${n === 1 ? "one" : n}`;
+  },
+  voteHold: (n: number, room: string) => `You hold ${n} in the ${room}`,
+  votePay: (points: string) => `Each yes of yours the climber takes earns you 1 ${points}`,
   voteNo: "✗ No",
   bribe: (neutral: string, token: number) => `🍬 Pay an ${neutral} a ${token}`,
   take: "↑ Go up with the picked yes",
@@ -95,6 +128,17 @@ export const S = {
   factWay: (kind: string, from: string, to: string) => `A ${kind} from the ${from} up to the ${to}`,
   factBlocker: (blocker: string) => `${blocker} sits here`,
   factKey: "The key is on offer this turn",
+  // What a picked climb needs and gives: glyph chips in the move panel, these are their words.
+  factOpen: "Open: no vote",
+  factBlockedHere: (blocker: string) => `${blocker} is here: no vote`,
+  factPost: "Post of one: no vote",
+  factOwn: (own: number) => `Your ${own} carry the vote`,
+  factNeeds: (need: number, own: number) => `Needs ${need} yes · you have ${own}`,
+  factAsk: (whose: string) => `Ask ${whose}`,
+  factTried: "They said no once this turn",
+  factNoPoints: (points: string) => `No ${points} to take`,
+  factNoneOfYours: (climber: string) => `No ${climber} of yours to climb here`,
+  factNudge: (neutral: string, points: string) => `Nudge an ${neutral} up: no vote, +1 ${points} to you`,
   factSeats: (held: number, cap: number, who: string) => `${held} of ${cap} seats taken${who ? `: ${who}` : ""}`,
   swapFor: (glyph: string, from: number, to: number) => `${glyph} ${from} ⇢ ${to}`,
 

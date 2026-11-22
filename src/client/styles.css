@@ -258,6 +258,42 @@ kbd {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
+/* A seat sheet's admin actions: a quiet group at the foot, each a glyph and verb with a note. */
+.seat-admin {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.seat-admin h3 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.seat-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 8px;
+}
+.btn.seat-admin-btn {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  text-align: left;
+  font-weight: 400;
+}
+.seat-admin-btn b {
+  font-weight: 600;
+}
+.seat-admin-btn small {
+  color: var(--muted);
+  line-height: 1.3;
+}
+.btn.seat-admin-danger {
+  border-color: var(--danger);
+}
 .icon-btn {
   appearance: none;
   background: transparent;

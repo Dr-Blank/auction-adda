@@ -207,62 +207,53 @@ export function SeatSheetActions(props: {
   const { room, me, i, owing, rights, send, kicking, setKicking } = props;
   const { canAct, adminAway, canBot, canKick, canFree, canKeep } = rights;
   const seat = room.seats[i];
+  const away = !seat.connected && (canAct || adminAway);
+  if (!away && !(canBot || canKick || canFree || canKeep)) return null;
+  // Each action: a glyph and a short verb, what it does in the small line under it. Quiet buttons
+  // in their own group at the foot of the sheet, so none reads as the seat's status.
+  const action = (label: string, note: string | null, onClick: () => void, cls = "") => (
+    <button className={`btn ghost seat-admin-btn ${cls}`} onClick={onClick}>
+      <b>{label}</b>
+      {note && <small>{note}</small>}
+    </button>
+  );
   return (
-    <>
-      {!seat.connected && (canAct || adminAway) && (
-        <div className="row">
-          {canAct && owing && (
-            <button className="btn" onClick={() => send({ type: "skip", seat: i })}>
-              Skip their move
-            </button>
+    <section className="seat-admin" aria-label="Admin">
+      <h3>★ Admin</h3>
+      <div className="seat-admin-grid">
+        {away &&
+          canAct &&
+          owing &&
+          action("⏭️ Skip their move", "a random move is made for them", () => send({ type: "skip", seat: i }))}
+        {away &&
+          canAct &&
+          !seat.open &&
+          action("🔓 Open this seat", "someone else can take it from the room link", () =>
+            send({ type: "release", seat: i }),
           )}
-          {canAct && !seat.open && (
-            <button className="btn" onClick={() => send({ type: "release", seat: i })}>
-              Free seat (someone else can take it from the room link)
-            </button>
+        {away && adminAway && action("★ Become admin", null, () => send({ type: "admin", seat: me! }))}
+        {canBot && action("🤖 Bot plays", "until they come back", () => send({ type: "bot", seat: i }))}
+        {canFree &&
+          action("🔓 Open this seat", "the bot plays until someone takes it from the room link", () =>
+            send({ type: "release", seat: i }),
           )}
-          {adminAway && (
-            <button className="btn" onClick={() => send({ type: "admin", seat: me! })}>
-              Become admin
-            </button>
-          )}
-        </div>
-      )}
-      {(canBot || canKick || canFree || canKeep) && (
-        <div className="row">
-          {canBot && (
-            <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
-              Let a bot play until they come back
-            </button>
-          )}
-          {canFree && (
-            <button className="btn" onClick={() => send({ type: "release", seat: i })}>
-              Free seat: the bot plays until someone takes it from the room link
-            </button>
-          )}
-          {canKeep && (
-            <button className="btn" onClick={() => send({ type: "bot", seat: i })}>
-              Keep the bot (close the seat)
-            </button>
-          )}
-          {canKick &&
-            (kicking ? (
-              <>
-                <button className="btn primary" onClick={() => send({ type: "kick", seat: i })}>
-                  Kick {seat.name}: a bot plays the seat for good
-                </button>
-                <button className="btn" onClick={() => setKicking(false)}>
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button className="btn" onClick={() => setKicking(true)}>
-                Kick
-              </button>
-            ))}
-        </div>
-      )}
-    </>
+        {canKeep && action("🔒 Close the seat", "the bot keeps it", () => send({ type: "bot", seat: i }))}
+        {canKick &&
+          (kicking ? (
+            <>
+              {action(
+                `✕ Kick ${seat.name}`,
+                "a bot plays the seat for good",
+                () => send({ type: "kick", seat: i }),
+                "seat-admin-danger",
+              )}
+              {action("↩ Cancel", null, () => setKicking(false))}
+            </>
+          ) : (
+            action("✕ Kick", null, () => setKicking(true))
+          ))}
+      </div>
+    </section>
   );
 }
 
@@ -286,7 +277,7 @@ export function FreezeButton({ onClick }: { onClick: () => void }) {
       title="Freeze the game: the clock, the bots and all moves wait"
       aria-label="Freeze the game"
     >
-      <FreezeIcon /> <span className="lbl">Freeze</span>
+      <span aria-hidden="true">❄️</span> <span className="lbl">Freeze</span>
     </button>
   );
 }

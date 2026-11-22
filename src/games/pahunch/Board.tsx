@@ -284,7 +284,7 @@ export function Board(props: BoardProps) {
               <path className="ph-path-case" d={r.d} />
               <path className="ph-path-line" d={r.d} />
               <g transform={`translate(${r.head.x} ${r.head.y}) rotate(${deg.toFixed(1)})`}>
-                <path className="ph-path-head" d="M0.9 0L-0.9 -1.05L-0.45 0L-0.9 1.05Z" />
+                <path className="ph-path-head" d="M1.35 0L-1.35 -1.6L-0.65 0L-1.35 1.6Z" />
               </g>
             </g>
           );
@@ -320,8 +320,8 @@ export function Board(props: BoardProps) {
               )}
               {selected?.room === room && (
                 <g className="ph-room-check">
-                  <circle cx={b.x - b.w / 2} cy={b.y - b.h / 2} r={1.3} />
-                  <path d={`M${b.x - b.w / 2 - 0.6} ${b.y - b.h / 2}l0.45 0.45l0.8 -0.9`} />
+                  <circle cx={b.x - b.w / 2} cy={b.y - b.h / 2} r={1.8} />
+                  <path d={`M${b.x - b.w / 2 - 0.85} ${b.y - b.h / 2}l0.65 0.65l1.1 -1.25`} />
                 </g>
               )}
             </g>
